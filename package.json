@@ -1,6 +1,6 @@
 {
   "name": "@origozero/zeromind",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "ZeroMind IDE plugin — MCP server for Claude Code, Cursor, and Codex",
   "type": "module",
   "main": "dist/index.js",
@@ -47,5 +47,13 @@
     "url": "https://github.com/OrigoZero/zeromind-plugin.git"
   },
   "license": "MIT",
-  "keywords": ["zeromind", "mcp", "claude-code", "cursor", "codex", "origozero", "zero-engine"]
+  "keywords": [
+    "zeromind",
+    "mcp",
+    "claude-code",
+    "cursor",
+    "codex",
+    "origozero",
+    "zero-engine"
+  ]
 }
