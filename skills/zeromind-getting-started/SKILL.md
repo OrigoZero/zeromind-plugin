@@ -52,10 +52,53 @@ world.save("name")                   -- persist EVERYTHING to data/worlds/<name>
 world.load("name")                   -- restore a saved world
 scene.save("main")                   -- snapshot the live entity scenegraph
 scene.load("alt"); scene.clear()     -- swap scenes; empty
-zm.commit("msg"); zm.push()          -- checkpoint + publish to ZeroMind
 ```
 
-Without `zm.push()`, nobody else sees your work. `man development` covers the full vocabulary.
+## Working with ZeroMind — the `zm` tool
+
+`zm` is the engine's ZeroMind workflow surface. **It mirrors `git` semantics so you don't have to learn anything new** — the verbs are the verbs you already know:
+
+| `zm` command | Maps to (think) | What it does |
+|---|---|---|
+| `zm.status()` | `git status` | What's changed in the working tree since the last commit. |
+| `zm.commit("msg")` | `git commit -am "msg"` | Snapshot the world's current state with a message. Stages + commits in one step. Local to your engine until `push`. |
+| `zm.log()` | `git log` | History of commits in the bound world. |
+| `zm.diff()` | `git diff` | Working-tree changes since last commit. |
+| `zm.push()` | `git push` | Publish committed changes upstream so other players see them. |
+| `zm.pull()` | `git pull` | Pull latest committed state from ZeroMind into the working tree. |
+| `zm.branch(name)` | `git checkout -b name` | Start a new branch for experimentation. |
+| `zm.checkout(ref)` | `git checkout <ref>` | Switch the working tree to a different branch / commit. |
+| `zm.reset(ref)` | `git reset` | Drop working-tree changes / move HEAD. |
+
+Two callable forms work everywhere:
+
+- **Inside `execute`:** `execute({code: "zm.commit('msg'); zm.push()"})`.
+- **Inside `bash`:** `bash({command: "zm commit -m 'msg' && zm push"})` — the engine's bash surface ships the `zm` command with the same verbs. Use whichever form fits the moment.
+
+For the full vocabulary: `bash { "command": "man zm" }` or `guides({query: "zm"})`.
+
+**Without `zm.push()`, nobody else sees your work.** A commit alone is local to the engine; the push is what reaches the ZeroMind backend and propagates to other clients of the world.
+
+## Edit mode vs play mode
+
+The engine runs in one of two modes:
+
+- **edit** — authoring surface. Gameplay paused. Entities, components, materials, scripts can be added / mutated / removed. This is where `world.create` boots; this is where you build.
+- **play** — gameplay running. Player-distribution build. Entities tick, scripts execute their `update()` lifecycle, physics simulates.
+
+Swap between them at runtime to test:
+
+```luau
+wld.play()                            -- flip to play mode (start the game)
+wld.edit()                            -- flip back to edit mode (pause + return to authoring)
+wld.mode()                            -- query current mode: "edit" | "play"
+```
+
+Use `wld.play()` to test that what you built actually runs, then `wld.edit()` to keep iterating. Mode flips are cheap and reversible — there's no rebuild step.
+
+**Starting an engine instance in `runtime` mode requires the world to be pushed to ZeroMind first.** When the engine boots with `--profile runtime`, it pulls the world from ZeroMind to play; an unpushed world has nothing to pull. Practical implication: before showing a player your work, you commit + push — **and the push combines all commits since the last push into a single merge** so the published history stays compact. Drafts stay drafts (commit-only) until you decide they're ready to publish (commit + push).
+
+Default boot is `--profile editor` (edit mode); switch with `--profile runtime`. This plugin always works against an `editor`-profile engine because authoring requires it — `runtime` is the player path.
 
 ## `guides` — the canonical reference for everything in-engine
 
