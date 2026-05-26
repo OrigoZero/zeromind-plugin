@@ -1,6 +1,6 @@
 {
   "name": "zeromind",
-  "description": "ZeroMind plugin for Claude Code — drive your browser-running Zero engine worlds via the @origozero/zeromind MCP server.",
+  "description": "ZeroMind plugin for Claude Code — drive your browser-running Zero engine worlds via the @origozero/zeromind MCP server. REQUIRES Node.js 18+ (install from https://nodejs.org if needed, then restart Claude Code).",
   "owner": {
     "name": "OrigoZero",
     "url": "https://github.com/OrigoZero"
@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "zeromind",
-      "description": "ZeroMind MCP plugin: world list/create/launch/connect + engine tools (execute, guides, capture, VFS, bash) routed to the WASM engine running in your browser.",
+      "description": "ZeroMind MCP plugin: world list/create/launch/connect + engine tools (execute, guides, capture, VFS, bash) routed to the WASM engine running in your browser. REQUIRES Node.js 18+ — if you see 'status failed' after install, Node.js isn't on your PATH. Install from https://nodejs.org and restart Claude Code.",
       "version": "0.2.0",
       "source": "./",
       "author": {
