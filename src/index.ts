@@ -4,7 +4,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
   type CallToolRequest,
+  type GetPromptRequest,
 } from "@modelcontextprotocol/sdk/types.js";
 import { ensureRegistered } from "./install.js";
 import { Bridge } from "./bridge.js";
@@ -12,6 +15,7 @@ import { authStatus, zmLink, zmLinkPoll, zmUnlink } from "./tools/auth.js";
 import { WorldTools } from "./tools/world.js";
 import { EngineTools } from "./tools/engine.js";
 import { loadConfig } from "./config.js";
+import { promptDefs, getPrompt } from "./prompts.js";
 
 const IDE_NAME = process.env.ZEROMIND_IDE_NAME ?? "unknown-ide";
 
@@ -240,7 +244,7 @@ const dispatch = async (
 const main = async (): Promise<void> => {
   const server = new Server(
     { name: "zeromind", version: "0.1.0" },
-    { capabilities: { tools: {} } },
+    { capabilities: { tools: {}, prompts: {} } },
   );
 
   let bridge: Bridge | undefined;
@@ -260,6 +264,13 @@ const main = async (): Promise<void> => {
   };
 
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: toolDefs }));
+
+  server.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts: promptDefs }));
+
+  server.setRequestHandler(GetPromptRequestSchema, (req: GetPromptRequest) => {
+    const args = (req.params.arguments ?? {}) as Record<string, string>;
+    return getPrompt(req.params.name, args);
+  });
 
   server.setRequestHandler(CallToolRequestSchema, async (req: CallToolRequest) => {
     const name = req.params.name;
