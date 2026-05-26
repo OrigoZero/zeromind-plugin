@@ -38,7 +38,7 @@ This persists to the OS user-config dir (mode 0600). Subsequent sessions reuse i
    - On timeout → `{ok: false, error: 'no_active_session', url}`. Relay the URL.
 4. **`guides()`** (no args) — read the engine README. **Do this every time after `world.connect`** in unfamiliar territory. The README is the highest-signal index for the live engine: mental model, scripting globals, capture parameters, VFS tree, section index pointing to deep topic pagelets.
 5. **Iterate** with `execute` / `read_file` / `write_file` / `edit_file` / `capture` / `bash`.
-6. **Publish** when ready: `execute({code: "zm.commit('describe the change'); zm.push()"})`.
+6. **Publish** when ready: `execute({code: "zm.add('.'); zm.commit('describe the change'); zm.push()"})` — add stages, commit snapshots, push publishes.
 
 ## Worlds, scenes & persistence
 
@@ -61,44 +61,40 @@ scene.load("alt"); scene.clear()     -- swap scenes; empty
 | `zm` command | Maps to (think) | What it does |
 |---|---|---|
 | `zm.status()` | `git status` | What's changed in the working tree since the last commit. |
-| `zm.commit("msg")` | `git commit -am "msg"` | Snapshot the world's current state with a message. Stages + commits in one step. Local to your engine until `push`. |
+| `zm.add(paths)` | `git add` | **Stage** files for the next commit. `zm.add(".")` stages every change in the working tree. **Required before `zm.commit` — commit only takes what's staged, not unstaged changes.** |
+| `zm.commit("msg")` | `git commit -m "msg"` | Snapshot the **staged** changes with a message. Does NOT auto-stage. Local to your engine until `push`. |
 | `zm.log()` | `git log` | History of commits in the bound world. |
-| `zm.diff()` | `git diff` | Working-tree changes since last commit. |
+| `zm.diff()` | `git diff` | Working-tree changes since last commit (unstaged + staged). |
 | `zm.push()` | `git push` | Publish committed changes upstream so other players see them. |
 | `zm.pull()` | `git pull` | Pull latest committed state from ZeroMind into the working tree. |
 | `zm.branch(name)` | `git checkout -b name` | Start a new branch for experimentation. |
 | `zm.checkout(ref)` | `git checkout <ref>` | Switch the working tree to a different branch / commit. |
 | `zm.reset(ref)` | `git reset` | Drop working-tree changes / move HEAD. |
 
+**The publish sequence is always three steps: `zm.add` → `zm.commit` → `zm.push`.** Skipping `zm.add` commits nothing (you'll see the commit succeed with an empty change set); skipping `zm.push` leaves the commit local-only.
+
 Two callable forms work everywhere:
 
-- **Inside `execute`:** `execute({code: "zm.commit('msg'); zm.push()"})`.
-- **Inside `bash`:** `bash({command: "zm commit -m 'msg' && zm push"})` — the engine's bash surface ships the `zm` command with the same verbs. Use whichever form fits the moment.
+- **Inside `execute`:** `execute({code: "zm.add('.'); zm.commit('msg'); zm.push()"})`.
+- **Inside `bash`:** `bash({command: "zm add . && zm commit -m 'msg' && zm push"})` — the engine's bash surface ships the `zm` command with the same verbs. Use whichever form fits the moment.
 
 For the full vocabulary: `bash { "command": "man zm" }` or `guides({query: "zm"})`.
 
 **Without `zm.push()`, nobody else sees your work.** A commit alone is local to the engine; the push is what reaches the ZeroMind backend and propagates to other clients of the world.
 
-## Edit mode vs play mode
+**Push collapses commits into a single merge upstream.** Locally you can commit as granularly as you like — each commit is its own checkpoint to checkout/reset to. On `push`, every commit since the last successful push is combined into a single merge on the published history, so the world's public log stays compact regardless of how many local checkpoints you took.
 
-The engine runs in one of two modes:
+## Edit mode vs play mode — testing what you built
 
-- **edit** — authoring surface. Gameplay paused. Entities, components, materials, scripts can be added / mutated / removed. This is where `world.create` boots; this is where you build.
-- **play** — gameplay running. Player-distribution build. Entities tick, scripts execute their `update()` lifecycle, physics simulates.
-
-Swap between them at runtime to test:
+The engine you're driving always boots in **edit** mode (authoring surface, gameplay paused — agent tool calls require it). To test what you built actually runs, flip into **play** mode and back:
 
 ```luau
-wld.play()                            -- flip to play mode (start the game)
-wld.edit()                            -- flip back to edit mode (pause + return to authoring)
+wld.play()                            -- flip to play mode: gameplay runs, scripts tick, physics simulates
+wld.edit()                            -- flip back to edit mode: pause + return to authoring
 wld.mode()                            -- query current mode: "edit" | "play"
 ```
 
-Use `wld.play()` to test that what you built actually runs, then `wld.edit()` to keep iterating. Mode flips are cheap and reversible — there's no rebuild step.
-
-**Starting an engine instance in `runtime` mode requires the world to be pushed to ZeroMind first.** When the engine boots with `--profile runtime`, it pulls the world from ZeroMind to play; an unpushed world has nothing to pull. Practical implication: before showing a player your work, you commit + push — **and the push combines all commits since the last push into a single merge** so the published history stays compact. Drafts stay drafts (commit-only) until you decide they're ready to publish (commit + push).
-
-Default boot is `--profile editor` (edit mode); switch with `--profile runtime`. This plugin always works against an `editor`-profile engine because authoring requires it — `runtime` is the player path.
+Mode flips are cheap and reversible — there's no rebuild step. After `wld.play()`, take a `capture` to see your world animating; flip back with `wld.edit()` to make changes; repeat. This is the inner loop for verifying behavior beyond static layout.
 
 ## `guides` — the canonical reference for everything in-engine
 
@@ -469,8 +465,8 @@ world.load("my_project")
 scene.load("alt_scene")
 scene.clear()  -- empty scene
 
--- Publish — without push, no one else sees your work
-execute({ code = "zm.commit('description'); zm.push()" })
+-- Publish — three steps: add stages, commit snapshots, push publishes
+execute({ code = "zm.add('.'); zm.commit('description'); zm.push()" })
 ```
 
 ## Iterating without reloading
@@ -481,7 +477,7 @@ This is the pattern that makes Zero work fast.
 2. Test via `execute()` and `capture()`.
 3. Found a bug or want to tweak? Use `write_file` / `edit_file` against the VFS to modify the script in place. Re-execute.
 4. When the in-engine state is what you want, persist it: `execute { code: "scene.save('main'); world.save('my_project')" }`.
-5. When ready to publish, `execute { code: "zm.commit('msg'); zm.push()" }`.
+5. When ready to publish, `execute { code: "zm.add('.'); zm.commit('msg'); zm.push()" }`.
 
 A single connected session can handle dozens of iterations. If you find yourself asking the user to reload the browser between every change, you're doing it wrong.
 
@@ -491,9 +487,10 @@ Most user prompts will be one of these shapes — translate to the standard flow
 
 - **"make me a [game/scene/world] that does X"** → `world.create`, `world.connect`, then `execute` + `write_file` to build X.
 - **"open my [name]"** → `world.list` → find by name → `world.connect`.
-- **"add a [thing]"** to an open world → `execute` to spawn/configure, `capture` to verify, then `zm.commit`+`zm.push` once happy.
+- **"add a [thing]"** to an open world → `execute` to spawn/configure, `capture` to verify, then `zm.add('.')` + `zm.commit` + `zm.push` once happy.
 - **"what does my world look like?"** → `capture()` and show them.
-- **"save my work"** → `execute({code: "zm.commit('...'); zm.push()"})`.
+- **"does it actually work?"** → `wld.play()` to flip into play mode, `capture` to see it run, `wld.edit()` to return.
+- **"save my work"** → `execute({code: "zm.add('.'); zm.commit('...'); zm.push()"})`.
 - **"the [thing] isn't working"** → `capture` with a diagnostic pass to localize, then `read_file` the relevant component/material, then fix via `edit_file` and re-`execute` / `capture`.
 
 ## Errors you'll see
@@ -517,7 +514,8 @@ Most user prompts will be one of these shapes — translate to the standard flow
 | Disabling `lsp.strict` to silence diagnostics | Strict mode catches your bugs before they corrupt state. Fix the bug, don't silence the check. |
 | Indexing `input.snapshot().keys` by name | `keys` is an ARRAY of pressed key codes, not a dict. Use `input.isDown("KeyD")`. |
 | `entity:component("X")` colon-call instead of `entity.component.X(...)` | Colon-call returns nil silently. Use the dot form. |
-| Persisting work without `zm.push()` | Without push, nobody else sees your changes. Always finish with `zm.commit` + `zm.push`. |
+| Persisting work without `zm.push()` | Without push, nobody else sees your changes. Always finish with `zm.add` + `zm.commit` + `zm.push`. |
+| Calling `zm.commit` without `zm.add` first | Commit only takes what's **staged**. An un-add'd commit succeeds but ships an empty change set. `zm.add('.')` stages everything in the working tree. |
 
 ## Available MCP prompts
 
