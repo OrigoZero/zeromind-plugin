@@ -5,6 +5,19 @@ export const issuer = (): string =>
 
 export type RegisterResponse = { install_id: string; install_secret: string };
 
+export type LinkCodeResponse = {
+  user_code: string;
+  verification_url: string;
+  expires_in: number;
+  interval: number;
+};
+
+export type LinkStatusResponse =
+  | { status: "pending" }
+  | { status: "approved"; user_id: string };
+
+const authed = (secret: string) => ({ authorization: `Bearer ${secret}` });
+
 export const registerInstall = async (params: {
   install_name: string;
   public_key: string;
@@ -16,4 +29,39 @@ export const registerInstall = async (params: {
   });
   if (!res.ok) throw new Error(`register failed: ${res.status} ${await res.text()}`);
   return (await res.json()) as RegisterResponse;
+};
+
+export const createLinkCode = async (cfg: {
+  install_id: string;
+  install_secret: string;
+}): Promise<LinkCodeResponse> => {
+  const res = await fetch(`${issuer()}/v1/installs/${cfg.install_id}/link-codes`, {
+    method: "POST",
+    headers: { ...authed(cfg.install_secret), "content-type": "application/json" },
+    body: "{}",
+  });
+  if (!res.ok) throw new Error(`link-codes failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as LinkCodeResponse;
+};
+
+export const getLinkStatus = async (cfg: {
+  install_id: string;
+  install_secret: string;
+}): Promise<LinkStatusResponse> => {
+  const res = await fetch(`${issuer()}/v1/installs/${cfg.install_id}/link-status`, {
+    headers: authed(cfg.install_secret),
+  });
+  if (!res.ok) throw new Error(`link-status failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as LinkStatusResponse;
+};
+
+export const postUnlink = async (cfg: {
+  install_id: string;
+  install_secret: string;
+}): Promise<void> => {
+  const res = await fetch(`${issuer()}/v1/installs/${cfg.install_id}/unlink`, {
+    method: "POST",
+    headers: authed(cfg.install_secret),
+  });
+  if (!res.ok) throw new Error(`unlink failed: ${res.status} ${await res.text()}`);
 };
