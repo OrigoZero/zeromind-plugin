@@ -1,13 +1,20 @@
 {
   "name": "zeromind",
-  "version": "0.1.0",
-  "description": "ZeroMind MCP plugin: world tools + engine tools routed to the WASM engine in your browser.",
-  "author": { "name": "OrigoZero" },
-  "mcpServers": {
-    "zeromind": {
-      "command": "npx",
-      "args": ["-y", "@origozero/zeromind"],
-      "env": { "ZEROMIND_IDE_NAME": "claude-code" }
-    }
-  }
+  "description": "ZeroMind MCP plugin: world list/create/launch/connect + engine tools (execute, guides, capture, VFS, bash) routed to the WASM engine running in your browser. After install, the bundled skill teaches Claude how to drive Zero worlds.",
+  "version": "0.2.0",
+  "author": {
+    "name": "OrigoZero"
+  },
+  "homepage": "https://github.com/OrigoZero/zeromind-plugin",
+  "repository": "https://github.com/OrigoZero/zeromind-plugin",
+  "license": "MIT",
+  "keywords": [
+    "zeromind",
+    "origozero",
+    "mcp",
+    "zero-engine",
+    "3d-engine",
+    "world-building",
+    "wasm"
+  ]
 }

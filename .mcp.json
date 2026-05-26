@@ -1,0 +1,7 @@
+{
+  "zeromind": {
+    "command": "npx",
+    "args": ["-y", "@origozero/zeromind"],
+    "env": { "ZEROMIND_IDE_NAME": "claude-code" }
+  }
+}
