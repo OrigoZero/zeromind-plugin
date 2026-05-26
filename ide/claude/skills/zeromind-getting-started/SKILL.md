@@ -8,7 +8,7 @@ description: |
 
 ## What is Zero
 
-Zero is a custom 3D engine with Luau scripting, compiled to native + WASM. Players run worlds in their browser at `https://zeromind.origoclaw.com/play/<guid>`. Everything is organized into **worlds** — persistent, multiplayer containers backed by spacetime + ZeroMind. A world survives restarts, syncs across collaborators, and is the only path through which work reaches players.
+Zero is a custom 3D engine with Luau scripting, compiled to native + WASM. Players run worlds in their browser at `https://origozero.ai/edit/<guid>`. Everything is organized into **worlds** — persistent, multiplayer containers backed by spacetime + ZeroMind. A world survives restarts, syncs across collaborators, and is the only path through which work reaches players.
 
 You (Claude) talk to the user's currently-open browser tab via this plugin's MCP tools, which route through a ZeroMind-hosted WSS bridge to the WASM engine. You don't run anything locally; the engine is in the browser.
 
@@ -27,9 +27,11 @@ This is a one-time setup per IDE install. Subsequent sessions skip this entirely
 
 1. `auth_status` — if unlinked, link first (above).
 2. `world.list` — find the world by name or guid. Use `world.create({name})` to make a new one.
-3. `world.connect({guid})`:
-   - If returns `{ok: true, session_id}` — great, you're attached. Proceed.
-   - If returns `{ok: false, error: 'no_active_session', url, message}` — relay `url` to the user: "Open `<url>` in a browser tab, then say go." Wait. Retry `world.connect`.
+3. `world.connect({guid, auto_launch: true})`. This is the **seamless one-call flow**:
+   - If a browser session is already running (user opened the world themselves on origozero.ai) → returns `{ok: true, session_id}` immediately.
+   - Otherwise opens the play URL in the user's default browser via the OS's `open` / `start` / `xdg-open`, then long-polls up to 60s for the WASM engine to boot and connect.
+   - On timeout, returns `{ok: false, error: 'no_active_session', url, message}` — relay the URL to the user as a fallback.
+   - On platforms where browser-launch fails, returns `{ok: false, error: 'launch_failed', url, message}` — relay the URL.
 4. **Always call `guides()` (no args) immediately after `world.connect`.** It returns the engine README. The README is the source of truth for Luau API. Never guess API names.
 5. Iterate:
    - `execute({code: "..."})` — run Luau.

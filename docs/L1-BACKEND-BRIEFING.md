@@ -69,7 +69,7 @@ Notes:
 ```json
 {
   "user_code": "WXYZ-1234",
-  "verification_url": "https://zeromind.origoclaw.com/link",
+  "verification_url": "https://origozero.ai/link",
   "expires_in": 600,
   "interval": 5
 }
@@ -197,7 +197,7 @@ This is the new transport layer for the plugin ↔ browser engine RPC. Both ends
 **Plugin-side connection:**
 
 ```
-GET wss://zeromind.origoclaw.com/v1/bridge?role=ide
+GET wss://origozero.ai/v1/bridge?role=ide
 Authorization: Bearer <install_secret>
 ```
 
@@ -206,7 +206,7 @@ Reject with WSS close code `4401` if install_secret invalid or `linked = false`.
 **Browser-engine-side connection:** (this lands when the engine team ships the L2 trusted-Luau bridge module — not your code, but you need the endpoint to accept it):
 
 ```
-GET wss://zeromind.origoclaw.com/v1/bridge?role=browser&world_guid=<guid>&session_id=<random>
+GET wss://origozero.ai/v1/bridge?role=browser&world_guid=<guid>&session_id=<random>
 Authorization: Bearer <user-jwt>
 ```
 

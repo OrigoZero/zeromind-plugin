@@ -46,7 +46,7 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
               type: "text",
               text:
                 "## What is Zero?\n\n" +
-                "Zero is a custom 3D engine with Luau scripting, compiled to native + WASM. It runs in the user's web browser when they open one of their worlds at https://zeromind.origoclaw.com/play/<guid>. " +
+                "Zero is a custom 3D engine with Luau scripting, compiled to native + WASM. It runs in the user's web browser when they open one of their worlds at https://origozero.ai/edit/<guid>." +
                 "All work is organized into **worlds**: persistent multiplayer containers backed by spacetime + ZeroMind. Worlds survive restarts, sync across collaborators, and are the only path through which work reaches players.\n\n" +
                 "## The plugin's tools\n\n" +
                 "**Account/identity:**\n" +

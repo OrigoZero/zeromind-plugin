@@ -14,7 +14,7 @@ import type {
 
 const bridgeUrl = (): string => {
   if (process.env.ZEROMIND_BRIDGE_URL) return process.env.ZEROMIND_BRIDGE_URL;
-  const issuer = (process.env.ZEROMIND_ISSUER ?? "https://zeromind.origoclaw.com").replace(
+  const issuer = (process.env.ZEROMIND_ISSUER ?? "https://origozero.ai").replace(
     /\/+$/,
     "",
   );
