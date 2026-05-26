@@ -1,4 +1,5 @@
 import { fetch } from "undici";
+import type { World } from "./types.js";
 
 export const issuer = (): string =>
   (process.env.ZEROMIND_ISSUER ?? "https://zeromind.origoclaw.com").replace(/\/+$/, "");
@@ -64,4 +65,27 @@ export const postUnlink = async (cfg: {
     headers: authed(cfg.install_secret),
   });
   if (!res.ok) throw new Error(`unlink failed: ${res.status} ${await res.text()}`);
+};
+
+export const listWorlds = async (cfg: { install_secret: string }): Promise<World[]> => {
+  const res = await fetch(`${issuer()}/v1/me/worlds`, {
+    headers: authed(cfg.install_secret),
+  });
+  if (!res.ok) throw new Error(`worlds list failed: ${res.status} ${await res.text()}`);
+  const body = (await res.json()) as { worlds: World[] };
+  return body.worlds;
+};
+
+export const createWorld = async (
+  cfg: { install_secret: string },
+  params: { name: string; template?: string; public?: boolean },
+): Promise<World> => {
+  const res = await fetch(`${issuer()}/v1/worlds`, {
+    method: "POST",
+    headers: { ...authed(cfg.install_secret), "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error(`world create failed: ${res.status} ${await res.text()}`);
+  const body = (await res.json()) as { world: World };
+  return body.world;
 };
