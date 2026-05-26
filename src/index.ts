@@ -65,35 +65,39 @@ const toolDefs = [
   {
     name: "world.open_in_browser",
     description:
-      "Return the URL to open a world in the user's browser. Useful when you want to relay the URL to the user manually. For the seamless flow, prefer world.launch (opens it for them) or world.connect with auto_launch:true (opens + waits).",
+      "Return the URL to open a world in the user's browser. Useful when you want to relay the URL to the user manually. For the seamless flow, prefer world.launch (opens it for them) or world.connect with auto_launch:true (opens + waits). Pass `name` (preferred — looked up via world.list) or `guid` (already-resolved).",
     inputSchema: {
       type: "object",
-      properties: { guid: { type: "string" } },
-      required: ["guid"],
+      properties: {
+        name: { type: "string", description: "World name (looked up via world.list)" },
+        guid: { type: "string", description: "Already-resolved world guid (skip lookup)" },
+      },
     },
   },
   {
     name: "world.launch",
     description:
-      "Open the world's play URL in the user's default browser by spawning the OS's `open` / `start` / `xdg-open` command. The browser tab boots the WASM engine, which connects to the ZeroMind bridge. Use world.connect afterwards (or just pass auto_launch:true to world.connect to combine both steps).",
+      "Open the world's play URL in the user's default browser by spawning the OS's `open` / `start` / `xdg-open` command. Pass `name` (preferred) or `guid`. The browser tab boots the WASM engine, which connects to the ZeroMind bridge. Use world.connect afterwards (or just pass auto_launch:true to world.connect to combine both steps).",
     inputSchema: {
       type: "object",
-      properties: { guid: { type: "string" } },
-      required: ["guid"],
+      properties: {
+        name: { type: "string", description: "World name (looked up via world.list)" },
+        guid: { type: "string", description: "Already-resolved world guid (skip lookup)" },
+      },
     },
   },
   {
     name: "world.connect",
     description:
-      "Attach to a browser session for a world. If a session is already active, returns immediately. Otherwise long-polls up to `timeout_ms` (default 60000) for `session.opened`. Pass `auto_launch: true` to have me open the play URL in the user's default browser before waiting — that's the standard one-call seamless flow after world.create. Sets the implicit current session for subsequent engine tools.",
+      "Attach to a browser session for a world. Pass `name` (preferred — resolved via world.list) or `guid`. If a session is already active, returns immediately. Otherwise long-polls up to `timeout_ms` (default 60000) for `session.opened`. Pass `auto_launch: true` to have me open the play URL in the user's default browser before waiting — that's the standard one-call seamless flow after world.create. Sets the implicit current session for subsequent engine tools.",
     inputSchema: {
       type: "object",
       properties: {
-        guid: { type: "string" },
+        name: { type: "string", description: "World name (looked up via world.list)" },
+        guid: { type: "string", description: "Already-resolved world guid (skip lookup)" },
         timeout_ms: { type: "integer" },
         auto_launch: { type: "boolean" },
       },
-      required: ["guid"],
     },
   },
   {
@@ -200,12 +204,14 @@ const toolDefs = [
   },
 ];
 
-type ToolCtx = { b: Bridge; w: WorldTools; e: EngineTools };
+type WorldCtx = { w: WorldTools };
+type EngineCtx = { b: Bridge; w: WorldTools; e: EngineTools };
 
 const dispatch = async (
   name: string,
   args: Record<string, unknown>,
-  ensureBridge: () => Promise<ToolCtx>,
+  ensureWorld: () => Promise<WorldCtx>,
+  ensureEngine: () => Promise<EngineCtx>,
 ): Promise<unknown> => {
   switch (name) {
     case "auth_status":
@@ -217,43 +223,53 @@ const dispatch = async (
     case "zm_unlink":
       return zmUnlink();
     case "world.list":
-      return (await ensureBridge()).w.list();
+      return (await ensureWorld()).w.list();
     case "world.create":
-      return (await ensureBridge()).w.create(
+      return (await ensureWorld()).w.create(
         args as { name: string; template?: string; public?: boolean },
       );
     case "world.open_in_browser":
-      return (await ensureBridge()).w.openInBrowser(args.guid as string);
+      return (await ensureWorld()).w.openInBrowser(
+        args as { name?: string; guid?: string; name_or_guid?: string },
+      );
     case "world.launch":
-      return (await ensureBridge()).w.launch(args as { guid: string });
+      return (await ensureWorld()).w.launch(
+        args as { name?: string; guid?: string; name_or_guid?: string },
+      );
     case "world.connect":
-      return (await ensureBridge()).w.connect(
-        args as { guid: string; timeout_ms?: number; auto_launch?: boolean },
+      return (await ensureWorld()).w.connect(
+        args as {
+          name?: string;
+          guid?: string;
+          name_or_guid?: string;
+          timeout_ms?: number;
+          auto_launch?: boolean;
+        },
       );
     case "world.disconnect":
-      return (await ensureBridge()).w.disconnect();
+      return (await ensureWorld()).w.disconnect();
     case "execute":
-      return (await ensureBridge()).e.execute(args as { code: string });
+      return (await ensureEngine()).e.execute(args as { code: string });
     case "guides":
-      return (await ensureBridge()).e.guides(args);
+      return (await ensureEngine()).e.guides(args);
     case "capture":
-      return (await ensureBridge()).e.capture(args);
+      return (await ensureEngine()).e.capture(args);
     case "read_file":
-      return (await ensureBridge()).e.read_file(args as { path: string });
+      return (await ensureEngine()).e.read_file(args as { path: string });
     case "write_file":
-      return (await ensureBridge()).e.write_file(
+      return (await ensureEngine()).e.write_file(
         args as { path: string; content?: string; content_b64?: string },
       );
     case "edit_file":
-      return (await ensureBridge()).e.edit_file(
+      return (await ensureEngine()).e.edit_file(
         args as { path: string; old_string: string; new_string: string; replace_all?: boolean },
       );
     case "bash":
-      return (await ensureBridge()).e.bash(args as { command: string });
+      return (await ensureEngine()).e.bash(args as { command: string });
     case "luau_test":
-      return (await ensureBridge()).e.luau_test(args);
+      return (await ensureEngine()).e.luau_test(args);
     case "instance_health":
-      return (await ensureBridge()).e.instance_health();
+      return (await ensureEngine()).e.instance_health();
     default:
       throw new Error(`unknown tool: ${name}`);
   }
@@ -261,24 +277,71 @@ const dispatch = async (
 
 const main = async (): Promise<void> => {
   const server = new Server(
-    { name: "zeromind", version: "0.1.0" },
+    { name: "zeromind", version: "0.3.1" },
     { capabilities: { tools: {}, prompts: {} } },
   );
 
   let bridge: Bridge | undefined;
   let worldTools: WorldTools | undefined;
   let engineTools: EngineTools | undefined;
+  let bridgeConnectError: Error | undefined;
+  let initPromise: Promise<void> | undefined;
 
-  const ensureBridge = async (): Promise<ToolCtx> => {
+  // World tools (REST + local launch + session-tracker) are usable before
+  // the bridge is up. The bridge is needed only for session.opened events
+  // (which world.connect awaits) and for engine RPC. We do the init
+  // single-flight via initPromise so concurrent tool calls share one init.
+  const runInit = async (): Promise<void> => {
     const cfg = loadConfig();
     if (!cfg) throw new Error("not registered — call zm_link first");
-    if (!bridge) {
-      bridge = new Bridge(cfg);
-      await bridge.connect();
-      worldTools = new WorldTools(cfg, bridge);
-      engineTools = new EngineTools(bridge, worldTools);
+    const b = new Bridge(cfg);
+    const wt = new WorldTools(cfg, b);
+    const et = new EngineTools(b, wt);
+    // Publish world tools immediately so REST world.* calls work even
+    // while the bridge handshake is still in flight or fails outright.
+    bridge = b;
+    worldTools = wt;
+    engineTools = et;
+    try {
+      await b.connect();
+      bridgeConnectError = undefined;
+    } catch (e) {
+      bridgeConnectError = e as Error;
+      // eslint-disable-next-line no-console
+      console.error(
+        `zeromind: bridge connect failed (engine tools will be unavailable until L1 bridge is reachable): ${(e as Error).message}`,
+      );
     }
-    return { b: bridge, w: worldTools!, e: engineTools! };
+  };
+
+  const ensureInit = (): Promise<void> => {
+    if (!initPromise) initPromise = runInit();
+    return initPromise;
+  };
+
+  const ensureWorld = async (): Promise<WorldCtx> => {
+    await ensureInit();
+    return { w: worldTools! };
+  };
+
+  const ensureEngine = async (): Promise<EngineCtx> => {
+    await ensureWorld();
+    if (bridgeConnectError) {
+      throw new Error(
+        `engine tools require the ZeroMind WSS bridge, but the bridge connect failed: ${bridgeConnectError.message}. Once the L1 bridge is reachable, retry — the plugin will try to connect again on the next engine tool call.`,
+      );
+    }
+    if (!bridge!.isConnected()) {
+      try {
+        await bridge!.connect();
+      } catch (e) {
+        bridgeConnectError = e as Error;
+        throw new Error(
+          `bridge connect failed: ${(e as Error).message}. Retry once the L1 bridge endpoint is reachable.`,
+        );
+      }
+    }
+    return { b: bridge!, w: worldTools!, e: engineTools! };
   };
 
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: toolDefs }));
@@ -294,7 +357,7 @@ const main = async (): Promise<void> => {
     const name = req.params.name;
     const args = (req.params.arguments ?? {}) as Record<string, unknown>;
     try {
-      const result = await dispatch(name, args, ensureBridge);
+      const result = await dispatch(name, args, ensureWorld, ensureEngine);
       if (name === "capture") {
         const r = result as { image_b64: string };
         return {

@@ -1,6 +1,6 @@
 {
   "name": "@origozero/zeromind",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "ZeroMind IDE plugin — MCP server for Claude Code, Cursor, and Codex",
   "type": "module",
   "main": "dist/index.js",

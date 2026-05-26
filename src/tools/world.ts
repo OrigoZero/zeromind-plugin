@@ -58,8 +58,45 @@ export class WorldTools {
     return `${issuer().replace(/\/+$/, "")}/edit/${guid}`;
   }
 
-  openInBrowser(guid: string): { url: string; message: string } {
-    const url = this.playUrl(guid);
+  /**
+   * Resolve a `name | guid | name_or_guid` argument to a concrete guid via
+   * `world.list`. The AI is encouraged to call this with `name` (no guid
+   * literacy required), but a guid is accepted for already-resolved cases.
+   */
+  private async resolveGuid(arg: {
+    name?: string;
+    guid?: string;
+    name_or_guid?: string;
+  }): Promise<{ guid?: string; error?: string }> {
+    const candidate = arg.guid ?? arg.name_or_guid ?? arg.name;
+    if (!candidate) return { error: "must pass `name` or `name_or_guid`" };
+    // Heuristic: a guid looks like 8-4-4-4-12 hex or starts with `wld_`.
+    const looksLikeGuid = /^(wld_|[0-9a-f]{8}-[0-9a-f]{4}-)/i.test(candidate);
+    if (arg.guid || looksLikeGuid) return { guid: candidate };
+    const list = await this.list();
+    const matches = list.filter((w) => w.name === candidate);
+    if (matches.length === 0) {
+      return {
+        error: `no world found with name '${candidate}'. Call world.list to see what's available, or pass auto_create=true on world.connect to create it on demand.`,
+      };
+    }
+    if (matches.length > 1) {
+      const guids = matches.map((w) => w.guid).join(", ");
+      return {
+        error: `multiple worlds named '${candidate}' (guids: ${guids}). Pass an explicit guid to disambiguate, or rename one of them.`,
+      };
+    }
+    return { guid: matches[0].guid };
+  }
+
+  async openInBrowser(arg: {
+    name?: string;
+    guid?: string;
+    name_or_guid?: string;
+  }): Promise<{ url: string; message: string } | { error: string }> {
+    const r = await this.resolveGuid(arg);
+    if (r.error) return { error: r.error };
+    const url = this.playUrl(r.guid!);
     return {
       url,
       message: `Open this URL in a browser tab to start the world, then I'll continue: ${url}`,
@@ -72,8 +109,18 @@ export class WorldTools {
    * immediately — the actual browser-engine boot happens asynchronously,
    * which `world.connect` then long-polls for.
    */
-  launch(params: { guid: string }): LaunchResult {
-    const url = this.playUrl(params.guid);
+  async launch(arg: {
+    name?: string;
+    guid?: string;
+    name_or_guid?: string;
+  }): Promise<LaunchResult | { error: string }> {
+    const r = await this.resolveGuid(arg);
+    if (r.error) return { error: r.error };
+    return this.launchByGuid(r.guid!);
+  }
+
+  private launchByGuid(guid: string): LaunchResult {
+    const url = this.playUrl(guid);
     const platform = process.platform;
     let command: string;
     let args: string[];
@@ -112,18 +159,24 @@ export class WorldTools {
    * "open + wait + attach" handshake.
    */
   async connect(params: {
-    guid: string;
+    name?: string;
+    guid?: string;
+    name_or_guid?: string;
     timeout_ms?: number;
     auto_launch?: boolean;
-  }): Promise<ConnectResult> {
-    const existing = this.activeSessions.get(params.guid);
+  }): Promise<ConnectResult | { ok: false; error: string }> {
+    const r = await this.resolveGuid(params);
+    if (r.error) return { ok: false, error: r.error };
+    const guid = r.guid!;
+
+    const existing = this.activeSessions.get(guid);
     if (existing) {
       this.current = existing;
       return { ok: true, session_id: existing };
     }
 
     if (params.auto_launch) {
-      const launchResult = this.launch({ guid: params.guid });
+      const launchResult = this.launchByGuid(guid);
       if (!launchResult.ok) {
         return {
           ok: false,
@@ -135,7 +188,7 @@ export class WorldTools {
     }
 
     const timeoutMs = params.timeout_ms ?? DEFAULT_CONNECT_TIMEOUT_MS;
-    const sessionId = await this.waitForSession(params.guid, timeoutMs);
+    const sessionId = await this.waitForSession(guid, timeoutMs);
     if (sessionId) {
       // Small grace period — let the engine finish its trusted-VM
       // bootstrap before the AI starts hitting it with execute()s.
@@ -144,7 +197,7 @@ export class WorldTools {
       return { ok: true, session_id: sessionId };
     }
 
-    const url = this.playUrl(params.guid);
+    const url = this.playUrl(guid);
     return {
       ok: false,
       error: "no_active_session",
