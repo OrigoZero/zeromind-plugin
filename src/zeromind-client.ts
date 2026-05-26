@@ -2,7 +2,7 @@ import { fetch } from "undici";
 import type { World } from "./types.js";
 
 export const issuer = (): string =>
-  (process.env.ZEROMIND_ISSUER ?? "https://zeromind.origoclaw.com").replace(/\/+$/, "");
+  (process.env.ZEROMIND_ISSUER ?? "https://origozero.ai").replace(/\/+$/, "");
 
 export type RegisterResponse = { install_id: string; install_secret: string };
 

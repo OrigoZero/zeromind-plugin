@@ -57,13 +57,54 @@ describe("world tools", () => {
       await b.connect();
       const tools = new WorldTools(cfg, b);
 
-      const result = await tools.connect({ guid: "wld_nonexistent" });
+      const result = await tools.connect({
+        guid: "wld_nonexistent",
+        timeout_ms: 200,
+      });
       expect(result.ok).toBe(false);
       if (result.ok === false) {
         expect(result.error).toBe("no_active_session");
-        expect(result.url).toContain("/play/wld_nonexistent");
-        expect(result.message).toContain("Open this URL");
+        expect(result.url).toContain("/edit/wld_nonexistent");
+        expect(result.message.toLowerCase()).toContain("ask the user to open");
       }
+      await b.close();
+    } finally {
+      clearEnv();
+      tmp.cleanup();
+    }
+  });
+
+  it("connect long-polls and resolves when a browser session opens mid-wait", async () => {
+    const tmp = withTmpConfigDir();
+    setEnv(server, tmp.dir);
+    try {
+      const cfg = await ensureRegistered({ ideName: "t" });
+      server.forceApprove(cfg.install_id, "usr_poll");
+      const b = new Bridge(cfg);
+      await b.connect();
+      const tools = new WorldTools(cfg, b);
+      const world = await tools.create({ name: "poll" });
+
+      let lateWs: WebSocket | undefined;
+      const timer = setTimeout(() => {
+        lateWs = new WebSocket(
+          `${server.wsUrl}/v1/bridge?role=browser&world_guid=${world.guid}&session_id=ses_late`,
+          { headers: { authorization: "Bearer mock-user-jwt-usr_poll" } },
+        );
+      }, 100);
+
+      try {
+        const result = await tools.connect({
+          guid: world.guid,
+          timeout_ms: 5_000,
+        });
+        expect(result).toEqual({ ok: true, session_id: "ses_late" });
+        expect(tools.currentSession()).toBe("ses_late");
+      } finally {
+        clearTimeout(timer);
+        if (lateWs) lateWs.close();
+      }
+
       await b.close();
     } finally {
       clearEnv();

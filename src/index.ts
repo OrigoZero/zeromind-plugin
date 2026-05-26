@@ -65,7 +65,17 @@ const toolDefs = [
   {
     name: "world.open_in_browser",
     description:
-      "Return the URL to open a world in the user's browser. The user must open this URL and then world.connect can attach.",
+      "Return the URL to open a world in the user's browser. Useful when you want to relay the URL to the user manually. For the seamless flow, prefer world.launch (opens it for them) or world.connect with auto_launch:true (opens + waits).",
+    inputSchema: {
+      type: "object",
+      properties: { guid: { type: "string" } },
+      required: ["guid"],
+    },
+  },
+  {
+    name: "world.launch",
+    description:
+      "Open the world's play URL in the user's default browser by spawning the OS's `open` / `start` / `xdg-open` command. The browser tab boots the WASM engine, which connects to the ZeroMind bridge. Use world.connect afterwards (or just pass auto_launch:true to world.connect to combine both steps).",
     inputSchema: {
       type: "object",
       properties: { guid: { type: "string" } },
@@ -75,10 +85,14 @@ const toolDefs = [
   {
     name: "world.connect",
     description:
-      "Attach to an active browser session for a world. If no session is active, returns the URL for the user to open. Sets the implicit current session for subsequent engine tools.",
+      "Attach to a browser session for a world. If a session is already active, returns immediately. Otherwise long-polls up to `timeout_ms` (default 60000) for `session.opened`. Pass `auto_launch: true` to have me open the play URL in the user's default browser before waiting — that's the standard one-call seamless flow after world.create. Sets the implicit current session for subsequent engine tools.",
     inputSchema: {
       type: "object",
-      properties: { guid: { type: "string" } },
+      properties: {
+        guid: { type: "string" },
+        timeout_ms: { type: "integer" },
+        auto_launch: { type: "boolean" },
+      },
       required: ["guid"],
     },
   },
@@ -210,8 +224,12 @@ const dispatch = async (
       );
     case "world.open_in_browser":
       return (await ensureBridge()).w.openInBrowser(args.guid as string);
+    case "world.launch":
+      return (await ensureBridge()).w.launch(args as { guid: string });
     case "world.connect":
-      return (await ensureBridge()).w.connect(args as { guid: string });
+      return (await ensureBridge()).w.connect(
+        args as { guid: string; timeout_ms?: number; auto_launch?: boolean },
+      );
     case "world.disconnect":
       return (await ensureBridge()).w.disconnect();
     case "execute":
