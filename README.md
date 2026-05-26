@@ -11,7 +11,17 @@ v0.1.0 — feature-complete against the in-repo mock ZeroMind server. End-to-end
 
 The plugin itself is shippable to npm today; it'll be functional end-to-end once L1 lands.
 
-## Install (when released)
+## Prerequisites
+
+**Node.js 18 or newer** must be installed and on your PATH. The plugin is a Node MCP server spawned by your IDE via `npx`. If you don't have Node yet, install it:
+
+- **macOS:** `brew install node` (or download from https://nodejs.org)
+- **Linux:** your distro's package manager, or https://nodejs.org / [nvm](https://github.com/nvm-sh/nvm)
+- **Windows:** https://nodejs.org (LTS installer) — restart your IDE after install so it picks up the new PATH
+
+Verify with `node --version` (should print v18+ or higher). **If you see "status failed" after installing the plugin, Node is almost certainly the cause** — install it, restart your IDE, retry.
+
+## Install
 
 ### Claude Code
 
@@ -22,7 +32,7 @@ The plugin itself is shippable to npm today; it'll be functional end-to-end once
 
 ### Cursor
 
-Click the install button in `ide/cursor/install-link.md` (rendered on the README on GitHub).
+Click the install button in [`ide/cursor/install-link.md`](ide/cursor/install-link.md). Linux users: if the deeplink errors, use the manual `~/.cursor/mcp.json` block in that file.
 
 ### Codex
 
