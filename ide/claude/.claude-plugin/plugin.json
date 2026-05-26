@@ -1,0 +1,13 @@
+{
+  "name": "zeromind",
+  "version": "0.1.0",
+  "description": "ZeroMind MCP plugin: world tools + engine tools routed to the WASM engine in your browser.",
+  "author": { "name": "OrigoZero" },
+  "mcpServers": {
+    "zeromind": {
+      "command": "npx",
+      "args": ["-y", "@origozero/zeromind"],
+      "env": { "ZEROMIND_IDE_NAME": "claude-code" }
+    }
+  }
+}
