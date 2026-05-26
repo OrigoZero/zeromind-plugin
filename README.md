@@ -4,7 +4,12 @@ ZeroMind IDE plugin — an MCP server that runs inside Claude Code, Cursor, and 
 
 ## Status
 
-Pre-release. Implementation in progress — see `docs/` for the design doc and implementation plan.
+v0.1.0 — feature-complete against the in-repo mock ZeroMind server. End-to-end (stdio MCP) tested. Production use against the live `zeromind.origoclaw.com` depends on:
+
+- **L1 (ZeroMind backend)** — endpoints `/v1/installs/*`, `/v1/me/worlds`, `/v1/worlds`, `wss /v1/bridge`. Spec in [`docs/L1-BACKEND-BRIEFING.md`](docs/L1-BACKEND-BRIEFING.md).
+- **L2 (engine bridge module)** — trusted Luau module that opens the WSS bridge on WASM boot. Tracked in `OrigoZero/zero`.
+
+The plugin itself is shippable to npm today; it'll be functional end-to-end once L1 lands.
 
 ## Install (when released)
 
