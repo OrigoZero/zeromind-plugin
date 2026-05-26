@@ -34,6 +34,15 @@ npm run build     # compile TypeScript
 npm run lint
 ```
 
+## Releasing
+
+Maintainer steps:
+
+1. Bump version in `package.json`.
+2. `git tag vX.Y.Z && git push --tags` — the publish workflow runs.
+
+Requires `NPM_TOKEN` secret in repo settings, scoped to the `@origozero` npm org.
+
 ## License
 
 MIT
