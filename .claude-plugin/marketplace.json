@@ -1,18 +1,19 @@
 {
   "name": "zeromind",
+  "description": "ZeroMind plugin for Claude Code — drive your browser-running Zero engine worlds via the @origozero/zeromind MCP server.",
   "owner": {
     "name": "OrigoZero",
     "url": "https://github.com/OrigoZero"
   },
-  "metadata": {
-    "description": "ZeroMind plugin for Claude Code — drive your browser-running Zero engine worlds.",
-    "version": "0.1.0"
-  },
   "plugins": [
     {
       "name": "zeromind",
-      "source": ".",
-      "description": "ZeroMind MCP plugin: world list/create + engine tools (execute, guides, capture, VFS) routed to the WASM engine in your browser."
+      "description": "ZeroMind MCP plugin: world list/create/launch/connect + engine tools (execute, guides, capture, VFS, bash) routed to the WASM engine running in your browser.",
+      "version": "0.2.0",
+      "source": "./",
+      "author": {
+        "name": "OrigoZero"
+      }
     }
   ]
 }
