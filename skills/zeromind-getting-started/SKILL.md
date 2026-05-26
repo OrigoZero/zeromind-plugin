@@ -23,8 +23,10 @@ Treat the engine accordingly: **no shortcuts, no "for now" solutions, no stubs**
 If `auth_status` returns `linked: false`:
 
 1. Call `zm_link`. Returns either `{status: 'approved', user_id}` (done) or `{status: 'pending', user_code, verification_url, expires_in, interval}`.
-2. If pending, tell the user verbatim: *"Open `<verification_url>` and enter `<user_code>`. The code expires in `<expires_in>`s."*
+2. If pending, tell the user: *"Open **https://origozero.ai/link** and enter `<user_code>`. The code expires in `<expires_in>`s."*
 3. Poll `zm_link_poll` every `interval` seconds. When approved, confirm and proceed.
+
+**Always tell the user `https://origozero.ai/link`** as the URL — do not relay the `verification_url` field verbatim. The backend currently returns an `api.origozero.ai/link` variant in that field, but the public approval page lives at `origozero.ai/link`. Use the public domain so the user reaches the right page.
 
 This persists to the OS user-config dir (mode 0600). Subsequent sessions reuse it silently.
 
