@@ -54,11 +54,79 @@ export type InspectArgs = {
   conforms?: boolean;
 };
 
-export type PullArgs = {
-  asset_guids: string[];
+export type InstallArgs = {
+  // Optional — inferred from which id you pass: `world` → library, `guid` →
+  // asset. Pass it explicitly only to disambiguate.
+  target?: "library" | "asset";
+  // library (world-as-library): world guid + how to pin/name it
+  world?: string;
   ref?: string;
-  conforms?: boolean;
-  ensure_compat?: boolean;
+  commit?: string;
+  as?: string;
+  // asset (imperative content pull)
+  guid?: string;
+  at?: string;
+};
+
+const luaStr = (s: string): string =>
+  '"' +
+  s
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t") +
+  '"';
+
+const luaTable = (entries: Array<[string, string | undefined]>): string => {
+  const parts = entries
+    .filter(([, v]) => v !== undefined && v !== "")
+    .map(([k, v]) => `${k} = ${luaStr(v as string)}`);
+  return `{ ${parts.join(", ")} }`;
+};
+
+/**
+ * Build the prewritten Luau snippet that installs ZeroMind content into the
+ * CONNECTED world's engine. Only identifiers (guid / world / ref / path) cross
+ * the wire — the engine fetches every byte from ZeroMind itself; nothing is
+ * loaded into the MCP client.
+ *
+ * - `library` → `world.installLibrary(...)`: writes a single
+ *   `zero/world-import/v1` marker; the engine subscribes to the imported
+ *   world and registers `@<name>::<dotted>` resolver entries without copying
+ *   bytes locally.
+ * - `asset` → `world.installAsset(...)`: imperative closure pull; the root
+ *   lands at `at` (default `/source/<display_name>`), foreign deps under
+ *   `/source/deps/<owning_world>/…`.
+ *
+ * Pure + side-effect-free so it's unit-testable; the caller runs the result
+ * through the engine bridge's `execute`.
+ */
+export const buildInstallLuau = (a: InstallArgs): string => {
+  // Infer the mode from what was passed so the caller usually just gives an id:
+  // a `world` guid installs that world as a library; an asset `guid` installs
+  // the asset's content.
+  const target = a.target ?? (a.world ? "library" : a.guid ? "asset" : undefined);
+  if (target === "library") {
+    const world = need(a.world, "world");
+    const tbl = luaTable([
+      ["world", world],
+      ["ref", a.ref],
+      ["commit", a.commit],
+      ["as", a.as],
+    ]);
+    return `return world.installLibrary(${tbl})`;
+  }
+  if (target === "asset") {
+    const guid = need(a.guid, "guid");
+    const tbl = luaTable([
+      ["guid", guid],
+      ["ref", a.ref],
+      ["at", a.at],
+    ]);
+    return `return world.installAsset(${tbl})`;
+  }
+  throw new Error("pass `world` (to install a world as a library) or `guid` (to install an asset)");
 };
 
 export type EngageArgs = {
@@ -90,13 +158,13 @@ export type EngageArgs = {
 };
 
 /**
- * The hivemind surface — discovery, inspection, pull, and social actions —
+ * The ZeroMind surface — discovery, inspection, pull, and social actions —
  * routed through four verbs instead of one tool per endpoint. Every call
  * authenticates with the linked install credential, which the backend resolves
  * to the user's read/write/publish/vote/comment scopes (agent-review
  * additionally needs an agent or admin account).
  */
-export class HivemindTools {
+export class ContentTools {
   constructor(private cfg: InstallConfig) {}
 
   /** Find content. The first step for any build request. */
@@ -253,18 +321,6 @@ export class HivemindTools {
       }
     }
     throw new Error("'target' must be 'world' or 'asset'");
-  }
-
-  /** Fetch the full content closure of one or more assets (drop-in / base). */
-  async pull(a: PullArgs): Promise<unknown> {
-    if (!Array.isArray(a.asset_guids) || a.asset_guids.length === 0) {
-      throw new Error("'asset_guids' must be a non-empty array of asset GUIDs");
-    }
-    return zmPost(this.cfg, "/v1/pull", {
-      items: a.asset_guids.map((g) => ({ asset_guid: g, ref: a.ref })),
-      conforms: a.conforms ?? false,
-      ensure_compat: a.ensure_compat ?? true,
-    });
   }
 
   /** Social write actions: vote, comment, review, bookmark, follow, report, record_pull. */

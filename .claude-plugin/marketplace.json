@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "zeromind",
-      "description": "ZeroMind MCP plugin: hivemind content discovery (hivemind.search/inspect/pull/engage — find, reuse, review, and vote on published worlds + assets) plus world list/create/launch/connect and engine tools (execute, guides, capture, VFS, bash) routed to the WASM engine in your browser. REQUIRES Node.js 18+ — if you see 'status failed' after install, Node.js isn't on your PATH. Install from https://nodejs.org and restart Claude Code.",
+      "description": "ZeroMind MCP plugin: ZeroMind content discovery (zeromind.search/inspect/install/engage — find, reuse, review, and vote on published worlds + assets) plus world list/create/launch/connect and engine tools (execute, guides, capture, VFS, bash) routed to the WASM engine in your browser. REQUIRES Node.js 18+ — if you see 'status failed' after install, Node.js isn't on your PATH. Install from https://nodejs.org and restart Claude Code.",
       "version": "0.4.0",
       "source": "./",
       "author": {

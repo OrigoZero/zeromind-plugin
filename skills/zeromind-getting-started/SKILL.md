@@ -10,23 +10,23 @@ You drive the user's Zero engine remotely through this MCP plugin. The Zero engi
 
 Treat the engine accordingly: **no shortcuts, no "for now" solutions, no stubs**. Every change must be the real solution.
 
-## STEP 0 (do this first, always): check the ZeroMind hivemind
+## STEP 0 (do this first, always): check ZeroMind
 
-**Before building anything, search the hivemind for content someone already published.** ZeroMind is not just where your work is saved — it's a shared library of worlds and assets (modules, components, tools, materials, shaders, scenes, packages) that other people and agents made and that you can reuse. The first step of *any* project or request is to check whether it already exists.
+**Before building anything, search ZeroMind for content someone already published.** ZeroMind is not just where your work is saved — it's a shared library of worlds and assets (modules, components, tools, materials, shaders, scenes, packages) that other people and agents made and that you can reuse. The first step of *any* project or request is to check whether it already exists.
 
-Run `hivemind.search` before you write a line of Luau. There are three winning outcomes:
+Run `zeromind.search` before you write a line of Luau. There are three winning outcomes:
 
-- **A — Drop-in solution:** exactly what's asked for, marked `compatible`. Pull it, wire it in, done.
-- **B — Reusable parts:** several published pieces cover big chunks — pull them and write only the glue.
-- **C — A base to modify:** the closest match is a strong starting point — pull it and adapt instead of starting empty.
+- **A — Drop-in solution:** exactly what's asked for, marked `compatible`. Install it, done.
+- **B — Reusable parts:** several published pieces cover big chunks — install them and write only the glue.
+- **C — A base to modify:** the closest match is a strong starting point — install it and adapt instead of starting empty.
 
 Only build from scratch when search genuinely turns up nothing usable — and then publish the result so the next agent gets outcome A.
 
 ```
-hivemind.search { "q": "<what the user asked for>", "kind": "<module|component|shader|scene|…>" }
+zeromind.search { "q": "<what the user asked for>", "kind": "<module|component|shader|scene|…>" }
 ```
 
-The four hivemind tools — `hivemind.search` (find), `hivemind.inspect` (vet), `hivemind.pull` (take), `hivemind.engage` (vote/comment/review/give back) — are pure REST and need **no open world or `world.connect`**, so you can scout before you ever open the engine. **The dedicated `zeromind-hivemind` skill is the full reference for this — read it whenever a request might be served by existing content (i.e. almost always).** Writing everything yourself when a drop-in existed is the biggest waste of the user's time; treat "did I check the hivemind?" as a hard gate before any from-scratch work.
+The ZeroMind tools — `zeromind.search` (find), `zeromind.inspect` (vet), `zeromind.install` (bring into the world), `zeromind.engage` (vote/comment/review/give back). `search`, `inspect`, and `engage` are pure REST and need **no open world** — you can scout before you ever open the engine; `zeromind.install` is the one that brings content into the connected world (the engine fetches the bytes — you never download content or hand-write guids into `execute()`). **The dedicated `zeromind-library` skill is the full reference for this — read it whenever a request might be served by existing content (i.e. almost always).** Writing everything yourself when a drop-in existed is the biggest waste of the user's time; treat "did I check ZeroMind?" as a hard gate before any from-scratch work.
 
 ## Core principles
 
@@ -51,15 +51,15 @@ This persists to the OS user-config dir (mode 0600). Subsequent sessions reuse i
 ## The seamless flow
 
 1. **`auth_status`** — confirm linked. If not, link first.
-2. **`hivemind.search`** — check whether the thing the user wants (or parts of it) already exists before building. See STEP 0 above and the `zeromind-hivemind` skill. Pull a drop-in / parts / base when there's a hit.
+2. **`zeromind.search`** — check whether the thing the user wants (or parts of it) already exists before building. See STEP 0 above and the `zeromind-library` skill. Inspect a hit, then `zeromind.install` a drop-in / parts / base (after connecting a world).
 3. **`world.list`** — find by name, or `world.create({name: "..."})` for a new one. Worlds are persistent multiplayer 3D containers; everything you build lives inside one.
 4. **`world.connect({guid, auto_launch: true})`** — the one-call attach:
    - Already-open browser tab → returns immediately.
    - Otherwise opens `https://origozero.ai/edit/<guid>` in the user's default browser and long-polls up to 60s for the WASM engine to boot + connect.
    - On timeout → `{ok: false, error: 'no_active_session', url}`. Relay the URL.
 5. **`guides()`** (no args) — read the engine README. **Do this every time after `world.connect`** in unfamiliar territory. The README is the highest-signal index for the live engine: mental model, scripting globals, capture parameters, VFS tree, section index pointing to deep topic pagelets.
-6. **Iterate** with `execute` / `read_file` / `write_file` / `edit_file` / `capture` / `bash`. When you pulled a base from the hivemind (outcome C), `write_file` its closure into `/zero/source/` and adapt it here.
-7. **Publish** when ready: `execute({code: "zm.add('.'); zm.commit('describe the change'); zm.push()"})` — add stages, commit snapshots, push publishes. Then `hivemind.engage` to record pulls + vote/comment on content you used.
+6. **Iterate** with `execute` / `read_file` / `write_file` / `edit_file` / `capture` / `bash`. When you installed a base from ZeroMind (outcome C, via `zeromind.install`), read + adapt the installed files here (`read_file` / `edit_file` under `/source/<name>`).
+7. **Publish** when ready: `execute({code: "zm.add('.'); zm.commit('describe the change'); zm.push()"})` — add stages, commit snapshots, push publishes. Then `zeromind.engage` to vote/comment on content you used.
 
 ## Worlds, scenes & persistence
 
@@ -504,10 +504,10 @@ A single connected session can handle dozens of iterations. If you find yourself
 
 ## What the user actually wants
 
-Most user prompts will be one of these shapes — translate to the standard flow. **For anything that involves building, `hivemind.search` comes first** (see STEP 0) — find a drop-in / parts / base before writing from scratch:
+Most user prompts will be one of these shapes — translate to the standard flow. **For anything that involves building, `zeromind.search` comes first** (see STEP 0) — find a drop-in / parts / base before writing from scratch:
 
-- **"make me a [game/scene/world] that does X"** → `hivemind.search({q: "X"})` first; pull what fits. Then `world.create`, `world.connect`, and `execute` + `write_file` to assemble + fill the gaps.
-- **"add a [feature/system/mechanic]"** → `hivemind.search({q: "[feature]", kind: "module"})` first — pull a module/component if one exists, then wire it in. Only hand-write it if nothing usable turns up.
+- **"make me a [game/scene/world] that does X"** → `zeromind.search({q: "X"})` first. Then `world.create`, `world.connect`, `zeromind.install` what fits, and `execute` to assemble + fill the gaps.
+- **"add a [feature/system/mechanic]"** → `zeromind.search({q: "[feature]", kind: "module"})` first — `zeromind.install` a module/component if one exists, then wire it in. Only hand-write it if nothing usable turns up.
 - **"open my [name]"** → `world.list` → find by name → `world.connect`.
 - **"add a [thing]"** to an open world → `execute` to spawn/configure, `capture` to verify, then `zm.add('.')` + `zm.commit` + `zm.push` once happy.
 - **"what does my world look like?"** → `capture()` and show them.

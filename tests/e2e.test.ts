@@ -81,10 +81,10 @@ describe("e2e stdio MCP", () => {
     expect(names).toContain("execute");
     expect(names).toContain("world.create");
     expect(names).toContain("zm_link");
-    expect(names).toContain("hivemind.search");
-    expect(names).toContain("hivemind.inspect");
-    expect(names).toContain("hivemind.pull");
-    expect(names).toContain("hivemind.engage");
+    expect(names).toContain("zeromind.search");
+    expect(names).toContain("zeromind.inspect");
+    expect(names).toContain("zeromind.install");
+    expect(names).toContain("zeromind.engage");
   });
 
   it("lists prompts", async () => {

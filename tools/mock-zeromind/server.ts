@@ -164,7 +164,7 @@ export const buildServer = (state: MockState): Server =>
         return json(res, 200, { world });
       }
 
-      // ── Hivemind: discovery (GET) ──────────────────────────────────────
+      // ── ZeroMind: discovery (GET) ──────────────────────────────────────
       if (method === "GET" && path === "/v1/discover") {
         if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
         return json(res, 200, {
@@ -218,7 +218,7 @@ export const buildServer = (state: MockState): Server =>
         return json(res, 200, { schemas: [] });
       }
 
-      // ── Hivemind: inspect (GET worlds/assets sub-resources) ────────────
+      // ── ZeroMind: inspect (GET worlds/assets sub-resources) ────────────
       const worldSub = path.match(/^\/v1\/worlds\/([^/]+)\/(summary|contents|published|comments)$/);
       if (method === "GET" && worldSub) {
         if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
@@ -261,15 +261,7 @@ export const buildServer = (state: MockState): Server =>
         });
       }
 
-      // ── Hivemind: pull (POST) ──────────────────────────────────────────
-      if (method === "POST" && path === "/v1/pull") {
-        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
-        const body = (await readJson(req)) as { items?: Array<{ asset_guid: string }> };
-        const roots = (body.items ?? []).map((i) => i.asset_guid);
-        return json(res, 200, { roots, assets: [], blobs: [], truncated: false });
-      }
-
-      // ── Hivemind: engage (POST social) ─────────────────────────────────
+      // ── ZeroMind: engage (POST social) ─────────────────────────────────
       const voteMatch = path.match(/^\/v1\/(worlds|assets)\/([^/]+)\/vote$/);
       if (method === "POST" && voteMatch) {
         if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });

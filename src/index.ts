@@ -14,7 +14,7 @@ import { Bridge } from "./bridge.js";
 import { authStatus, zmLink, zmLinkPoll, zmUnlink } from "./tools/auth.js";
 import { WorldTools } from "./tools/world.js";
 import { EngineTools } from "./tools/engine.js";
-import { HivemindTools } from "./tools/hivemind.js";
+import { ContentTools, buildInstallLuau, type InstallArgs } from "./tools/content.js";
 import { loadConfig } from "./config.js";
 import { promptDefs, getPrompt } from "./prompts.js";
 
@@ -46,9 +46,9 @@ const toolDefs = [
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "hivemind.search",
+    name: "zeromind.search",
     description:
-      "FIRST STEP for any build request — search the ZeroMind hivemind for content others already published before writing anything yourself. When you pass `q`, the backend embeds it for SEMANTIC vector search (falling back to keyword/BM25 when no embedder is configured); the response's `ranking.mode` reports which fired ('semantic'|'bm25'|'structured') and each hit's `matched_chunks` are the symbol-level snippets that matched (your usage examples). Returns ranked hits with `import_hint` (`@world@commit/name`), `asset_guid`, `compat_tier`, `agent_score`, capabilities/tags/readme so you can (A) drop a solution in directly, (B) reuse parts, or (C) pull a base to modify. `scope`: 'assets' (default — find the exact module/component/shader), 'worlds' (find a whole project), 'both' (quick combined), 'feed' (browse hot/new/top with no query), 'similar' (pure-embedding neighbors of an asset_guid), 'top_by_kind' (best of one kind), 'kinds'/'capabilities'/'schemas' (browse the taxonomy). Filter with kind/lang/capability/tag/license/conforms_to; page with limit/offset.",
+      "FIRST STEP for any build request — search ZeroMind for content others already published before writing anything yourself. When you pass `q`, the backend embeds it for SEMANTIC vector search (falling back to keyword/BM25 when no embedder is configured); the response's `ranking.mode` reports which fired ('semantic'|'bm25'|'structured') and each hit's `matched_chunks` are the symbol-level snippets that matched (your usage examples). Returns ranked hits with `import_hint` (`@world@commit/name`), `asset_guid`, `compat_tier`, `agent_score`, capabilities/tags/readme so you can (A) drop a solution in directly, (B) reuse parts, or (C) pull a base to modify. `scope`: 'assets' (default — find the exact module/component/shader), 'worlds' (find a whole project), 'both' (quick combined), 'feed' (browse hot/new/top with no query), 'similar' (pure-embedding neighbors of an asset_guid), 'top_by_kind' (best of one kind), 'kinds'/'capabilities'/'schemas' (browse the taxonomy). Filter with kind/lang/capability/tag/license/conforms_to; page with limit/offset.",
     inputSchema: {
       type: "object",
       properties: {
@@ -98,9 +98,9 @@ const toolDefs = [
     },
   },
   {
-    name: "hivemind.inspect",
+    name: "zeromind.inspect",
     description:
-      "Drill into one world or asset found via hivemind.search before committing to reuse it. Default view is 'overview' — a single call that aggregates everything you need to judge it. For target='asset', overview returns {detail, comments, dependents}: the schema (`schema`/`provides_schema`/`structured` — how it's used), `capabilities` (what it offers), `readme_excerpt` + the agent review/verdict (examples + quality), all analytics counters (score/pulls/views/comments/agent_score), plus comments and who already depends on it. For target='world', overview returns {detail, summary, comments}: world analytics + kind histogram + top publishings + comments. Narrower views — asset: detail|closure|children|dependents|pulls|comments; world: detail|summary|contents|published|comments. Pass the `guid` from a search hit.",
+      "Drill into one world or asset found via zeromind.search before committing to reuse it. Default view is 'overview' — a single call that aggregates everything you need to judge it. For target='asset', overview returns {detail, comments, dependents}: the schema (`schema`/`provides_schema`/`structured` — how it's used), `capabilities` (what it offers), `readme_excerpt` + the agent review/verdict (examples + quality), all analytics counters (score/pulls/views/comments/agent_score), plus comments and who already depends on it. For target='world', overview returns {detail, summary, comments}: world analytics + kind histogram + top publishings + comments. Narrower views — asset: detail|closure|children|dependents|pulls|comments; world: detail|summary|contents|published|comments. Pass the `guid` from a search hit.",
     inputSchema: {
       type: "object",
       properties: {
@@ -122,31 +122,26 @@ const toolDefs = [
     },
   },
   {
-    name: "hivemind.pull",
+    name: "zeromind.install",
     description:
-      "Fetch the full content closure of one or more assets — the resolved asset versions, deduplicated blob download URLs, and engine sidecars needed to materialize them. This is how you grab a drop-in solution or a base to modify. Pass `asset_guids` (from search/inspect hits). With `ensure_compat` (default true) a registered compat shim is swapped in automatically so the content works in your world. To then wire the pulled content into the engine, use its `import_hint` in a commit's imports, or write the returned files via the engine VFS tools. After actually adopting an asset, record it with hivemind.engage action='record_pull' so its adoption signal rises.",
+      "Install ZeroMind content INTO the currently-connected world — the one step that wires found content into the project, and the ONLY way to bring content in (you never download content to this client; it isn't operable here). The agent does NOT hand-write Luau or guids into execute(): just pass the id from a search/inspect hit and this tool runs the right engine call for you, and the engine fetches every byte from ZeroMind itself. Pass `world` (a world guid) to add that whole world as a reusable library, OR `guid` (an asset guid) to install that asset's content; the mode is inferred from which you pass. Requires a connected world (world.connect first). Optional: `at` (where to install an asset, default /source/<name>), `as` (the @<name> to mount a library under), `ref`/`commit` to pin a version.",
     inputSchema: {
       type: "object",
       properties: {
-        asset_guids: {
-          type: "array",
-          items: { type: "string" },
-          description: "1–64 asset GUIDs to pull (with their transitive closure).",
-        },
-        ref: { type: "string", description: "Optional commit id pinning the root assets' versions." },
-        conforms: { type: "boolean", description: "Also pull conforms_to schema definitions. Default false." },
-        ensure_compat: {
-          type: "boolean",
-          description: "Swap in a compat shim when one exists (default true). Set false for the raw original.",
-        },
+        world: { type: "string", description: "Install this world as a library (pass its guid). Picks library mode." },
+        guid: { type: "string", description: "Install this asset (pass its asset_guid). Picks asset mode." },
+        at: { type: "string", description: "asset: where to install it (default /source/<display_name>)." },
+        as: { type: "string", description: "library: the @<name> stem to mount under (default derived from the world)." },
+        ref: { type: "string", description: "Pin to a branch/tag/commit." },
+        commit: { type: "string", description: "library: pin to a concrete commit id." },
+        target: { type: "string", enum: ["library", "asset"], description: "Usually inferred; set only to disambiguate." },
       },
-      required: ["asset_guids"],
     },
   },
   {
-    name: "hivemind.engage",
+    name: "zeromind.engage",
     description:
-      "Contribute back to the hivemind. `action`: 'vote' (value 1 up / -1 down / 0 clear; target world|asset|comment), 'comment' (target world|asset, body, optional parent for replies), 'review' (structured agent quality review on an asset — compat_tier compatible|shim|incompatible + usability/code_quality/performance 0–100 + optional verdict; requires an agent or admin account), 'bookmark' (target world|asset, on), 'follow' (target world|user, on), 'report' (target world|asset, reason), 'record_pull' (mark that consumer world_guid adopted asset_guid — raises its adoption signal). Vote on and comment about content you used; review it once you've judged its quality.",
+      "Contribute back to ZeroMind. `action`: 'vote' (value 1 up / -1 down / 0 clear; target world|asset|comment), 'comment' (target world|asset, body, optional parent for replies), 'review' (structured agent quality review on an asset — compat_tier compatible|shim|incompatible + usability/code_quality/performance 0–100 + optional verdict; requires an agent or admin account), 'bookmark' (target world|asset, on), 'follow' (target world|user, on), 'report' (target world|asset, reason), 'record_pull' (mark that consumer world_guid adopted asset_guid — raises its adoption signal). Vote on and comment about content you used; review it once you've judged its quality.",
     inputSchema: {
       type: "object",
       properties: {
@@ -344,7 +339,7 @@ const dispatch = async (
   args: Record<string, unknown>,
   ensureWorld: () => Promise<WorldCtx>,
   ensureEngine: () => Promise<EngineCtx>,
-  ensureHivemind: () => HivemindTools,
+  ensureContent: () => ContentTools,
 ): Promise<unknown> => {
   switch (name) {
     case "auth_status":
@@ -355,16 +350,21 @@ const dispatch = async (
       return zmLinkPoll();
     case "zm_unlink":
       return zmUnlink();
-    case "hivemind.search":
-      return ensureHivemind().search(args);
-    case "hivemind.inspect":
-      return ensureHivemind().inspect(
+    case "zeromind.search":
+      return ensureContent().search(args);
+    case "zeromind.inspect":
+      return ensureContent().inspect(
         args as { target: "world" | "asset"; guid: string },
       );
-    case "hivemind.pull":
-      return ensureHivemind().pull(args as { asset_guids: string[] });
-    case "hivemind.engage":
-      return ensureHivemind().engage(
+    case "zeromind.install": {
+      // Engine-side install: the bridge runs a prewritten Luau call so the
+      // engine fetches content from ZeroMind directly — no bytes through
+      // this client. Requires a connected world.
+      const code = buildInstallLuau(args as unknown as InstallArgs);
+      return (await ensureEngine()).e.execute({ code });
+    }
+    case "zeromind.engage":
+      return ensureContent().engage(
         args as { action: "vote" | "comment" | "review" | "bookmark" | "follow" | "report" | "record_pull" },
       );
     case "world.list":
@@ -429,7 +429,7 @@ const main = async (): Promise<void> => {
   let bridge: Bridge | undefined;
   let worldTools: WorldTools | undefined;
   let engineTools: EngineTools | undefined;
-  let hivemindTools: HivemindTools | undefined;
+  let contentTools: ContentTools | undefined;
   let bridgeConnectError: Error | undefined;
   let initPromise: Promise<void> | undefined;
 
@@ -470,16 +470,16 @@ const main = async (): Promise<void> => {
     return { w: worldTools! };
   };
 
-  // Hivemind tools are pure REST against the ZeroMind backend — no bridge,
+  // ZeroMind tools are pure REST against the ZeroMind backend — no bridge,
   // no open browser world required. They only need the linked install
   // credential, so they're available the moment the IDE is linked.
-  const ensureHivemind = (): HivemindTools => {
-    if (!hivemindTools) {
+  const ensureContent = (): ContentTools => {
+    if (!contentTools) {
       const cfg = loadConfig();
       if (!cfg) throw new Error("not registered — call zm_link first");
-      hivemindTools = new HivemindTools(cfg);
+      contentTools = new ContentTools(cfg);
     }
-    return hivemindTools;
+    return contentTools;
   };
 
   const ensureEngine = async (): Promise<EngineCtx> => {
@@ -515,7 +515,7 @@ const main = async (): Promise<void> => {
     const name = req.params.name;
     const args = (req.params.arguments ?? {}) as Record<string, unknown>;
     try {
-      const result = await dispatch(name, args, ensureWorld, ensureEngine, ensureHivemind);
+      const result = await dispatch(name, args, ensureWorld, ensureEngine, ensureContent);
       if (name === "capture") {
         const r = result as { image_b64: string };
         return {

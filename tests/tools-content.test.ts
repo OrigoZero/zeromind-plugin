@@ -2,14 +2,14 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { startMockServer, type MockServerHandle } from "../tools/mock-zeromind/index.js";
 import { withTmpConfigDir } from "./helpers/tmp-config.js";
 import { ensureRegistered } from "../src/install.js";
-import { HivemindTools } from "../src/tools/hivemind.js";
+import { ContentTools, buildInstallLuau } from "../src/tools/content.js";
 import type { InstallConfig } from "../src/config.js";
 
-describe("hivemind tools", () => {
+describe("ZeroMind tools", () => {
   let server: MockServerHandle;
   let tmp: ReturnType<typeof withTmpConfigDir>;
   let cfg: InstallConfig;
-  let hm: HivemindTools;
+  let hm: ContentTools;
 
   beforeAll(async () => {
     server = await startMockServer({ port: 0 });
@@ -23,7 +23,7 @@ describe("hivemind tools", () => {
     process.env.ZEROMIND_ISSUER = server.url;
     cfg = await ensureRegistered({ ideName: "t" });
     server.forceApprove(cfg.install_id, "usr_hm");
-    hm = new HivemindTools(cfg);
+    hm = new ContentTools(cfg);
   });
   afterEach(() => {
     delete process.env.ZEROMIND_CONFIG_DIR;
@@ -121,16 +121,6 @@ describe("hivemind tools", () => {
     });
   });
 
-  describe("pull", () => {
-    it("posts the asset guids as closure items", async () => {
-      const r = (await hm.pull({ asset_guids: ["ast_a", "ast_b"] })) as { roots: string[] };
-      expect(r.roots).toEqual(["ast_a", "ast_b"]);
-    });
-    it("rejects an empty pull", async () => {
-      await expect(hm.pull({ asset_guids: [] })).rejects.toThrow(/non-empty/);
-    });
-  });
-
   describe("engage", () => {
     it("votes on an asset (204 → ok)", async () => {
       const r = (await hm.engage({ action: "vote", target: "asset", guid: "ast_1", value: 1 })) as {
@@ -193,6 +183,54 @@ describe("hivemind tools", () => {
       await expect(
         hm.engage({ action: "explode" as unknown as "vote" }),
       ).rejects.toThrow(/unknown action/);
+    });
+  });
+
+  describe("buildInstallLuau", () => {
+    it("infers library mode from `world` and asset mode from `guid`", () => {
+      expect(buildInstallLuau({ world: "wld_1" })).toBe(
+        'return world.installLibrary({ world = "wld_1" })',
+      );
+      expect(buildInstallLuau({ guid: "ast_1" })).toBe(
+        'return world.installAsset({ guid = "ast_1" })',
+      );
+    });
+
+    it("builds a world-as-library install with only the provided keys", () => {
+      const code = buildInstallLuau({ target: "library", world: "wld_1", as: "combat" });
+      expect(code).toBe('return world.installLibrary({ world = "wld_1", as = "combat" })');
+    });
+
+    it("includes ref/commit when given", () => {
+      const code = buildInstallLuau({
+        target: "library",
+        world: "wld_1",
+        ref: "main",
+        commit: "01H",
+        as: "combat",
+      });
+      expect(code).toBe(
+        'return world.installLibrary({ world = "wld_1", ref = "main", commit = "01H", as = "combat" })',
+      );
+    });
+
+    it("builds an asset install with guid + at", () => {
+      const code = buildInstallLuau({ target: "asset", guid: "ast_1", at: "/source/voxel" });
+      expect(code).toBe('return world.installAsset({ guid = "ast_1", at = "/source/voxel" })');
+    });
+
+    it("escapes string values safely", () => {
+      const code = buildInstallLuau({ target: "asset", guid: 'a"b\\c' });
+      expect(code).toBe('return world.installAsset({ guid = "a\\"b\\\\c" })');
+    });
+
+    it("requires world for library and guid for asset", () => {
+      expect(() => buildInstallLuau({ target: "library" })).toThrow(/world/);
+      expect(() => buildInstallLuau({ target: "asset" })).toThrow(/guid/);
+    });
+
+    it("requires a world or a guid when neither is given", () => {
+      expect(() => buildInstallLuau({})).toThrow(/pass `world`.*or `guid`/);
     });
   });
 });

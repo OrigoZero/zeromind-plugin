@@ -91,9 +91,9 @@ export const createWorld = async (
 };
 
 // ── Generic ZeroMind REST helpers ──────────────────────────────────────────
-// The hivemind surface (discovery, social, pull) spans ~30 endpoints. Rather
+// The ZeroMind content surface (discovery + social) spans ~30 endpoints. Rather
 // than mint one client function per route — which would balloon this file and
-// the tool list — the hivemind tools route through these two helpers and build
+// the tool list — ZeroMind tools route through these two helpers and build
 // the path themselves. Both attach the install Bearer credential, which the
 // backend resolves to a full user context (read/write/publish/vote/comment).
 

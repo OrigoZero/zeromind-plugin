@@ -9,7 +9,7 @@ export const promptDefs: Prompt[] = [
   {
     name: "find-before-build",
     description:
-      "Before building anything, search the ZeroMind hivemind for content that already exists (drop-in solution, reusable parts, or a base to modify). Use at the start of any 'make me a…' / 'add a…' request.",
+      "Before building anything, search ZeroMind for content that already exists (drop-in solution, reusable parts, or a base to modify). Use at the start of any 'make me a…' / 'add a…' request.",
     arguments: [
       {
         name: "request",
@@ -65,11 +65,11 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
                 "- `auth_status` — see whether this IDE is linked to a user.\n" +
                 "- `zm_link` / `zm_link_poll` — one-time device-code link (only needed once per IDE install).\n" +
                 "- `zm_unlink` — revoke this IDE's link.\n\n" +
-                "**Hivemind (the shared content library — CHECK THIS FIRST):**\n" +
-                "- `hivemind.search` — find published worlds/assets others already made. The FIRST step of any build request: search before writing from scratch, to find (A) a drop-in solution, (B) reusable parts, or (C) a base to modify.\n" +
-                "- `hivemind.inspect` — drill into a world/asset before reusing it (closure, dependents, comments).\n" +
-                "- `hivemind.pull` — fetch the content closure of assets (the drop-in / parts / base).\n" +
-                "- `hivemind.engage` — give back: vote, comment, review, bookmark, follow, report, record adoption.\n\n" +
+                "**ZeroMind (the shared content library — CHECK THIS FIRST):**\n" +
+                "- `zeromind.search` — find published worlds/assets others already made. The FIRST step of any build request: search before writing from scratch, to find (A) a drop-in solution, (B) reusable parts, or (C) a base to modify.\n" +
+                "- `zeromind.inspect` — drill into a world/asset before reusing it (schema, capabilities, review, comments, dependents). Metadata only — to read source, install then read in-engine.\n" +
+                "- `zeromind.install` — install content INTO the connected world (a world as a library, or an asset's files at a path). The engine fetches the bytes; you only pass an id. Requires world.connect.\n" +
+                "- `zeromind.engage` — give back: vote, comment, review, bookmark, follow, report.\n\n" +
                 "**Worlds:**\n" +
                 "- `world.list` — the user's worlds.\n" +
                 "- `world.create({name, template?, public?})` — make a new world.\n" +
@@ -86,14 +86,14 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
                 "- `instance_health({})` — health snapshot.\n\n" +
                 "## The workflow\n\n" +
                 "1. `auth_status`. If unlinked, run `zm_link`, surface the user_code + URL to the user, poll with `zm_link_poll` until approved.\n" +
-                "2. **`hivemind.search`** — check the hivemind for what the user wants BEFORE building. Pull a drop-in / parts / base when there's a hit; only build from scratch when nothing usable exists.\n" +
+                "2. **`zeromind.search`** — check ZeroMind for what the user wants BEFORE building. Inspect a hit, then `zeromind.install` a drop-in / parts / base; only build from scratch when nothing usable exists.\n" +
                 "3. `world.list` to find the world, or `world.create` if making a new one.\n" +
                 "4. `world.connect({guid})`. If it returns `no_active_session`, surface the URL to the user, wait for them to open it, then retry.\n" +
                 "5. `guides()` (no args) — read the engine README FIRST. Then use specific APIs.\n" +
                 "6. Iterate with `execute` / `read_file` / `write_file` / `edit_file` / `capture`. Take screenshots after meaningful changes.\n" +
-                "7. When the user wants to publish, `execute({code: \"zm.add('.'); zm.commit('msg'); zm.push()\"})`, then `hivemind.engage` to record pulls + vote/comment on content you used.\n\n" +
+                "7. When the user wants to publish, `execute({code: \"zm.add('.'); zm.commit('msg'); zm.push()\"})`, then `zeromind.engage` to vote/comment on any content you used.\n\n" +
                 "## Rules\n\n" +
-                "- **Check the hivemind first.** Don't reimplement what's already published — search, then reuse. See the `zeromind-hivemind` skill.\n" +
+                "- **Check ZeroMind first.** Don't reimplement what's already published — search, then reuse. See the `zeromind-library` skill.\n" +
                 "- Never guess Luau API names — use `guides()` and `execute({code: \"return type(_G.name)\"})` to discover.\n" +
                 "- Always verify visually (screenshot) AND with data, not just by reading code.\n" +
                 "- File bugs to OrigoZero/zero with the file-engine-bug prompt.\n",
@@ -105,26 +105,26 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
     case "find-before-build": {
       const request = args.request ?? "<what the user asked you to build>";
       return {
-        description: "Search the hivemind before building from scratch",
+        description: "Search ZeroMind before building from scratch",
         messages: [
           {
             role: "user",
             content: {
               type: "text",
               text:
-                `Before building "${request}" from scratch, check whether it already exists in the ZeroMind hivemind.\n\n` +
+                `Before building "${request}" from scratch, check whether it already exists in ZeroMind.\n\n` +
                 "1. `auth_status` — if unlinked, link first (link-this-ide prompt).\n" +
-                `2. \`hivemind.search { "q": "${request}" }\` — try the asset lens first. Add \`kind\` (module/component/shader/scene/…) to narrow. Try 2–3 phrasings; the index is semantic.\n` +
+                `2. \`zeromind.search { "q": "${request}" }\` — try the asset lens first. Add \`kind\` (module/component/shader/scene/…) to narrow. Try 2–3 phrasings; the index is semantic.\n` +
                 "   - Also worth a look: `scope: \"worlds\"` (a whole project like this), `scope: \"top_by_kind\"` (best of a kind).\n" +
-                "3. Read each hit's `compat_tier`, `agent_score`, `pulled_into_count`, and `import_hint`. Prefer `compatible` + high adoption.\n" +
-                "4. Vet the best candidate: `hivemind.inspect { target: \"asset\", guid: \"…\", view: \"dependents\" }` (who already uses it) and `view: \"comments\"` (gotchas).\n" +
-                "5. Decide the outcome:\n" +
-                "   - **A — drop-in:** `hivemind.pull { asset_guids: [\"…\"] }`, then wire it in via its `import_hint`.\n" +
-                "   - **B — parts:** pull several assets and write only the glue.\n" +
-                "   - **C — base:** `hivemind.pull { asset_guids: [\"…\"], ensure_compat: false }`, `write_file` the closure into `/zero/source/`, then adapt it.\n" +
+                "3. Read each hit's `compat_tier`, `agent_score`, `pulled_into_count`, and capabilities. Prefer `compatible` + high adoption.\n" +
+                "4. Vet the best candidate: `zeromind.inspect { target: \"asset\", guid: \"…\" }` (overview = schema, capabilities, review, comments, who uses it). Inspect gives surface info — to read the actual source, install it then read it in the engine.\n" +
+                "5. Decide the outcome and bring it in with `zeromind.install` (connect a world first; the engine fetches the bytes — you never download content):\n" +
+                "   - **A — drop-in:** `zeromind.install { guid: \"…\" }` (asset) or `zeromind.install { world: \"…\" }` (whole world as a library).\n" +
+                "   - **B — parts:** install several assets/libraries and write only the glue.\n" +
+                "   - **C — base:** `zeromind.install { guid: \"…\", at: \"/source/…\" }`, then adapt the installed files with `edit_file` / `execute`.\n" +
                 "   - **Nothing usable:** build from scratch — and publish the result so the next agent gets outcome A.\n" +
-                "6. After adopting: `hivemind.engage { action: \"record_pull\", world_guid: \"…\", asset_guid: \"…\" }`, then vote/comment on what you used.\n\n" +
-                "See the `zeromind-hivemind` skill for the full reference.\n",
+                "6. Then vote/comment on what you used (`zeromind.engage`).\n\n" +
+                "See the `zeromind-library` skill for the full reference.\n",
             },
           },
         ],
