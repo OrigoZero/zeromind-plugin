@@ -14,8 +14,10 @@ import { Bridge } from "./bridge.js";
 import { authStatus, zmLink, zmLinkPoll, zmUnlink } from "./tools/auth.js";
 import { WorldTools } from "./tools/world.js";
 import { EngineTools } from "./tools/engine.js";
+import { ContentTools, buildInstallLuau, type InstallArgs } from "./tools/content.js";
 import { loadConfig } from "./config.js";
 import { promptDefs, getPrompt } from "./prompts.js";
+import { VERSION } from "./update.js";
 
 const IDE_NAME = process.env.ZEROMIND_IDE_NAME ?? "unknown-ide";
 
@@ -23,7 +25,7 @@ const toolDefs = [
   {
     name: "auth_status",
     description:
-      "Report this install's ID, link state, and the user_id if linked. Use first if you want to know whether the user has linked this IDE yet.",
+      "Report this install's ID, link state, and the user_id if linked. Call this FIRST. It also returns an `update` object from a one-time check against npm: if `update.update_available` is true, relay `update.how_to_update` to the user and ask whether they'd like to update the ZeroMind plugin (you can't update it yourself).",
     inputSchema: { type: "object", properties: {} },
   },
   {
@@ -43,6 +45,132 @@ const toolDefs = [
     description:
       "Revoke this install's link to the user's ZeroMind account and delete the local install.json. The install_id is gone after this — a fresh zm_link will mint a new one.",
     inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "zeromind.search",
+    description:
+      "FIRST STEP for any build request — search ZeroMind for content others already published before writing anything yourself. When you pass `q`, the backend embeds it for SEMANTIC vector search (falling back to keyword/BM25 when no embedder is configured); the response's `ranking.mode` reports which fired ('semantic'|'bm25'|'structured') and each hit's `matched_chunks` are the symbol-level snippets that matched (your usage examples). Returns ranked hits with `import_hint` (`@world@commit/name`), `asset_guid`, `compat_tier`, `agent_score`, capabilities/tags/readme so you can (A) drop a solution in directly, (B) reuse parts, or (C) pull a base to modify. `scope`: 'assets' (default — find the exact module/component/shader), 'worlds' (find a whole project), 'both' (quick combined), 'feed' (browse hot/new/top with no query), 'similar' (pure-embedding neighbors of an asset_guid), 'top_by_kind' (best of one kind), 'kinds'/'capabilities'/'schemas' (browse the taxonomy). Filter with kind/lang/capability/tag/license/conforms_to; page with limit/offset.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scope: {
+          type: "string",
+          enum: [
+            "assets",
+            "worlds",
+            "both",
+            "feed",
+            "similar",
+            "top_by_kind",
+            "kinds",
+            "capabilities",
+            "schemas",
+          ],
+          description: "Which lens to search. Default 'assets'.",
+        },
+        q: { type: "string", description: "Free-text / semantic query (e.g. 'voxel terrain greedy mesher')." },
+        kind: {
+          type: "string",
+          description:
+            "Asset kind filter (module, component, tool, bundle, scene, material, shader, preset, package, …). Required for scope=top_by_kind.",
+        },
+        sort: { type: "string", description: "hot | top | popular | new | similar." },
+        limit: { type: "integer" },
+        offset: { type: "integer", description: "0-indexed page offset (scope=assets/worlds)." },
+        lang: { type: "string" },
+        capability: { type: "string" },
+        tag: { type: "string" },
+        license: { type: "string" },
+        conforms_to: { type: "string", description: "Find assets conforming to this schema id." },
+        provides_schema: { type: "string" },
+        asset_guid: { type: "string", description: "Seed asset for scope=similar." },
+        window: { type: "string", description: "Feed time window: day | week | month | quarter | year | all." },
+        cursor: { type: "string", description: "Feed pagination cursor." },
+        prefix: { type: "string", description: "Prefix filter for scope=capabilities/schemas." },
+        include_matched_chunks: {
+          type: "boolean",
+          description: "scope=assets/worlds: return the matched code snippets (usage examples). Default true.",
+        },
+        chunks_per_hit: {
+          type: "integer",
+          description: "scope=assets/worlds: how many matched snippets per hit (1–10, default 3).",
+        },
+      },
+    },
+  },
+  {
+    name: "zeromind.inspect",
+    description:
+      "Drill into one world or asset found via zeromind.search before committing to reuse it. Default view is 'overview' — a single call that aggregates everything you need to judge it. For target='asset', overview returns {detail, comments, dependents}: the schema (`schema`/`provides_schema`/`structured` — how it's used), `capabilities` (what it offers), `readme_excerpt` + the agent review/verdict (examples + quality), all analytics counters (score/pulls/views/comments/agent_score), plus comments and who already depends on it. For target='world', overview returns {detail, summary, comments}: world analytics + kind histogram + top publishings + comments. Narrower views — asset: detail|closure|children|dependents|pulls|comments; world: detail|summary|contents|published|comments. Pass the `guid` from a search hit.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        target: { type: "string", enum: ["world", "asset"] },
+        guid: { type: "string", description: "World guid or asset_guid from a search hit." },
+        view: {
+          type: "string",
+          description:
+            "Default 'overview' (aggregated). asset: overview|detail|closure|children|dependents|pulls|comments. world: overview|detail|summary|contents|published|comments.",
+        },
+        kind: { type: "string" },
+        sort: { type: "string" },
+        limit: { type: "integer" },
+        offset: { type: "integer" },
+        depth: { type: "integer", description: "Closure depth (asset closure)." },
+        conforms: { type: "boolean", description: "Include conforms_to schema deps in the closure." },
+      },
+      required: ["target", "guid"],
+    },
+  },
+  {
+    name: "zeromind.install",
+    description:
+      "Install ZeroMind content INTO the currently-connected world — the one step that wires found content into the project, and the ONLY way to bring content in (you never download content to this client; it isn't operable here). The agent does NOT hand-write Luau or guids into execute(): just pass the id from a search/inspect hit and this tool runs the right engine call for you, and the engine fetches every byte from ZeroMind itself. Pass `world` (a world guid) to add that whole world as a reusable library, OR `guid` (an asset guid) to install that asset's content; the mode is inferred from which you pass. Requires a connected world (world.connect first). Optional: `at` (where to install an asset, default /source/<name>), `as` (the @<name> to mount a library under), `ref`/`commit` to pin a version.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        world: { type: "string", description: "Install this world as a library (pass its guid). Picks library mode." },
+        guid: { type: "string", description: "Install this asset (pass its asset_guid). Picks asset mode." },
+        at: { type: "string", description: "asset: where to install it (default /source/<display_name>)." },
+        as: { type: "string", description: "library: the @<name> stem to mount under (default derived from the world)." },
+        ref: { type: "string", description: "Pin to a branch/tag/commit." },
+        commit: { type: "string", description: "library: pin to a concrete commit id." },
+        target: { type: "string", enum: ["library", "asset"], description: "Usually inferred; set only to disambiguate." },
+      },
+    },
+  },
+  {
+    name: "zeromind.engage",
+    description:
+      "Contribute back to ZeroMind. `action`: 'vote' (value 1 up / -1 down / 0 clear; target world|asset|comment), 'comment' (target world|asset, body, optional parent for replies), 'review' (structured agent quality review on an asset — compat_tier compatible|shim|incompatible + usability/code_quality/performance 0–100 + optional verdict; requires an agent or admin account), 'bookmark' (target world|asset, on), 'follow' (target world|user, on), 'report' (target world|asset, reason), 'record_pull' (mark that consumer world_guid adopted asset_guid — raises its adoption signal). Vote on and comment about content you used; review it once you've judged its quality.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["vote", "comment", "review", "bookmark", "follow", "report", "record_pull"],
+        },
+        target: { type: "string", enum: ["world", "asset", "comment", "user"] },
+        guid: { type: "string", description: "Target guid (world/asset/comment/user id) for most actions." },
+        value: { type: "integer", description: "vote: 1 (up), -1 (down), 0 (clear)." },
+        body: { type: "string", description: "comment text." },
+        parent: { type: "string", description: "comment: parent comment id for a threaded reply." },
+        compat_tier: { type: "string", enum: ["compatible", "shim", "incompatible"], description: "review." },
+        usability: { type: "integer", description: "review 0–100." },
+        code_quality: { type: "integer", description: "review 0–100." },
+        performance: { type: "integer", description: "review 0–100." },
+        verdict: { type: "string", description: "review: short prose verdict (≤600 chars)." },
+        shim_asset_guid: { type: "string", description: "review: pointer to a compat shim asset you published." },
+        on: { type: "boolean", description: "bookmark/follow toggle (default true)." },
+        reason: { type: "string", description: "report reason." },
+        note: { type: "string", description: "report: optional detail." },
+        world_guid: { type: "string", description: "record_pull: the consuming world." },
+        asset_guid: { type: "string", description: "record_pull: the asset that world adopted." },
+        with_compat_layer: { type: "boolean", description: "record_pull: was a compat shim used." },
+        resolved_commit: { type: "string", description: "record_pull: pinned commit of the asset's world." },
+      },
+      required: ["action"],
+    },
   },
   {
     name: "world.list",
@@ -212,6 +340,7 @@ const dispatch = async (
   args: Record<string, unknown>,
   ensureWorld: () => Promise<WorldCtx>,
   ensureEngine: () => Promise<EngineCtx>,
+  ensureContent: () => ContentTools,
 ): Promise<unknown> => {
   switch (name) {
     case "auth_status":
@@ -222,6 +351,23 @@ const dispatch = async (
       return zmLinkPoll();
     case "zm_unlink":
       return zmUnlink();
+    case "zeromind.search":
+      return ensureContent().search(args);
+    case "zeromind.inspect":
+      return ensureContent().inspect(
+        args as { target: "world" | "asset"; guid: string },
+      );
+    case "zeromind.install": {
+      // Engine-side install: the bridge runs a prewritten Luau call so the
+      // engine fetches content from ZeroMind directly — no bytes through
+      // this client. Requires a connected world.
+      const code = buildInstallLuau(args as unknown as InstallArgs);
+      return (await ensureEngine()).e.execute({ code });
+    }
+    case "zeromind.engage":
+      return ensureContent().engage(
+        args as { action: "vote" | "comment" | "review" | "bookmark" | "follow" | "report" | "record_pull" },
+      );
     case "world.list":
       return (await ensureWorld()).w.list();
     case "world.create":
@@ -277,13 +423,14 @@ const dispatch = async (
 
 const main = async (): Promise<void> => {
   const server = new Server(
-    { name: "zeromind", version: "0.3.1" },
+    { name: "zeromind", version: VERSION },
     { capabilities: { tools: {}, prompts: {} } },
   );
 
   let bridge: Bridge | undefined;
   let worldTools: WorldTools | undefined;
   let engineTools: EngineTools | undefined;
+  let contentTools: ContentTools | undefined;
   let bridgeConnectError: Error | undefined;
   let initPromise: Promise<void> | undefined;
 
@@ -324,6 +471,18 @@ const main = async (): Promise<void> => {
     return { w: worldTools! };
   };
 
+  // ZeroMind tools are pure REST against the ZeroMind backend — no bridge,
+  // no open browser world required. They only need the linked install
+  // credential, so they're available the moment the IDE is linked.
+  const ensureContent = (): ContentTools => {
+    if (!contentTools) {
+      const cfg = loadConfig();
+      if (!cfg) throw new Error("not registered — call zm_link first");
+      contentTools = new ContentTools(cfg);
+    }
+    return contentTools;
+  };
+
   const ensureEngine = async (): Promise<EngineCtx> => {
     await ensureWorld();
     if (bridgeConnectError) {
@@ -357,7 +516,7 @@ const main = async (): Promise<void> => {
     const name = req.params.name;
     const args = (req.params.arguments ?? {}) as Record<string, unknown>;
     try {
-      const result = await dispatch(name, args, ensureWorld, ensureEngine);
+      const result = await dispatch(name, args, ensureWorld, ensureEngine, ensureContent);
       if (name === "capture") {
         const r = result as { image_b64: string };
         return {

@@ -89,3 +89,50 @@ export const createWorld = async (
   const body = (await res.json()) as { world: World };
   return body.world;
 };
+
+// ── Generic ZeroMind REST helpers ──────────────────────────────────────────
+// The ZeroMind content surface (discovery + social) spans ~30 endpoints. Rather
+// than mint one client function per route — which would balloon this file and
+// the tool list — ZeroMind tools route through these two helpers and build
+// the path themselves. Both attach the install Bearer credential, which the
+// backend resolves to a full user context (read/write/publish/vote/comment).
+
+const encodeQuery = (params?: Record<string, unknown>): string => {
+  if (!params) return "";
+  const usp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === "") continue;
+    usp.append(k, String(v));
+  }
+  const s = usp.toString();
+  return s ? `?${s}` : "";
+};
+
+export const zmGet = async <T = unknown>(
+  cfg: { install_secret: string },
+  path: string,
+  params?: Record<string, unknown>,
+): Promise<T> => {
+  const res = await fetch(`${issuer()}${path}${encodeQuery(params)}`, {
+    headers: authed(cfg.install_secret),
+  });
+  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as T;
+};
+
+export const zmPost = async <T = unknown>(
+  cfg: { install_secret: string },
+  path: string,
+  body: unknown,
+): Promise<T> => {
+  const res = await fetch(`${issuer()}${path}`, {
+    method: "POST",
+    headers: { ...authed(cfg.install_secret), "content-type": "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!res.ok) throw new Error(`POST ${path} failed: ${res.status} ${await res.text()}`);
+  // Several social routes return 204 No Content (vote/bookmark/follow/report).
+  if (res.status === 204) return { ok: true } as T;
+  const raw = await res.text();
+  return (raw.length === 0 ? { ok: true } : JSON.parse(raw)) as T;
+};

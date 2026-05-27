@@ -1,7 +1,7 @@
 {
   "name": "zeromind",
-  "description": "ZeroMind MCP plugin: world list/create/launch/connect + engine tools (execute, guides, capture, VFS, bash) routed to the WASM engine running in your browser. After install, the bundled skill teaches Claude how to drive Zero worlds. REQUIRES Node.js 18+ — if you see 'status failed', install Node from https://nodejs.org and restart Claude Code.",
-  "version": "0.2.0",
+  "description": "ZeroMind MCP plugin: ZeroMind content discovery (zeromind.search/inspect/install/engage — find, reuse, review, and vote on published worlds + assets) plus world list/create/launch/connect and engine tools (execute, guides, capture, VFS, bash) routed to the WASM engine in your browser. Bundled skills teach Claude to check ZeroMind first and drive Zero worlds. REQUIRES Node.js 18+ — if you see 'status failed', install Node from https://nodejs.org and restart Claude Code.",
+  "version": "0.5.0",
   "author": {
     "name": "OrigoZero"
   },

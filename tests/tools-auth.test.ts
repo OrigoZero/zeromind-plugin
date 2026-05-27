@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { startMockServer, type MockServerHandle } from "../tools/mock-zeromind/index.js";
 import { withTmpConfigDir } from "./helpers/tmp-config.js";
 import { authStatus, zmLink, zmLinkPoll, zmUnlink } from "../src/tools/auth.js";
+import { resetUpdateCache, VERSION } from "../src/update.js";
 
 describe("auth tools", () => {
   let server: MockServerHandle;
@@ -16,17 +17,23 @@ describe("auth tools", () => {
     tmp = withTmpConfigDir();
     process.env.ZEROMIND_CONFIG_DIR = tmp.dir;
     process.env.ZEROMIND_ISSUER = server.url;
+    process.env.ZEROMIND_NPM_REGISTRY = server.url;
+    resetUpdateCache();
   });
   afterEach(() => {
     delete process.env.ZEROMIND_CONFIG_DIR;
     delete process.env.ZEROMIND_ISSUER;
+    delete process.env.ZEROMIND_NPM_REGISTRY;
     tmp.cleanup();
   });
 
-  it("authStatus reports unlinked for a fresh install", async () => {
+  it("authStatus reports unlinked for a fresh install + an update check", async () => {
     const s = await authStatus();
     expect(s.linked).toBe(false);
     expect(s.install_id).toMatch(/^inst_/);
+    // The mock registry advertises an older version → no update.
+    expect(s.update.update_available).toBe(false);
+    expect(s.update.current).toBe(VERSION);
   });
 
   it("zmLink returns pending code on first call, approved after user approves", async () => {

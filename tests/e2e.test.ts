@@ -81,6 +81,10 @@ describe("e2e stdio MCP", () => {
     expect(names).toContain("execute");
     expect(names).toContain("world.create");
     expect(names).toContain("zm_link");
+    expect(names).toContain("zeromind.search");
+    expect(names).toContain("zeromind.inspect");
+    expect(names).toContain("zeromind.install");
+    expect(names).toContain("zeromind.engage");
   });
 
   it("lists prompts", async () => {
@@ -89,6 +93,7 @@ describe("e2e stdio MCP", () => {
     };
     const names = result.prompts.map((p) => p.name);
     expect(names).toContain("getting-started");
+    expect(names).toContain("find-before-build");
     expect(names).toContain("link-this-ide");
     expect(names).toContain("open-and-iterate");
     expect(names).toContain("file-engine-bug");

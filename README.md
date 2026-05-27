@@ -1,6 +1,20 @@
 # @origozero/zeromind
 
-ZeroMind IDE plugin — an MCP server that runs inside Claude Code, Cursor, and Codex. Self-registers as a per-install ZeroMind principal, links to your account via a one-time device code, and exposes ZeroMind world tools plus the Zero engine tool surface routed to the WASM engine in your browser.
+ZeroMind IDE plugin — an MCP server that runs inside Claude Code, Cursor, and Codex. Self-registers as a per-install ZeroMind principal, links to your account via a one-time device code, and exposes:
+
+- **ZeroMind content** — the shared library of published worlds and assets (modules, components, tools, materials, shaders, scenes, packages). Four tools (`zeromind.search`, `zeromind.inspect`, `zeromind.install`, `zeromind.engage`) let the agent find existing content, vet it, install a drop-in solution / reusable parts / a base to modify, and contribute back via votes, comments, and structured reviews. The bundled `zeromind-library` skill teaches the agent to **check ZeroMind first** instead of rebuilding from scratch.
+- **World + engine tools** — list/create/launch/connect worlds, and drive the WASM engine in your browser (`execute`, `guides`, `capture`, VFS, `bash`).
+
+### ZeroMind tool surface
+
+The ZeroMind content + social API (discovery, feed, search, votes, comments, agent reviews, bookmarks, follows, reports) is exposed through **four** verb tools rather than one-tool-per-endpoint. No content bytes ever pass through the MCP client: discovery/inspection is metadata-only, and `install` hands the engine an id so the engine fetches content directly.
+
+| Tool | Verb | Backs |
+|---|---|---|
+| `zeromind.search` | find | `/v1/discover`, `/v1/discover/worlds`, `/v1/search`, `/v1/feed`, `/v1/discover/similar`, `/v1/discover/top-by-kind`, `/v1/discover/kinds`, `/v1/discover/capabilities`, `/v1/schemas` |
+| `zeromind.inspect` | vet | `/v1/worlds/{guid}` (+ `/summary` `/contents` `/published` `/comments`), `/v1/assets/{guid}` (detail), `/v1/assets/{guid}/{closure,children,dependents,pulls,comments}`. Default `overview` aggregates detail + comments + dependents (asset) / detail + summary + comments (world) in one call. |
+| `zeromind.install` | install | engine-side `world.installLibrary` / `world.installAsset` via the bridge — adds a world as a library or installs an asset's content at a path; the engine pulls the bytes from ZeroMind. Requires a connected world. |
+| `zeromind.engage` | give back | `/v1/{worlds,assets}/{guid}/{vote,comments,bookmark,follow,report}`, `/v1/comments/{id}/vote`, `/v1/assets/{guid}/agent-review`, `/v1/users/{id}/follow`, `/v1/worlds/{guid}/pulls` |
 
 ## Status
 
@@ -39,6 +53,17 @@ Click the install button in [`ide/cursor/install-link.md`](ide/cursor/install-li
 ```
 codex mcp add zeromind -- npx -y @origozero/zeromind
 ```
+
+## Updating
+
+There are two pieces, released together under one version number:
+
+- **The MCP server** — the npm package `@origozero/zeromind`, launched by `.mcp.json` via `npx -y @origozero/zeromind`. `npx` resolves the latest published version from the registry, so a fresh IDE session generally picks up new releases automatically (clear the npx cache if it lags).
+- **The plugin** — the skills + `.mcp.json` bundled in this repo, installed through the Claude Code marketplace. Update it with `/plugin` (update the `zeromind` plugin), then restart the IDE.
+
+**First-use update check.** On the first `auth_status` call of a session the server does one best-effort check against the npm registry and returns an `update` object (`current`, `latest`, `update_available`, `how_to_update`). When a newer release exists the bundled skill has the agent surface it and ask the user whether to update — the agent never updates on its own. The check is memoized per process, fails silently when offline, and can be pointed at a stub via `ZEROMIND_NPM_REGISTRY` (used by the tests).
+
+Maintainers: publishing is gated on a git tag (see Releasing) and `package.json` `version` is the source of truth — keep `VERSION` in `src/update.ts`, `.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json` in lockstep with it.
 
 ## Development
 

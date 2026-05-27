@@ -70,6 +70,13 @@ export const buildServer = (state: MockState): Server =>
     const method = req.method ?? "GET";
 
     try {
+      // npm registry stub (used by the first-use update check when
+      // ZEROMIND_NPM_REGISTRY points here). Returns an old version so the
+      // check resolves deterministically to update_available:false.
+      if (method === "GET" && path === "/@origozero/zeromind/latest") {
+        return json(res, 200, { version: "0.0.1" });
+      }
+
       if (method === "POST" && path === "/v1/installs/register") {
         const body = (await readJson(req)) as { install_name?: string; public_key?: string };
         if (!body.install_name || !body.public_key) {
@@ -162,6 +169,148 @@ export const buildServer = (state: MockState): Server =>
         };
         state.worlds.set(guid, world);
         return json(res, 200, { world });
+      }
+
+      // ── ZeroMind: discovery (GET) ──────────────────────────────────────
+      if (method === "GET" && path === "/v1/discover") {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        return json(res, 200, {
+          hits: [
+            {
+              asset_guid: "ast_mock1",
+              owning_world: "wld_mock1",
+              kind: url.searchParams.get("kind") ?? "module",
+              display_name: "mock-module",
+              import_hint: "@wld_mock1@cmt_mock/mock-module",
+              compat_tier: "compatible",
+            },
+          ],
+          total: 1,
+          limit: Number(url.searchParams.get("limit") ?? 25),
+          offset: Number(url.searchParams.get("offset") ?? 0),
+          query_echo: { q: url.searchParams.get("q"), kind: url.searchParams.get("kind") },
+        });
+      }
+      if (method === "GET" && path === "/v1/discover/worlds") {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        return json(res, 200, { worlds: [{ world_guid: "wld_mock1", world_title: "Mock" }] });
+      }
+      if (method === "GET" && path === "/v1/search") {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        return json(res, 200, { worlds: [], assets: [], q: url.searchParams.get("q") });
+      }
+      if (method === "GET" && path === "/v1/feed") {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        return json(res, 200, { items: [], next_cursor: null, sort: url.searchParams.get("sort") });
+      }
+      const similarMatch = path.match(/^\/v1\/discover\/similar\/([^/]+)$/);
+      if (method === "GET" && similarMatch) {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        return json(res, 200, { hits: [], query_echo: { seed_asset: similarMatch[1] } });
+      }
+      if (method === "GET" && path === "/v1/discover/top-by-kind") {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        return json(res, 200, { kind: url.searchParams.get("kind"), assets: [] });
+      }
+      if (method === "GET" && path === "/v1/discover/kinds") {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        return json(res, 200, { kinds: [{ kind: "module", count: 1, is_composite: true }] });
+      }
+      if (method === "GET" && path === "/v1/discover/capabilities") {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        return json(res, 200, { capabilities: [] });
+      }
+      if (method === "GET" && path === "/v1/schemas") {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        return json(res, 200, { schemas: [] });
+      }
+
+      // ── ZeroMind: inspect (GET worlds/assets sub-resources) ────────────
+      const worldSub = path.match(/^\/v1\/worlds\/([^/]+)\/(summary|contents|published|comments)$/);
+      if (method === "GET" && worldSub) {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        const [, guid, view] = worldSub;
+        if (view === "comments") return json(res, 200, []);
+        return json(res, 200, { world: guid, view });
+      }
+      const worldDetail = path.match(/^\/v1\/worlds\/([^/]+)$/);
+      if (method === "GET" && worldDetail) {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        return json(res, 200, { guid: worldDetail[1], title: "Mock World" });
+      }
+      const assetSub = path.match(/^\/v1\/assets\/([^/]+)\/(closure|children|dependents|pulls|comments)$/);
+      if (method === "GET" && assetSub) {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        const [, guid, view] = assetSub;
+        if (view === "comments") return json(res, 200, []);
+        if (view === "closure") {
+          return json(res, 200, { roots: [guid], assets: [], blobs: [], truncated: false });
+        }
+        if (view === "dependents") {
+          return json(res, 200, { asset_guid: guid, pulled_by: [], required_by: [], conformed_by: [] });
+        }
+        return json(res, 200, { asset_guid: guid, view });
+      }
+      const assetDetail = path.match(/^\/v1\/assets\/([^/]+)$/);
+      if (method === "GET" && assetDetail) {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        return json(res, 200, {
+          asset_guid: assetDetail[1],
+          owning_world: "wld_mock1",
+          kind: "module",
+          display_name: "mock-module",
+          capabilities: ["mock_capability"],
+          readme_excerpt: "Mock readme.",
+          score: 0,
+          comment_count: 0,
+          view_count: 0,
+          pulled_into_count: 0,
+        });
+      }
+
+      // ── ZeroMind: engage (POST social) ─────────────────────────────────
+      const voteMatch = path.match(/^\/v1\/(worlds|assets)\/([^/]+)\/vote$/);
+      if (method === "POST" && voteMatch) {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        res.writeHead(204);
+        return res.end();
+      }
+      const commentVote = path.match(/^\/v1\/comments\/([^/]+)\/vote$/);
+      if (method === "POST" && commentVote) {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        return json(res, 200, { score: 1 });
+      }
+      const addComment = path.match(/^\/v1\/(worlds|assets)\/([^/]+)\/comments$/);
+      if (method === "POST" && addComment) {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        const body = (await readJson(req)) as { body?: string; parent?: string };
+        return json(res, 200, {
+          comment_id: "cmt_mock",
+          body: body.body,
+          parent: body.parent ?? null,
+        });
+      }
+      const reviewMatch = path.match(/^\/v1\/assets\/([^/]+)\/agent-review$/);
+      if (method === "POST" && reviewMatch) {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        const body = (await readJson(req)) as Record<string, unknown>;
+        return json(res, 200, { asset_guid: reviewMatch[1], agent_score: 86, ...body });
+      }
+      const toggleMatch = path.match(/^\/v1\/(worlds|assets|users)\/([^/]+)\/(bookmark|follow|report)$/);
+      if (method === "POST" && toggleMatch) {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        res.writeHead(204);
+        return res.end();
+      }
+      const recordPull = path.match(/^\/v1\/worlds\/([^/]+)\/pulls$/);
+      if (method === "POST" && recordPull) {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        const body = (await readJson(req)) as { asset_guid?: string };
+        return json(res, 200, {
+          world_guid: recordPull[1],
+          asset_guid: body.asset_guid,
+          created: true,
+        });
       }
 
       return text(res, 404, "Not found");
