@@ -17,6 +17,7 @@ import { EngineTools } from "./tools/engine.js";
 import { ContentTools, buildInstallLuau, type InstallArgs } from "./tools/content.js";
 import { loadConfig } from "./config.js";
 import { promptDefs, getPrompt } from "./prompts.js";
+import { VERSION } from "./update.js";
 
 const IDE_NAME = process.env.ZEROMIND_IDE_NAME ?? "unknown-ide";
 
@@ -24,7 +25,7 @@ const toolDefs = [
   {
     name: "auth_status",
     description:
-      "Report this install's ID, link state, and the user_id if linked. Use first if you want to know whether the user has linked this IDE yet.",
+      "Report this install's ID, link state, and the user_id if linked. Call this FIRST. It also returns an `update` object from a one-time check against npm: if `update.update_available` is true, relay `update.how_to_update` to the user and ask whether they'd like to update the ZeroMind plugin (you can't update it yourself).",
     inputSchema: { type: "object", properties: {} },
   },
   {
@@ -422,7 +423,7 @@ const dispatch = async (
 
 const main = async (): Promise<void> => {
   const server = new Server(
-    { name: "zeromind", version: "0.4.0" },
+    { name: "zeromind", version: VERSION },
     { capabilities: { tools: {}, prompts: {} } },
   );
 

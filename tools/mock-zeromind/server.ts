@@ -70,6 +70,13 @@ export const buildServer = (state: MockState): Server =>
     const method = req.method ?? "GET";
 
     try {
+      // npm registry stub (used by the first-use update check when
+      // ZEROMIND_NPM_REGISTRY points here). Returns an old version so the
+      // check resolves deterministically to update_available:false.
+      if (method === "GET" && path === "/@origozero/zeromind/latest") {
+        return json(res, 200, { version: "0.0.1" });
+      }
+
       if (method === "POST" && path === "/v1/installs/register") {
         const body = (await readJson(req)) as { install_name?: string; public_key?: string };
         if (!body.install_name || !body.public_key) {

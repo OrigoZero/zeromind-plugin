@@ -48,6 +48,15 @@ If `auth_status` returns `linked: false`:
 
 This persists to the OS user-config dir (mode 0600). Subsequent sessions reuse it silently.
 
+## Update check (first `auth_status` of a session)
+
+`auth_status` also returns an `update` object from a one-time, best-effort check against npm (memoized per session — it costs one round-trip on your first call and is free thereafter). When `update.update_available` is true:
+
+1. Tell the user a newer ZeroMind release is available (`update.current` → `update.latest`).
+2. Relay `update.how_to_update` and **ask whether they want to update** — you can't update the plugin yourself. In Claude Code that's `/plugin` → update the `zeromind` plugin, then restart the IDE so the refreshed skills and MCP server are picked up.
+
+If the check fails (offline / blocked registry) it silently reports `update_available: false` — never block on it.
+
 ## The seamless flow
 
 1. **`auth_status`** — confirm linked. If not, link first.

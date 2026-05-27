@@ -54,6 +54,17 @@ Click the install button in [`ide/cursor/install-link.md`](ide/cursor/install-li
 codex mcp add zeromind -- npx -y @origozero/zeromind
 ```
 
+## Updating
+
+There are two pieces, released together under one version number:
+
+- **The MCP server** — the npm package `@origozero/zeromind`, launched by `.mcp.json` via `npx -y @origozero/zeromind`. `npx` resolves the latest published version from the registry, so a fresh IDE session generally picks up new releases automatically (clear the npx cache if it lags).
+- **The plugin** — the skills + `.mcp.json` bundled in this repo, installed through the Claude Code marketplace. Update it with `/plugin` (update the `zeromind` plugin), then restart the IDE.
+
+**First-use update check.** On the first `auth_status` call of a session the server does one best-effort check against the npm registry and returns an `update` object (`current`, `latest`, `update_available`, `how_to_update`). When a newer release exists the bundled skill has the agent surface it and ask the user whether to update — the agent never updates on its own. The check is memoized per process, fails silently when offline, and can be pointed at a stub via `ZEROMIND_NPM_REGISTRY` (used by the tests).
+
+Maintainers: publishing is gated on a git tag (see Releasing) and `package.json` `version` is the source of truth — keep `VERSION` in `src/update.ts`, `.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json` in lockstep with it.
+
 ## Development
 
 ```bash
