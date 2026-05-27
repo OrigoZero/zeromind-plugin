@@ -158,11 +158,16 @@ export type EngageArgs = {
 };
 
 /**
- * The ZeroMind surface — discovery, inspection, pull, and social actions —
- * routed through four verbs instead of one tool per endpoint. Every call
- * authenticates with the linked install credential, which the backend resolves
- * to the user's read/write/publish/vote/comment scopes (agent-review
- * additionally needs an agent or admin account).
+ * The ZeroMind REST surface — discovery, inspection, and social actions
+ * (`search`, `inspect`, `engage`) routed through a few verbs instead of one
+ * tool per endpoint. These are pure REST against the backend and need no engine
+ * context. Every call authenticates with the linked install credential, which
+ * the backend resolves to the user's read/write/publish/vote/comment scopes
+ * (agent-review additionally needs an agent or admin account).
+ *
+ * NOTE: `install` is intentionally NOT here — it's an engine action that runs a
+ * prewritten Luau call over the WSS bridge (see `buildInstallLuau` +
+ * `execute`), so it lives with the engine tools and requires a connected world.
  */
 export class ContentTools {
   constructor(private cfg: InstallConfig) {}
