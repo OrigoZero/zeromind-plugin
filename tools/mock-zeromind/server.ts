@@ -239,7 +239,26 @@ export const buildServer = (state: MockState): Server =>
         if (view === "closure") {
           return json(res, 200, { roots: [guid], assets: [], blobs: [], truncated: false });
         }
+        if (view === "dependents") {
+          return json(res, 200, { asset_guid: guid, pulled_by: [], required_by: [], conformed_by: [] });
+        }
         return json(res, 200, { asset_guid: guid, view });
+      }
+      const assetDetail = path.match(/^\/v1\/assets\/([^/]+)$/);
+      if (method === "GET" && assetDetail) {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        return json(res, 200, {
+          asset_guid: assetDetail[1],
+          owning_world: "wld_mock1",
+          kind: "module",
+          display_name: "mock-module",
+          capabilities: ["mock_capability"],
+          readme_excerpt: "Mock readme.",
+          score: 0,
+          comment_count: 0,
+          view_count: 0,
+          pulled_into_count: 0,
+        });
       }
 
       // ── Hivemind: pull (POST) ──────────────────────────────────────────

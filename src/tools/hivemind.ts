@@ -38,6 +38,8 @@ export type SearchArgs = {
   window?: string;
   cursor?: string;
   prefix?: string;
+  include_matched_chunks?: boolean;
+  chunks_per_hit?: number;
 };
 
 export type InspectArgs = {
@@ -114,6 +116,8 @@ export class HivemindTools {
           sort: a.sort,
           limit: a.limit,
           offset: a.offset,
+          include_matched_chunks: a.include_matched_chunks,
+          chunks_per_hit: a.chunks_per_hit,
         });
       case "worlds":
         return zmGet(this.cfg, "/v1/discover/worlds", {
@@ -126,6 +130,8 @@ export class HivemindTools {
           sort: a.sort,
           limit: a.limit,
           offset: a.offset,
+          include_matched_chunks: a.include_matched_chunks,
+          chunks_per_hit: a.chunks_per_hit,
         });
       case "both":
         return zmGet(this.cfg, "/v1/search", {
@@ -169,8 +175,19 @@ export class HivemindTools {
   async inspect(a: InspectArgs): Promise<unknown> {
     const guid = need(a.guid, "guid");
     if (a.target === "world") {
-      const view = a.view ?? "summary";
+      const view = a.view ?? "overview";
       switch (view) {
+        case "overview": {
+          // One call → everything an agent needs to judge a world:
+          // analytics (detail), what it ships (summary), and what people
+          // say (comments). Fetched in parallel.
+          const [detail, summary, comments] = await Promise.all([
+            zmGet(this.cfg, `/v1/worlds/${enc(guid)}`),
+            zmGet(this.cfg, `/v1/worlds/${enc(guid)}/summary`),
+            zmGet(this.cfg, `/v1/worlds/${enc(guid)}/comments`),
+          ]);
+          return { detail, summary, comments };
+        }
         case "detail":
           return zmGet(this.cfg, `/v1/worlds/${enc(guid)}`);
         case "summary":
@@ -192,13 +209,26 @@ export class HivemindTools {
           return zmGet(this.cfg, `/v1/worlds/${enc(guid)}/comments`);
         default:
           throw new Error(
-            `unknown world view '${view}'. Use: detail, summary, contents, published, comments.`,
+            `unknown world view '${view}'. Use: overview, detail, summary, contents, published, comments.`,
           );
       }
     }
     if (a.target === "asset") {
-      const view = a.view ?? "closure";
+      const view = a.view ?? "overview";
       switch (view) {
+        case "overview": {
+          // One call → schema + capabilities + readme + the agent review
+          // (detail), what people say (comments), and who already uses it
+          // (dependents). Fetched in parallel.
+          const [detail, comments, dependents] = await Promise.all([
+            zmGet(this.cfg, `/v1/assets/${enc(guid)}`),
+            zmGet(this.cfg, `/v1/assets/${enc(guid)}/comments`),
+            zmGet(this.cfg, `/v1/assets/${enc(guid)}/dependents`),
+          ]);
+          return { detail, comments, dependents };
+        }
+        case "detail":
+          return zmGet(this.cfg, `/v1/assets/${enc(guid)}`);
         case "closure":
           return zmGet(this.cfg, `/v1/assets/${enc(guid)}/closure`, {
             depth: a.depth,
@@ -218,7 +248,7 @@ export class HivemindTools {
           return zmGet(this.cfg, `/v1/assets/${enc(guid)}/comments`);
         default:
           throw new Error(
-            `unknown asset view '${view}'. Use: closure, children, dependents, pulls, comments.`,
+            `unknown asset view '${view}'. Use: overview, detail, closure, children, dependents, pulls, comments.`,
           );
       }
     }

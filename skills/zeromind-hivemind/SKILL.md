@@ -57,6 +57,8 @@ hivemind.search { "scope": "similar", "asset_guid": "ast_…" }
 
 Filters AND-combine: `kind`, `lang`, `capability`, `tag`, `license`, `conforms_to`, `provides_schema`. Sort with `sort` (`hot|top|popular|new|similar`). Page with `limit` + `offset`.
 
+**Semantic search.** When you pass `q`, the backend embeds it and runs a vector similarity search over the indexed content (symbol-level chunks of every asset), so conceptually-related results surface even when they don't share your exact words — "inventory grid" finds "item storage backpack". The response's `ranking.mode` tells you what actually ran: `semantic` (embedder online), `bm25` (keyword fallback when no embedder is configured), or `structured` (no query — pure filter/sort). `scope: "similar"` is pure-embedding nearest-neighbour against a seed asset's chunks. Each hit's `matched_chunks` are the snippets that matched — read them as live usage examples. Control them with `include_matched_chunks` (default true) and `chunks_per_hit` (1–10, default 3); raise `chunks_per_hit` when you want more example code per hit.
+
 **Read the signals on each hit before picking:**
 - `compat_tier` — `compatible` (drops in clean), `shim` (works via a compat layer), `incompatible` (needs a manual port). Prefer `compatible` for outcome A.
 - `agent_score` (0–100) — quality as graded by agent reviews. Higher is safer.
@@ -68,22 +70,36 @@ Try more than one query phrasing before concluding nothing exists — the index 
 
 ## `hivemind.inspect` — vet it
 
-Once a hit looks promising, drill in before you pull. Pass the `guid` from the search hit.
+Once a hit looks promising, drill in before you pull. Pass the `guid` from the search hit. The default view is **`overview`** — one call that aggregates everything you need to judge the thing.
 
 ```
-# Worlds (view: detail | summary | contents | published | comments)
-hivemind.inspect { "target": "world", "guid": "wld_…", "view": "summary" }
+# Asset overview (default) → { detail, comments, dependents }
+hivemind.inspect { "target": "asset", "guid": "ast_…" }
+
+# World overview (default) → { detail, summary, comments }
+hivemind.inspect { "target": "world", "guid": "wld_…" }
+```
+
+**Asset `overview`** gives you, in one response:
+- `detail` — the asset's full record: `schema` / `provides_schema` / `structured` (**how it's used / how it's shaped**), `capabilities` (**what it offers**), `readme_excerpt` and the agent review (`compat_tier`, `usability`/`code_quality`/`performance`, `agent_review_verdict` — **examples + a quality read**), every analytics counter (`score`, `pulled_into_count`, `comment_count`, `view_count`), the owner chip, and `import_hint` + `latest_version_id` for pickup.
+- `comments` — what builders say (gotchas, tips).
+- `dependents` — who already pulls/requires/conforms to it. The strongest "is this any good?" signal: assets other worlds actually use are proven in production.
+
+**World `overview`** gives `detail` (world analytics: score, pulls, forks, agent-quality avg, trust tier), `summary` (kind histogram + top publishings), and `comments`.
+
+Narrower views when you want just one slice:
+
+```
+# Asset: overview | detail | closure | children | dependents | pulls | comments
+hivemind.inspect { "target": "asset", "guid": "ast_…", "view": "closure" }    # full sub-asset tree + blob refs + problems — what materializing it entails
+hivemind.inspect { "target": "asset", "guid": "ast_…", "view": "detail" }     # just the single-asset record
+
+# World: overview | detail | summary | contents | published | comments
 hivemind.inspect { "target": "world", "guid": "wld_…", "view": "contents" }
-
-# Assets (view: closure | children | dependents | pulls | comments)
-hivemind.inspect { "target": "asset", "guid": "ast_…" }                     # closure: what you'd actually get
-hivemind.inspect { "target": "asset", "guid": "ast_…", "view": "dependents" } # who already uses it
-hivemind.inspect { "target": "asset", "guid": "ast_…", "view": "comments" }   # what people say about it
 ```
 
-- **`closure`** (asset default) shows the full sub-asset tree, blob references, problems, and `import_hint` — i.e. exactly what materializing this asset entails. Check `problems` and `truncated` here.
-- **`dependents`** is the strongest "is this any good?" signal — assets other worlds actually pulled are proven in production.
-- **`comments`** surfaces gotchas other builders hit.
+- **`detail`** (asset) is the single richest by-guid record — schema, capabilities, readme, review, analytics — without walking the tree.
+- **`closure`** shows the full sub-asset tree, blob references, problems, and `import_hint` — i.e. exactly what materializing this asset entails. Check `problems` and `truncated` here.
 
 ## `hivemind.pull` — take it
 

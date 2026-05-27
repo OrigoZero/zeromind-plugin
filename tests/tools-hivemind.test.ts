@@ -68,17 +68,49 @@ describe("hivemind tools", () => {
   });
 
   describe("inspect", () => {
-    it("inspects a world (default summary) and a named view", async () => {
-      const s = (await hm.inspect({ target: "world", guid: "wld_1" })) as { view: string };
-      expect(s.view).toBe("summary");
+    it("world overview (default) aggregates detail + summary + comments", async () => {
+      const r = (await hm.inspect({ target: "world", guid: "wld_1" })) as {
+        detail: { guid: string };
+        summary: { view: string };
+        comments: unknown[];
+      };
+      expect(r.detail.guid).toBe("wld_1");
+      expect(r.summary.view).toBe("summary");
+      expect(Array.isArray(r.comments)).toBe(true);
+    });
+
+    it("world named views still work", async () => {
       const c = (await hm.inspect({ target: "world", guid: "wld_1", view: "contents" })) as {
         view: string;
       };
       expect(c.view).toBe("contents");
     });
 
-    it("inspects an asset (default closure)", async () => {
-      const r = (await hm.inspect({ target: "asset", guid: "ast_1" })) as { roots: string[] };
+    it("asset overview (default) aggregates detail + comments + dependents", async () => {
+      const r = (await hm.inspect({ target: "asset", guid: "ast_1" })) as {
+        detail: { asset_guid: string; capabilities: string[] };
+        comments: unknown[];
+        dependents: { pulled_by: unknown[] };
+      };
+      expect(r.detail.asset_guid).toBe("ast_1");
+      expect(r.detail.capabilities).toContain("mock_capability");
+      expect(Array.isArray(r.comments)).toBe(true);
+      expect(r.dependents.pulled_by).toBeDefined();
+    });
+
+    it("asset detail view returns the single-asset record", async () => {
+      const d = (await hm.inspect({ target: "asset", guid: "ast_1", view: "detail" })) as {
+        asset_guid: string;
+        readme_excerpt: string;
+      };
+      expect(d.asset_guid).toBe("ast_1");
+      expect(d.readme_excerpt).toBe("Mock readme.");
+    });
+
+    it("asset closure view returns the closure", async () => {
+      const r = (await hm.inspect({ target: "asset", guid: "ast_1", view: "closure" })) as {
+        roots: string[];
+      };
       expect(r.roots).toEqual(["ast_1"]);
     });
 

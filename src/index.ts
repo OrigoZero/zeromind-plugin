@@ -48,7 +48,7 @@ const toolDefs = [
   {
     name: "hivemind.search",
     description:
-      "FIRST STEP for any build request — search the ZeroMind hivemind for content others already published before writing anything yourself. Returns ranked hits with `import_hint` (`@world@commit/name`), `asset_guid`, `compat_tier`, `agent_score`, and matched code snippets so you can (A) drop a solution in directly, (B) reuse parts, or (C) pull a base to modify. `scope`: 'assets' (default — find the exact module/component/shader), 'worlds' (find a whole project), 'both' (quick combined), 'feed' (browse hot/new/top with no query), 'similar' (neighbors of an asset_guid), 'top_by_kind' (best of one kind), 'kinds'/'capabilities'/'schemas' (browse the taxonomy). Filter with kind/lang/capability/tag/license/conforms_to; page with limit/offset.",
+      "FIRST STEP for any build request — search the ZeroMind hivemind for content others already published before writing anything yourself. When you pass `q`, the backend embeds it for SEMANTIC vector search (falling back to keyword/BM25 when no embedder is configured); the response's `ranking.mode` reports which fired ('semantic'|'bm25'|'structured') and each hit's `matched_chunks` are the symbol-level snippets that matched (your usage examples). Returns ranked hits with `import_hint` (`@world@commit/name`), `asset_guid`, `compat_tier`, `agent_score`, capabilities/tags/readme so you can (A) drop a solution in directly, (B) reuse parts, or (C) pull a base to modify. `scope`: 'assets' (default — find the exact module/component/shader), 'worlds' (find a whole project), 'both' (quick combined), 'feed' (browse hot/new/top with no query), 'similar' (pure-embedding neighbors of an asset_guid), 'top_by_kind' (best of one kind), 'kinds'/'capabilities'/'schemas' (browse the taxonomy). Filter with kind/lang/capability/tag/license/conforms_to; page with limit/offset.",
     inputSchema: {
       type: "object",
       properties: {
@@ -86,13 +86,21 @@ const toolDefs = [
         window: { type: "string", description: "Feed time window: day | week | month | quarter | year | all." },
         cursor: { type: "string", description: "Feed pagination cursor." },
         prefix: { type: "string", description: "Prefix filter for scope=capabilities/schemas." },
+        include_matched_chunks: {
+          type: "boolean",
+          description: "scope=assets/worlds: return the matched code snippets (usage examples). Default true.",
+        },
+        chunks_per_hit: {
+          type: "integer",
+          description: "scope=assets/worlds: how many matched snippets per hit (1–10, default 3).",
+        },
       },
     },
   },
   {
     name: "hivemind.inspect",
     description:
-      "Drill into one world or asset found via hivemind.search before committing to reuse it. For target='world': view 'summary' (default — kind histogram + top publishings), 'detail', 'contents', 'published', 'comments'. For target='asset': view 'closure' (default — full sub-asset tree + blob refs + problems, what you'd actually get), 'children', 'dependents' (who already uses it — adoption signal), 'pulls', 'comments'. Pass the `guid` from a search hit.",
+      "Drill into one world or asset found via hivemind.search before committing to reuse it. Default view is 'overview' — a single call that aggregates everything you need to judge it. For target='asset', overview returns {detail, comments, dependents}: the schema (`schema`/`provides_schema`/`structured` — how it's used), `capabilities` (what it offers), `readme_excerpt` + the agent review/verdict (examples + quality), all analytics counters (score/pulls/views/comments/agent_score), plus comments and who already depends on it. For target='world', overview returns {detail, summary, comments}: world analytics + kind histogram + top publishings + comments. Narrower views — asset: detail|closure|children|dependents|pulls|comments; world: detail|summary|contents|published|comments. Pass the `guid` from a search hit.",
     inputSchema: {
       type: "object",
       properties: {
@@ -101,7 +109,7 @@ const toolDefs = [
         view: {
           type: "string",
           description:
-            "world: detail|summary|contents|published|comments. asset: closure|children|dependents|pulls|comments.",
+            "Default 'overview' (aggregated). asset: overview|detail|closure|children|dependents|pulls|comments. world: overview|detail|summary|contents|published|comments.",
         },
         kind: { type: "string" },
         sort: { type: "string" },
