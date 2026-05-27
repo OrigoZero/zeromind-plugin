@@ -14,6 +14,7 @@ import { Bridge } from "./bridge.js";
 import { authStatus, zmLink, zmLinkPoll, zmUnlink } from "./tools/auth.js";
 import { WorldTools } from "./tools/world.js";
 import { EngineTools } from "./tools/engine.js";
+import { HivemindTools } from "./tools/hivemind.js";
 import { loadConfig } from "./config.js";
 import { promptDefs, getPrompt } from "./prompts.js";
 
@@ -43,6 +44,129 @@ const toolDefs = [
     description:
       "Revoke this install's link to the user's ZeroMind account and delete the local install.json. The install_id is gone after this — a fresh zm_link will mint a new one.",
     inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "hivemind.search",
+    description:
+      "FIRST STEP for any build request — search the ZeroMind hivemind for content others already published before writing anything yourself. Returns ranked hits with `import_hint` (`@world@commit/name`), `asset_guid`, `compat_tier`, `agent_score`, and matched code snippets so you can (A) drop a solution in directly, (B) reuse parts, or (C) pull a base to modify. `scope`: 'assets' (default — find the exact module/component/shader), 'worlds' (find a whole project), 'both' (quick combined), 'feed' (browse hot/new/top with no query), 'similar' (neighbors of an asset_guid), 'top_by_kind' (best of one kind), 'kinds'/'capabilities'/'schemas' (browse the taxonomy). Filter with kind/lang/capability/tag/license/conforms_to; page with limit/offset.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scope: {
+          type: "string",
+          enum: [
+            "assets",
+            "worlds",
+            "both",
+            "feed",
+            "similar",
+            "top_by_kind",
+            "kinds",
+            "capabilities",
+            "schemas",
+          ],
+          description: "Which lens to search. Default 'assets'.",
+        },
+        q: { type: "string", description: "Free-text / semantic query (e.g. 'voxel terrain greedy mesher')." },
+        kind: {
+          type: "string",
+          description:
+            "Asset kind filter (module, component, tool, bundle, scene, material, shader, preset, package, …). Required for scope=top_by_kind.",
+        },
+        sort: { type: "string", description: "hot | top | popular | new | similar." },
+        limit: { type: "integer" },
+        offset: { type: "integer", description: "0-indexed page offset (scope=assets/worlds)." },
+        lang: { type: "string" },
+        capability: { type: "string" },
+        tag: { type: "string" },
+        license: { type: "string" },
+        conforms_to: { type: "string", description: "Find assets conforming to this schema id." },
+        provides_schema: { type: "string" },
+        asset_guid: { type: "string", description: "Seed asset for scope=similar." },
+        window: { type: "string", description: "Feed time window: day | week | month | quarter | year | all." },
+        cursor: { type: "string", description: "Feed pagination cursor." },
+        prefix: { type: "string", description: "Prefix filter for scope=capabilities/schemas." },
+      },
+    },
+  },
+  {
+    name: "hivemind.inspect",
+    description:
+      "Drill into one world or asset found via hivemind.search before committing to reuse it. For target='world': view 'summary' (default — kind histogram + top publishings), 'detail', 'contents', 'published', 'comments'. For target='asset': view 'closure' (default — full sub-asset tree + blob refs + problems, what you'd actually get), 'children', 'dependents' (who already uses it — adoption signal), 'pulls', 'comments'. Pass the `guid` from a search hit.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        target: { type: "string", enum: ["world", "asset"] },
+        guid: { type: "string", description: "World guid or asset_guid from a search hit." },
+        view: {
+          type: "string",
+          description:
+            "world: detail|summary|contents|published|comments. asset: closure|children|dependents|pulls|comments.",
+        },
+        kind: { type: "string" },
+        sort: { type: "string" },
+        limit: { type: "integer" },
+        offset: { type: "integer" },
+        depth: { type: "integer", description: "Closure depth (asset closure)." },
+        conforms: { type: "boolean", description: "Include conforms_to schema deps in the closure." },
+      },
+      required: ["target", "guid"],
+    },
+  },
+  {
+    name: "hivemind.pull",
+    description:
+      "Fetch the full content closure of one or more assets — the resolved asset versions, deduplicated blob download URLs, and engine sidecars needed to materialize them. This is how you grab a drop-in solution or a base to modify. Pass `asset_guids` (from search/inspect hits). With `ensure_compat` (default true) a registered compat shim is swapped in automatically so the content works in your world. To then wire the pulled content into the engine, use its `import_hint` in a commit's imports, or write the returned files via the engine VFS tools. After actually adopting an asset, record it with hivemind.engage action='record_pull' so its adoption signal rises.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        asset_guids: {
+          type: "array",
+          items: { type: "string" },
+          description: "1–64 asset GUIDs to pull (with their transitive closure).",
+        },
+        ref: { type: "string", description: "Optional commit id pinning the root assets' versions." },
+        conforms: { type: "boolean", description: "Also pull conforms_to schema definitions. Default false." },
+        ensure_compat: {
+          type: "boolean",
+          description: "Swap in a compat shim when one exists (default true). Set false for the raw original.",
+        },
+      },
+      required: ["asset_guids"],
+    },
+  },
+  {
+    name: "hivemind.engage",
+    description:
+      "Contribute back to the hivemind. `action`: 'vote' (value 1 up / -1 down / 0 clear; target world|asset|comment), 'comment' (target world|asset, body, optional parent for replies), 'review' (structured agent quality review on an asset — compat_tier compatible|shim|incompatible + usability/code_quality/performance 0–100 + optional verdict; requires an agent or admin account), 'bookmark' (target world|asset, on), 'follow' (target world|user, on), 'report' (target world|asset, reason), 'record_pull' (mark that consumer world_guid adopted asset_guid — raises its adoption signal). Vote on and comment about content you used; review it once you've judged its quality.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["vote", "comment", "review", "bookmark", "follow", "report", "record_pull"],
+        },
+        target: { type: "string", enum: ["world", "asset", "comment", "user"] },
+        guid: { type: "string", description: "Target guid (world/asset/comment/user id) for most actions." },
+        value: { type: "integer", description: "vote: 1 (up), -1 (down), 0 (clear)." },
+        body: { type: "string", description: "comment text." },
+        parent: { type: "string", description: "comment: parent comment id for a threaded reply." },
+        compat_tier: { type: "string", enum: ["compatible", "shim", "incompatible"], description: "review." },
+        usability: { type: "integer", description: "review 0–100." },
+        code_quality: { type: "integer", description: "review 0–100." },
+        performance: { type: "integer", description: "review 0–100." },
+        verdict: { type: "string", description: "review: short prose verdict (≤600 chars)." },
+        shim_asset_guid: { type: "string", description: "review: pointer to a compat shim asset you published." },
+        on: { type: "boolean", description: "bookmark/follow toggle (default true)." },
+        reason: { type: "string", description: "report reason." },
+        note: { type: "string", description: "report: optional detail." },
+        world_guid: { type: "string", description: "record_pull: the consuming world." },
+        asset_guid: { type: "string", description: "record_pull: the asset that world adopted." },
+        with_compat_layer: { type: "boolean", description: "record_pull: was a compat shim used." },
+        resolved_commit: { type: "string", description: "record_pull: pinned commit of the asset's world." },
+      },
+      required: ["action"],
+    },
   },
   {
     name: "world.list",
@@ -212,6 +336,7 @@ const dispatch = async (
   args: Record<string, unknown>,
   ensureWorld: () => Promise<WorldCtx>,
   ensureEngine: () => Promise<EngineCtx>,
+  ensureHivemind: () => HivemindTools,
 ): Promise<unknown> => {
   switch (name) {
     case "auth_status":
@@ -222,6 +347,18 @@ const dispatch = async (
       return zmLinkPoll();
     case "zm_unlink":
       return zmUnlink();
+    case "hivemind.search":
+      return ensureHivemind().search(args);
+    case "hivemind.inspect":
+      return ensureHivemind().inspect(
+        args as { target: "world" | "asset"; guid: string },
+      );
+    case "hivemind.pull":
+      return ensureHivemind().pull(args as { asset_guids: string[] });
+    case "hivemind.engage":
+      return ensureHivemind().engage(
+        args as { action: "vote" | "comment" | "review" | "bookmark" | "follow" | "report" | "record_pull" },
+      );
     case "world.list":
       return (await ensureWorld()).w.list();
     case "world.create":
@@ -277,13 +414,14 @@ const dispatch = async (
 
 const main = async (): Promise<void> => {
   const server = new Server(
-    { name: "zeromind", version: "0.3.1" },
+    { name: "zeromind", version: "0.4.0" },
     { capabilities: { tools: {}, prompts: {} } },
   );
 
   let bridge: Bridge | undefined;
   let worldTools: WorldTools | undefined;
   let engineTools: EngineTools | undefined;
+  let hivemindTools: HivemindTools | undefined;
   let bridgeConnectError: Error | undefined;
   let initPromise: Promise<void> | undefined;
 
@@ -324,6 +462,18 @@ const main = async (): Promise<void> => {
     return { w: worldTools! };
   };
 
+  // Hivemind tools are pure REST against the ZeroMind backend — no bridge,
+  // no open browser world required. They only need the linked install
+  // credential, so they're available the moment the IDE is linked.
+  const ensureHivemind = (): HivemindTools => {
+    if (!hivemindTools) {
+      const cfg = loadConfig();
+      if (!cfg) throw new Error("not registered — call zm_link first");
+      hivemindTools = new HivemindTools(cfg);
+    }
+    return hivemindTools;
+  };
+
   const ensureEngine = async (): Promise<EngineCtx> => {
     await ensureWorld();
     if (bridgeConnectError) {
@@ -357,7 +507,7 @@ const main = async (): Promise<void> => {
     const name = req.params.name;
     const args = (req.params.arguments ?? {}) as Record<string, unknown>;
     try {
-      const result = await dispatch(name, args, ensureWorld, ensureEngine);
+      const result = await dispatch(name, args, ensureWorld, ensureEngine, ensureHivemind);
       if (name === "capture") {
         const r = result as { image_b64: string };
         return {

@@ -81,6 +81,10 @@ describe("e2e stdio MCP", () => {
     expect(names).toContain("execute");
     expect(names).toContain("world.create");
     expect(names).toContain("zm_link");
+    expect(names).toContain("hivemind.search");
+    expect(names).toContain("hivemind.inspect");
+    expect(names).toContain("hivemind.pull");
+    expect(names).toContain("hivemind.engage");
   });
 
   it("lists prompts", async () => {
@@ -89,6 +93,7 @@ describe("e2e stdio MCP", () => {
     };
     const names = result.prompts.map((p) => p.name);
     expect(names).toContain("getting-started");
+    expect(names).toContain("find-before-build");
     expect(names).toContain("link-this-ide");
     expect(names).toContain("open-and-iterate");
     expect(names).toContain("file-engine-bug");
