@@ -782,7 +782,7 @@ Flags:
   --global   write to user-global config (e.g. ~/.codex/AGENTS.md)
   --project  write to the current project (default for most harnesses)
   --force    overwrite an existing owned file (skills, rule files)
-  --cwd <p>  install relative to <p> instead of \$PWD
+  --cwd <p>  install relative to <p> instead of $PWD
 `;
 
 export const runInstallCli = async (argv: string[]): Promise<void> => {
