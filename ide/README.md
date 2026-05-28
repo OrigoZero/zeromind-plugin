@@ -6,7 +6,7 @@ Each harness loads agent context through a different native channel. ZeroMind sh
 
 | Harness | Native channel | One-shot install |
 |---|---|---|
-| [Claude Code](./claude/README.md) | skills (`.claude/skills/<name>/SKILL.md`) + plugin marketplace | `/plugin install zeromind` (or `npx @origozero/zeromind install claude`) |
+| [Claude Code](./claude/README.md) | skills (`.claude/skills/<name>/SKILL.md`) + plugin marketplace | `/plugin marketplace add OrigoZero/zeromind-plugin` then `/plugin install zeromind` (or `npx @origozero/zeromind install claude`) |
 | [Cursor](./cursor/install-link.md) | `.cursor/rules/<name>.mdc` (MDC frontmatter, agent-requested) | `npx @origozero/zeromind install cursor` |
 | [Codex CLI](./codex/README.md) | `AGENTS.md` (project root or `~/.codex/AGENTS.md`) | `npx @origozero/zeromind install codex` |
 | [Gemini CLI](./gemini/README.md) | `GEMINI.md` (project root or `~/.gemini/GEMINI.md`) | `npx @origozero/zeromind install gemini` |

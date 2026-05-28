@@ -27,9 +27,12 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@iarna/toml": "^2.2.5",
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "jsonc-parser": "^3.3.1",
     "undici": "^6.0.0",
-    "ws": "^8.16.0"
+    "ws": "^8.16.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
