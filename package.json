@@ -11,6 +11,9 @@
     "dist/",
     "skills/",
     "templates/",
+    "dist-publishing/",
+    "docs/install-matrix.json",
+    "docs/install-matrix.schema.json",
     "README.md",
     "LICENSE"
   ],

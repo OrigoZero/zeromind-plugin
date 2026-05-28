@@ -1,0 +1,13 @@
+name: zeromind
+version: "0.5.0"
+description: "ZeroMind — the shared library of published Zero engine worlds + assets, plus the engine you drive remotely. Contributes a skill and a slash command alongside the zeromind MCP server."
+author: OrigoZero
+provides_skills:
+  - zeromind-getting-started
+  - zeromind-library
+provides_commands:
+  - zeromind
+requires_env:
+  - name: ZEROMIND_IDE_NAME
+    description: "Optional. Lets the ZeroMind backend tag this install as Hermes (default: 'hermes')."
+    secret: false

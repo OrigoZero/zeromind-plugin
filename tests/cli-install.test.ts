@@ -26,6 +26,7 @@ describe("cli-install: per-harness full native install", () => {
       "goose",
       "junie",
       "amp",
+      "hermes",
     ] as const) {
       expect(names).toContain(expected);
     }
@@ -61,23 +62,59 @@ describe("cli-install: per-harness full native install", () => {
     expect(settings.mcpServers.zeromind.args).toEqual(["-y", "@origozero/zeromind"]);
   });
 
-  it("Cursor install writes the rule + adds the MCP server to ~/.cursor/mcp.json", async () => {
+  it("Cursor install copies the Cursor 3.0 plugin bundle to ~/.cursor/plugins/local/ + writes rule and mcp.json fallback", async () => {
     const cwd = newTmp();
     process.env.HOME = cwd;
     const r = await installHarness({ harness: "cursor", scope: "project", cwd });
-    const rule = r.steps.find((s) => s.label.includes("rule"))!;
-    expect(rule.status).toBe("written");
-    expect(rule.path).toBe(join(cwd, ".cursor/rules/zeromind.mdc"));
-    const ruleBody = readFileSync(rule.path!, "utf8");
-    expect(ruleBody).toMatch(/^---\ndescription: /);
-    expect(ruleBody).toMatch(/alwaysApply: false/);
-
-    const mcp = r.steps.find((s) => s.label.includes("mcp.json"))!;
-    expect(mcp.status === "written" || mcp.status === "updated").toBe(true);
-    const cfg = JSON.parse(readFileSync(mcp.path!, "utf8")) as {
+    // Native channel: the Cursor 3.0 plugin bundle.
+    const pluginStep = r.steps.find((s) => s.label.includes("Cursor plugin"))!;
+    expect(
+      pluginStep.status === "written" || pluginStep.status === "exists" || pluginStep.status === "skipped",
+    ).toBe(true);
+    if (pluginStep.status === "written") {
+      expect(pluginStep.path).toBe(join(cwd, ".cursor/plugins/local/zeromind"));
+      const manifest = JSON.parse(
+        readFileSync(join(pluginStep.path!, ".cursor-plugin/plugin.json"), "utf8"),
+      ) as { name: string };
+      expect(manifest.name).toBe("zeromind");
+    }
+    // Manual fallback: ~/.cursor/mcp.json + .cursor/rules/zeromind.mdc.
+    const fb = r.steps.find((s) => s.label.includes("Manual fallback"))!;
+    expect(fb.status === "written" || fb.status === "updated").toBe(true);
+    const cfg = JSON.parse(readFileSync(fb.path!, "utf8")) as {
       mcpServers: { zeromind: { env: { ZEROMIND_IDE_NAME: string } } };
     };
     expect(cfg.mcpServers.zeromind.env.ZEROMIND_IDE_NAME).toBe("cursor");
+    // The fallback also wrote the rule alongside.
+    const rulePath = join(cwd, ".cursor/rules/zeromind.mdc");
+    const ruleBody = readFileSync(rulePath, "utf8");
+    expect(ruleBody).toMatch(/^---\ndescription: /);
+    expect(ruleBody).toMatch(/alwaysApply: false/);
+  });
+
+  it("Hermes install writes mcp_servers.zeromind to ~/.hermes/config.yaml + drops the optional plugin bundle", async () => {
+    const cwd = newTmp();
+    process.env.HOME = cwd;
+    const r = await installHarness({ harness: "hermes", cwd });
+    // Canonical channel: config.yaml MCP entry.
+    const mcpStep = r.steps.find((s) => s.label.includes("config.yaml"))!;
+    expect(mcpStep.status === "written" || mcpStep.status === "updated").toBe(true);
+    expect(mcpStep.path).toBe(join(cwd, ".hermes/config.yaml"));
+    const cfg = readFileSync(mcpStep.path!, "utf8");
+    expect(cfg).toMatch(/mcp_servers:/);
+    expect(cfg).toMatch(/zeromind/);
+    expect(cfg).toMatch(/@origozero\/zeromind/);
+    // Optional plugin bundle with skills + slash command + context hook.
+    const plugin = r.steps.find((s) => s.label.includes("Plugin bundle"))!;
+    if (plugin.status === "written") {
+      expect(plugin.path).toBe(join(cwd, ".hermes/plugins/zeromind"));
+      expect(readFileSync(join(plugin.path!, "plugin.yaml"), "utf8")).toMatch(
+        /name: zeromind/,
+      );
+      expect(readFileSync(join(plugin.path!, "__init__.py"), "utf8")).toMatch(
+        /def register\(ctx\)/,
+      );
+    }
   });
 
   it("Codex install copies the .codex-plugin bundle to the personal marketplace + writes config.toml fallback + AGENTS.md", async () => {
@@ -198,6 +235,7 @@ describe("cli-install: per-harness full native install", () => {
       "copilot",
       "junie",
       "amp",
+      "hermes",
     ];
     for (const h of harnesses) {
       const cwd = newTmp();

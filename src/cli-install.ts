@@ -46,7 +46,8 @@ export type Harness =
   | "copilot"
   | "goose"
   | "junie"
-  | "amp";
+  | "amp"
+  | "hermes";
 
 type Scope = "project" | "global";
 
@@ -269,23 +270,61 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
   cursor: {
     name: "Cursor",
     channel:
-      "`.cursor/rules/<name>.mdc` (rules) + `~/.cursor/mcp.json` (MCP server)",
+      "Cursor 3.0 plugin (`.cursor-plugin/plugin.json` bundle in `~/.cursor/plugins/local/`) — bundles skills, the `zeromind.mdc` rule, and `mcp.json`. Manual fallback edits `~/.cursor/mcp.json` + writes a single rule file.",
     defaultScope: "project",
     scopes: ["project", "global"],
     steps: [
-      writeFileStep(
-        "rule: .cursor/rules/zeromind.mdc",
-        (ctx) =>
-          ctx.scope === "global"
-            ? expand("~/.cursor/rules/zeromind.mdc")
-            : join(ctx.cwd, ".cursor/rules/zeromind.mdc"),
-        () => cursorMdc(MANUAL),
-      ),
-      editJsonMcpServerStep(
-        "MCP server in ~/.cursor/mcp.json",
-        () => expand("~/.cursor/mcp.json"),
-        "cursor",
-      ),
+      {
+        // Cursor 3.0's actual native channel is its plugin system —
+        // bundles skills, rules, commands, hooks, and an mcp.json under
+        // a `.cursor-plugin/plugin.json` manifest. We ship a
+        // ready-to-install bundle and copy it into the user's local
+        // plugins dir, where Cursor auto-discovers it on startup.
+        label: "Cursor plugin: copy bundle to ~/.cursor/plugins/local/",
+        run: (ctx) => {
+          const src = join(PKG_ROOT, "dist-publishing", "cursor-plugin");
+          if (!existsSync(src)) {
+            return {
+              label: "Cursor plugin: copy bundle to ~/.cursor/plugins/local/",
+              status: "skipped",
+              note: `Plugin bundle missing at ${src}. The published npm package should include dist-publishing/.`,
+            };
+          }
+          const dest = expand("~/.cursor/plugins/local/zeromind");
+          const status = copyPluginBundle(src, dest, ctx.force);
+          return {
+            label: "Cursor plugin: copy bundle to ~/.cursor/plugins/local/",
+            status,
+            path: dest,
+            note:
+              status === "exists"
+                ? "Plugin already at this path — re-run with --force to refresh."
+                : "Restart Cursor; the plugin auto-loads on startup. Once the marketplace listing is live, users can also install via cursor.com/marketplace one-click.",
+          };
+        },
+      },
+      {
+        // Manual fallback: a single .cursor/rules/*.mdc + mcp.json edit
+        // for environments where the plugin bundle isn't picked up.
+        label: "Manual fallback: rule + ~/.cursor/mcp.json",
+        run: (ctx) => {
+          const rulePath =
+            ctx.scope === "global"
+              ? expand("~/.cursor/rules/zeromind.mdc")
+              : join(ctx.cwd, ".cursor/rules/zeromind.mdc");
+          writeOwnedFile(rulePath, cursorMdc(MANUAL), ctx.force);
+          const mcpPath = expand("~/.cursor/mcp.json");
+          const status = editJsonEntry(mcpPath, "mcpServers", "zeromind", {
+            ...SERVER_SPEC,
+            env: ideEnv("cursor"),
+          });
+          return {
+            label: "Manual fallback: rule + ~/.cursor/mcp.json",
+            status,
+            path: mcpPath,
+          };
+        },
+      },
     ],
   },
 
@@ -854,6 +893,64 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
           status: "manual",
           note: "Add through Amp's MCP servers settings page:\n  command: npx\n  args: -y @origozero/zeromind\n  env: ZEROMIND_IDE_NAME=amp",
         }),
+      },
+    ],
+  },
+
+  hermes: {
+    name: "Hermes Agent",
+    channel:
+      "`mcp_servers.zeromind` in `~/.hermes/config.yaml` (canonical, auto-discovers tools) + an optional Python plugin at `~/.hermes/plugins/zeromind/` that contributes skills, a `/zeromind` slash command, and a first-turn context hook.",
+    defaultScope: "global",
+    scopes: ["global"],
+    steps: [
+      {
+        // Hermes' canonical channel for an external MCP server is the
+        // mcp_servers.<name> block in ~/.hermes/config.yaml. Hermes'
+        // MCP client auto-discovers the tools — no Python wrapper needed.
+        label: "MCP server in ~/.hermes/config.yaml",
+        run: async () => {
+          const path = expand("~/.hermes/config.yaml");
+          const status = await upsertYamlListEntry(path, "mcp_servers", {
+            name: "zeromind",
+            command: SERVER_SPEC.command,
+            args: SERVER_SPEC.args,
+            env: { ZEROMIND_IDE_NAME: "hermes" },
+          });
+          return {
+            label: "MCP server in ~/.hermes/config.yaml",
+            status,
+            path,
+            note: "Once the upstream catalog manifest is merged into nousresearch/hermes-agent, this will be installable via `hermes mcp install zeromind` instead.",
+          };
+        },
+      },
+      {
+        // Optional Hermes plugin: skills + /zeromind slash command +
+        // pre_llm_call context hook. Copies the bundle from
+        // dist-publishing/hermes-plugin/zeromind into ~/.hermes/plugins/.
+        label: "Plugin bundle: ~/.hermes/plugins/zeromind/",
+        run: (ctx) => {
+          const src = join(PKG_ROOT, "dist-publishing", "hermes-plugin", "zeromind");
+          if (!existsSync(src)) {
+            return {
+              label: "Plugin bundle: ~/.hermes/plugins/zeromind/",
+              status: "skipped",
+              note: `Plugin bundle missing at ${src}.`,
+            };
+          }
+          const dest = expand("~/.hermes/plugins/zeromind");
+          const status = copyPluginBundle(src, dest, ctx.force);
+          return {
+            label: "Plugin bundle: ~/.hermes/plugins/zeromind/",
+            status,
+            path: dest,
+            note:
+              status === "exists"
+                ? "Plugin already at this path — re-run with --force to refresh."
+                : "Enable it: `hermes plugins enable zeromind` (Hermes plugins are opt-in by default).",
+          };
+        },
       },
     ],
   },

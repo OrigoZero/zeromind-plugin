@@ -1,0 +1,22 @@
+name: zeromind
+display_name: ZeroMind
+description: "Drive your browser-running Zero engine worlds — search and install published assets, iterate the connected world with execute / capture / VFS tools."
+author: OrigoZero
+homepage: https://github.com/OrigoZero/zeromind-plugin
+license: MIT
+keywords:
+  - 3d
+  - engine
+  - game-dev
+  - library
+  - origozero
+
+server:
+  command: npx
+  args:
+    - "-y"
+    - "@origozero/zeromind"
+  env:
+    ZEROMIND_IDE_NAME: hermes
+
+requires_env: []

@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ZeroMind install matrix",
+  "description": "Per-harness install instructions consumed by the ZeroMind UI's 'bring your own agent' screen. One entry per harness drives one row of the harness dropdown.",
+  "type": "object",
+  "required": ["version", "harnesses"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Source npm package version this matrix was generated from."
+    },
+    "generated_from": { "type": "string" },
+    "description": { "type": "string" },
+    "harnesses": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Harness" }
+    }
+  },
+  "definitions": {
+    "Harness": {
+      "type": "object",
+      "required": [
+        "id",
+        "display_name",
+        "category",
+        "tools_available",
+        "prerequisites",
+        "primary_install",
+        "native_channel",
+        "doc_url"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier matching the `zeromind install <id>` CLI subcommand."
+        },
+        "display_name": {
+          "type": "string",
+          "description": "User-facing name for the dropdown row."
+        },
+        "category": {
+          "type": "string",
+          "enum": ["cli-agent", "ide", "ide-extension", "personal-agent", "generic"],
+          "description": "Used to group rows in the dropdown."
+        },
+        "icon_hint": {
+          "type": "string",
+          "description": "UI uses this to pick an icon; not a real URL."
+        },
+        "tools_available": {
+          "type": "boolean",
+          "description": "Whether the agent in this harness can CALL zeromind.* tools. Aider and (in some modes) Copilot are instructions-only."
+        },
+        "tools_note": {
+          "type": "string",
+          "description": "Explainer to show when tools_available is false or limited."
+        },
+        "prerequisites": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Display as a checklist next to the install command."
+        },
+        "primary_install": { "$ref": "#/definitions/InstallStep" },
+        "alternatives": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/InstallStep" },
+          "description": "Other native install paths (marketplace, deeplink, snippet). Surface as a 'show alternatives' disclosure."
+        },
+        "native_channel": {
+          "type": "string",
+          "description": "Short description of the harness-native channel ZeroMind plugs into."
+        },
+        "doc_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Per-harness deep-dive page on GitHub."
+        }
+      }
+    },
+    "InstallStep": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["shell", "in-app-command", "deeplink", "marketplace", "config-snippet"],
+          "description": "How the UI should render this step."
+        },
+        "label": { "type": "string" },
+        "command": {
+          "type": "string",
+          "description": "For kind=shell: the one-liner. Render as a copyable code block."
+        },
+        "steps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "For kind=in-app-command: list of slash commands to run inside the harness."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "For kind=deeplink or kind=marketplace: where to link."
+        },
+        "snippet": {
+          "type": "string",
+          "description": "For kind=config-snippet: the JSON/YAML/TOML block to paste."
+        },
+        "note": { "type": "string" },
+        "post_install_note": {
+          "type": "string",
+          "description": "Show under the command block after the user copies it."
+        }
+      }
+    }
+  }
+}
