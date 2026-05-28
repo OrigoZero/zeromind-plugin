@@ -192,3 +192,21 @@ export const writeOwnedFile = (
   writeFileSync(path, content);
   return "written";
 };
+
+// ─── Recursive directory copy (for harness plugin bundles) ─────────────
+
+import { cpSync } from "node:fs";
+
+/** Copy a packaged plugin bundle (e.g. dist-publishing/codex-plugin/) into
+ *  the user's harness-native plugin directory. Recursive, preserves
+ *  structure, overwrites only when `force` is true. */
+export const copyPluginBundle = (
+  srcDir: string,
+  destDir: string,
+  force: boolean,
+): "written" | "exists" => {
+  if (existsSync(destDir) && !force) return "exists";
+  mkdirSync(destDir, { recursive: true });
+  cpSync(srcDir, destDir, { recursive: true, force });
+  return "written";
+};

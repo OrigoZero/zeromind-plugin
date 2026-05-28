@@ -1,0 +1,9 @@
+{
+  "name": "zeromind",
+  "description": "Drive your browser-running Zero engine worlds from Codex. ZeroMind is a shared library of published worlds + assets — search and install drop-in solutions, reusable parts, or bases to modify instead of building from scratch. Then iterate the connected world with execute / capture / VFS tools.",
+  "version": "0.5.0",
+  "author": "OrigoZero",
+  "homepage": "https://github.com/OrigoZero/zeromind-plugin",
+  "skills": "./skills",
+  "mcpServers": "./.mcp.json"
+}

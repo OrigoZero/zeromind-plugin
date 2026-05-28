@@ -1,0 +1,13 @@
+id = "zeromind"
+name = "ZeroMind"
+description = "Drive your browser-running Zero engine worlds — search and install published assets, iterate the connected world with execute/capture/VFS tools."
+version = "0.5.0"
+schema_version = 1
+authors = ["OrigoZero"]
+repository = "https://github.com/OrigoZero/zeromind-plugin"
+license = "MIT"
+
+[context_servers.zeromind]
+command = "npx"
+args = ["-y", "@origozero/zeromind"]
+env = { ZEROMIND_IDE_NAME = "zed" }

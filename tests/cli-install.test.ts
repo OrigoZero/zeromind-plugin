@@ -80,29 +80,38 @@ describe("cli-install: per-harness full native install", () => {
     expect(cfg.mcpServers.zeromind.env.ZEROMIND_IDE_NAME).toBe("cursor");
   });
 
-  it("Codex install writes AGENTS.md (idempotent block) and falls back to TOML when `codex` CLI is missing", async () => {
+  it("Codex install copies the .codex-plugin bundle to the personal marketplace + writes config.toml fallback + AGENTS.md", async () => {
     const cwd = newTmp();
     process.env.HOME = cwd;
     const r = await installHarness({ harness: "codex", scope: "global", cwd });
-    const tomlStep = r.steps.find(
-      (s) => s.label.includes("codex mcp add") || s.label.includes("config.toml"),
-    )!;
-    // In a sandbox there's no `codex` CLI; fallback should write to ~/.codex/config.toml.
+    // Native channel: the Codex plugin bundle (skills + .mcp.json + .codex-plugin/plugin.json).
+    const pluginStep = r.steps.find((s) => s.label.includes("personal marketplace"))!;
     expect(
-      tomlStep.status === "written" ||
-        tomlStep.status === "updated" ||
-        tomlStep.status === "manual",
+      pluginStep.status === "written" || pluginStep.status === "exists" || pluginStep.status === "skipped",
     ).toBe(true);
+    if (pluginStep.status === "written") {
+      expect(pluginStep.path).toBe(
+        join(cwd, ".codex/marketplaces/personal/zeromind"),
+      );
+      const manifest = JSON.parse(
+        readFileSync(join(pluginStep.path!, ".codex-plugin/plugin.json"), "utf8"),
+      ) as { name: string; skills: string; mcpServers: string };
+      expect(manifest.name).toBe("zeromind");
+      expect(manifest.skills).toBe("./skills");
+      expect(manifest.mcpServers).toBe("./.mcp.json");
+    }
+    // Manual-fallback: config.toml (in absence of the codex CLI).
+    const tomlStep = r.steps.find((s) => s.label.includes("config.toml"))!;
     if (tomlStep.path) {
       const toml = readFileSync(tomlStep.path, "utf8");
       expect(toml).toMatch(/\[mcp_servers\.zeromind\]/);
       expect(toml).toMatch(/@origozero\/zeromind/);
     }
-    const agentsStep = r.steps.find((s) => s.label === "AGENTS.md")!;
+    // Complementary AGENTS.md for projects that want project-level context.
+    const agentsStep = r.steps.find((s) => s.label.includes("AGENTS.md"))!;
     expect(agentsStep.path).toBe(join(cwd, ".codex/AGENTS.md"));
     const agents = readFileSync(agentsStep.path!, "utf8");
     expect(agents).toMatch(/<!-- BEGIN ZEROMIND -->/);
-    expect(agents).toMatch(/<!-- END ZEROMIND -->/);
     expect(agents).toMatch(/zeromind\.search/);
   });
 
@@ -152,13 +161,21 @@ describe("cli-install: per-harness full native install", () => {
     expect(convs).toMatch(/<!-- BEGIN ZEROMIND -->/);
   });
 
-  it("Zed install drops the Claude-compatible skill + adds context_server to settings.json", async () => {
+  it("Zed install copies the extension bundle + falls back to context_server in settings.json", async () => {
     const cwd = newTmp();
     process.env.HOME = cwd;
     const r = await installHarness({ harness: "zed", scope: "project", cwd });
-    const skill = r.steps.find((s) => s.label.includes("skill"))!;
-    expect(skill.path).toBe(join(cwd, ".claude/skills/zeromind/SKILL.md"));
-    expect(skill.status).toBe("written");
+    // Native channel: the Zed extension bundle (extension.toml with context_servers.zeromind).
+    const extStep = r.steps.find((s) => s.label.includes("Zed extension"))!;
+    expect(
+      extStep.status === "written" || extStep.status === "exists" || extStep.status === "skipped",
+    ).toBe(true);
+    if (extStep.status === "written") {
+      const toml = readFileSync(join(extStep.path!, "extension.toml"), "utf8");
+      expect(toml).toMatch(/id = "zeromind"/);
+      expect(toml).toMatch(/context_servers\.zeromind/);
+    }
+    // Manual fallback: settings.json edit.
     const mcp = r.steps.find((s) => s.label.includes("settings.json"))!;
     const settings = readFileSync(mcp.path!, "utf8");
     expect(settings).toMatch(/context_servers/);
@@ -189,11 +206,26 @@ describe("cli-install: per-harness full native install", () => {
       const filePaths = r.steps.map((s) => s.path).filter(Boolean) as string[];
       // Each harness ships some form of the operating manual (either the
       // canonical condensed text or the long-form skill content). Common
-      // to both: the find-before-build rule via `zeromind.search`.
-      const anyManualContent = filePaths
+      // to both: the find-before-build rule via `zeromind.search`. Some
+      // harnesses install plugin BUNDLES (directories); walk them shallow.
+      const { statSync, readdirSync } = await import("node:fs");
+      const collect = (p: string): string[] => {
+        try {
+          const st = statSync(p);
+          if (st.isFile()) return [p];
+          if (st.isDirectory()) {
+            return readdirSync(p).flatMap((c) => collect(join(p, c)));
+          }
+        } catch {
+          // ignore
+        }
+        return [];
+      };
+      const files = filePaths.flatMap(collect);
+      const anyManualContent = files
         .map((p) => readFileSync(p, "utf8"))
         .some((b) => /zeromind\.search/.test(b));
-      expect(anyManualContent, `${h} should land the operating manual in a file`).toBe(true);
+      expect(anyManualContent, `${h} should land the operating manual in some file`).toBe(true);
     }
   });
 

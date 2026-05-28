@@ -7,9 +7,12 @@ canonical one-click flow.
 
 | Harness | Registry | Package | Submit |
 |---|---|---|---|
+| Codex | [Codex Plugin Directory](https://developers.openai.com/codex/plugins) (curated by OpenAI; 3rd-party submissions "coming soon") | [`codex-plugin/`](./codex-plugin/) | Add this repo as a personal/repo marketplace via Codex `/plugins` UI; submit to OpenAI's curated directory once open |
 | Cline | [Cline MCP Marketplace](https://github.com/cline/mcp-marketplace) | [`cline-marketplace/zeromind.json`](./cline-marketplace/zeromind.json) | PR to `cline/mcp-marketplace` |
-| openClaw | [ClawHub](https://github.com/openclaw/clawhub) | [`clawhub/zeromind/`](./clawhub/zeromind/) | `clawhub publish` from the package dir |
+| openClaw | [ClawHub](https://github.com/openclaw/clawhub) | [`clawhub/zeromind/`](./clawhub/zeromind/) | `clawhub skill publish` from the package dir |
 | Gemini CLI | [Gemini Extensions](https://github.com/google-gemini/gemini-cli/blob/main/docs/extension.md) | [`gemini-extension/zeromind/`](./gemini-extension/zeromind/) | Tag the repo + announce; users install via `gemini extensions install` |
+| Zed | [Zed extensions](https://zed.dev/extensions) | [`zed-extension/`](./zed-extension/) | PR to `zed-industries/extensions` |
+| Continue | [Continue Hub](https://hub.continue.dev/) | [`continue-hub/`](./continue-hub/) | Publish blocks via the Continue Hub web UI as `OrigoZero/zeromind-rule` + `OrigoZero/zeromind-mcp` |
 
 Each subdirectory has a `README.md` with the exact submit / publish steps,
 and the package layout follows that registry's schema.

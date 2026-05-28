@@ -1,0 +1,10 @@
+name: zeromind
+version: 0.5.0
+schema: v1
+
+command: npx
+args:
+  - "-y"
+  - "@origozero/zeromind"
+env:
+  ZEROMIND_IDE_NAME: continue

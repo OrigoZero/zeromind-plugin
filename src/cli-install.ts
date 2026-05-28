@@ -7,6 +7,7 @@ import { MANUAL } from "./instructions.js";
 import {
   BLOCK_BEGIN,
   BLOCK_END,
+  copyPluginBundle,
   editJsonEntry,
   editJsoncEntry,
   upsertMarkdownBlock,
@@ -291,12 +292,44 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
   codex: {
     name: "Codex CLI",
     channel:
-      "AGENTS.md + `~/.codex/config.toml` (via `codex mcp add`, with TOML fallback)",
+      "Codex plugin (`.codex-plugin/plugin.json` bundle in personal marketplace) — bundles both skills and the MCP server. Manual fallback writes `~/.codex/config.toml` + `~/.codex/AGENTS.md`.",
     defaultScope: "global",
     scopes: ["project", "global"],
     steps: [
       {
-        label: "MCP server: `codex mcp add zeromind`",
+        // Codex's actual native channel is its plugin system — bundles
+        // skills + MCP + apps in a manifest at `.codex-plugin/plugin.json`.
+        // We ship a ready-to-install bundle at dist-publishing/codex-plugin
+        // and copy it into the user's personal Codex marketplace dir.
+        label: "Codex plugin: copy bundle to personal marketplace",
+        run: (ctx) => {
+          const src = join(PKG_ROOT, "dist-publishing", "codex-plugin");
+          if (!existsSync(src)) {
+            return {
+              label: "Codex plugin: copy bundle to personal marketplace",
+              status: "skipped",
+              note: `Plugin bundle missing at ${src}. The published npm package should include dist-publishing/.`,
+            };
+          }
+          const dest = expand("~/.codex/marketplaces/personal/zeromind");
+          const status = copyPluginBundle(src, dest, ctx.force);
+          return {
+            label: "Codex plugin: copy bundle to personal marketplace",
+            status,
+            path: dest,
+            note:
+              status === "exists"
+                ? "Plugin already at this path — re-run with --force to refresh."
+                : "Open Codex's `/plugins` UI to enable the zeromind plugin (the bundle is now visible in your personal marketplace).",
+          };
+        },
+      },
+      {
+        // Manual-fallback path: write the MCP server entry directly to
+        // ~/.codex/config.toml in case the user isn't using the plugin
+        // browser. Belt-and-suspenders — Codex reads BOTH plugin
+        // manifests AND config.toml entries.
+        label: "Manual fallback: MCP server in ~/.codex/config.toml",
         run: () => {
           if (isOnPath("codex")) {
             const r = tryShell("codex", [
@@ -309,26 +342,24 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             ]);
             if (r.ok) {
               return {
-                label: "MCP server: `codex mcp add zeromind`",
+                label: "Manual fallback: `codex mcp add zeromind`",
                 status: "updated",
-                note: "Ran `codex mcp add` to register the server.",
+                note: "Ran `codex mcp add` as the manual fallback.",
               };
             }
           }
-          // Fallback — write the TOML block directly. Codex reads it on next launch.
           const path = expand("~/.codex/config.toml");
           const body = `[mcp_servers.zeromind]\ncommand = "npx"\nargs = ["-y", "@origozero/zeromind"]\n\n[mcp_servers.zeromind.env]\nZEROMIND_IDE_NAME = "codex"\n`;
           const status = upsertTomlBlock(path, body);
           return {
-            label: "MCP server in ~/.codex/config.toml",
+            label: "Manual fallback: MCP server in ~/.codex/config.toml",
             status,
             path,
-            note: "`codex` CLI not on PATH — wrote the [mcp_servers.zeromind] block directly. Run the install again after installing the Codex CLI to use `codex mcp add`.",
           };
         },
       },
       upsertBlockStep(
-        "AGENTS.md",
+        "AGENTS.md (project context, complementary to the plugin)",
         (ctx) =>
           ctx.scope === "global"
             ? expand("~/.codex/AGENTS.md")
@@ -341,17 +372,62 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
   gemini: {
     name: "Gemini CLI",
     channel:
-      "GEMINI.md + `~/.gemini/settings.json` (MCP server). Also ships a Gemini extension bundle under `dist-publishing/gemini-extension/` for harness-native distribution.",
+      "Gemini extension (`gemini-extension.json` bundles MCP server + context file in `~/.gemini/extensions/<name>/`). Falls back to direct edit of `~/.gemini/settings.json` + `~/.gemini/GEMINI.md`.",
     defaultScope: "global",
     scopes: ["project", "global"],
     steps: [
-      editJsonMcpServerStep(
-        "MCP server in ~/.gemini/settings.json",
-        () => expand("~/.gemini/settings.json"),
-        "gemini-cli",
-      ),
+      {
+        // Gemini CLI's actual native channel is extensions — a
+        // gemini-extension.json directory under ~/.gemini/extensions/
+        // that bundles MCP server + context file. We ship a
+        // ready-to-install one in dist-publishing/gemini-extension/.
+        label: "Gemini extension: copy bundle to ~/.gemini/extensions/",
+        run: (ctx) => {
+          const src = join(
+            PKG_ROOT,
+            "dist-publishing",
+            "gemini-extension",
+            "zeromind",
+          );
+          if (!existsSync(src)) {
+            return {
+              label: "Gemini extension: copy bundle to ~/.gemini/extensions/",
+              status: "skipped",
+              note: `Extension bundle missing at ${src}.`,
+            };
+          }
+          const dest = expand("~/.gemini/extensions/zeromind");
+          const status = copyPluginBundle(src, dest, ctx.force);
+          return {
+            label: "Gemini extension: copy bundle to ~/.gemini/extensions/",
+            status,
+            path: dest,
+            note:
+              status === "exists"
+                ? "Extension already at this path — re-run with --force to refresh."
+                : "Restart Gemini CLI; the extension is auto-discovered. You can also `gemini extensions install <git-url>` to track updates from the repo.",
+          };
+        },
+      },
+      {
+        // Manual fallback for users not on the extensions-capable
+        // version of Gemini CLI.
+        label: "Manual fallback: MCP server in ~/.gemini/settings.json",
+        run: () => {
+          const path = expand("~/.gemini/settings.json");
+          const status = editJsonEntry(path, "mcpServers", "zeromind", {
+            ...SERVER_SPEC,
+            env: ideEnv("gemini-cli"),
+          });
+          return {
+            label: "Manual fallback: MCP server in ~/.gemini/settings.json",
+            status,
+            path,
+          };
+        },
+      },
       upsertBlockStep(
-        "GEMINI.md",
+        "GEMINI.md (project context, complementary to the extension)",
         (ctx) =>
           ctx.scope === "global"
             ? expand("~/.gemini/GEMINI.md")
@@ -466,25 +542,71 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
   zed: {
     name: "Zed",
     channel:
-      "`.claude/skills/<name>/SKILL.md` + `~/.config/zed/settings.json` (context_servers)",
+      "Zed extension (`extension.toml` with `context_servers.zeromind`) + agent skill at `.claude/skills/zeromind/SKILL.md` (Zed reads the same path as Claude Code). Manual fallback edits `~/.config/zed/settings.json` directly.",
     defaultScope: "project",
     scopes: ["project", "global"],
     steps: [
       writeFileStep(
-        "skill: zeromind",
+        "skill: .claude/skills/zeromind/SKILL.md (Zed auto-reads it)",
         (ctx) =>
           ctx.scope === "global"
             ? expand("~/.claude/skills/zeromind/SKILL.md")
             : join(ctx.cwd, ".claude/skills/zeromind/SKILL.md"),
         () => newSkill(MANUAL),
       ),
-      editJsoncMcpServerStep(
-        "MCP server in ~/.config/zed/settings.json",
-        () => expand("~/.config/zed/settings.json"),
-        ["context_servers"],
-        "zed",
-        "zed-context",
-      ),
+      {
+        // Zed's actual native channel for MCP is the extension registry
+        // at zed.dev/extensions. We ship a ready-to-install extension
+        // (TOML-only — no Rust/WASM build) and copy it into Zed's
+        // dev-extensions location.
+        label: "Zed extension: copy bundle to dev-extensions",
+        run: (ctx) => {
+          const src = join(PKG_ROOT, "dist-publishing", "zed-extension");
+          if (!existsSync(src)) {
+            return {
+              label: "Zed extension: copy bundle to dev-extensions",
+              status: "skipped",
+              note: `Extension bundle missing at ${src}.`,
+            };
+          }
+          const dest = expand("~/.local/share/zed/extensions/installed/zeromind");
+          const status = copyPluginBundle(src, dest, ctx.force);
+          return {
+            label: "Zed extension: copy bundle to dev-extensions",
+            status,
+            path: dest,
+            note:
+              status === "exists"
+                ? "Extension already at this path — re-run with --force to refresh."
+                : "Open Zed → Command Palette → 'zed: extensions' to confirm the ZeroMind context_server is wired up.",
+          };
+        },
+      },
+      {
+        // Manual fallback: edit settings.json directly in case the
+        // dev-extensions path isn't where this Zed install looks.
+        label: "Manual fallback: MCP server in ~/.config/zed/settings.json",
+        run: async () => {
+          const path = expand("~/.config/zed/settings.json");
+          const status = await editJsoncEntry(
+            path,
+            ["context_servers"],
+            "zeromind",
+            {
+              command: {
+                path: SERVER_SPEC.command,
+                args: SERVER_SPEC.args,
+                env: ideEnv("zed"),
+              },
+            },
+          );
+          return {
+            label: "Manual fallback: MCP server in ~/.config/zed/settings.json",
+            status,
+            path,
+          };
+        },
+      },
     ],
   },
 
@@ -603,12 +725,63 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
   goose: {
     name: "Block Goose",
     channel:
-      "`~/.config/goose/.goosehints` + Goose MCP server (via `goose mcp add`)",
+      "Goose extension (declared in `~/.config/goose/config.yaml` under `extensions`) + `goose://extension?...` deeplink for one-click web install + `~/.config/goose/.goosehints`",
     defaultScope: "global",
     scopes: ["global"],
     steps: [
       {
-        label: "MCP server: `goose mcp add zeromind`",
+        // Goose's actual native channel is the `extensions` config block
+        // plus the `goose://extension?...` deeplink format. Try both.
+        label: "Extension entry in ~/.config/goose/config.yaml",
+        run: async () => {
+          const path = expand("~/.config/goose/config.yaml");
+          const status = await upsertYamlListEntry(path, "extensions", {
+            name: "zeromind",
+            display_name: "ZeroMind",
+            description:
+              "ZeroMind — search/install published worlds + assets and drive the Zero engine in your browser.",
+            enabled: true,
+            type: "stdio",
+            cmd: SERVER_SPEC.command,
+            args: SERVER_SPEC.args,
+            env_keys: [],
+            timeout: 300,
+            bundled: false,
+          });
+          return {
+            label: "Extension entry in ~/.config/goose/config.yaml",
+            status,
+            path,
+          };
+        },
+      },
+      {
+        // One-click web install: `goose://extension?...` deeplink. Goose
+        // honors these per their deeplink-generator docs. Print it for
+        // sharing / docs / one-click flows.
+        label: "Generate `goose://extension` deeplink (for one-click install)",
+        run: () => {
+          const params = new URLSearchParams({
+            cmd: SERVER_SPEC.command,
+            id: "zeromind",
+            name: "ZeroMind",
+            description:
+              "Drive your browser-running Zero engine worlds via MCP.",
+            timeout: "300",
+          });
+          for (const a of SERVER_SPEC.args) params.append("arg", a);
+          const deeplink = `goose://extension?${params.toString()}`;
+          return {
+            label: "Generate `goose://extension` deeplink",
+            status: "manual",
+            note: `Share this URL for one-click install:\n  ${deeplink}\n(Recipients click it in their browser → Goose registers the extension.)`,
+          };
+        },
+      },
+      {
+        // Try the CLI subcommand as a third path (idempotent — Goose
+        // dedupes by name).
+        label: "MCP server: `goose mcp add zeromind` (if CLI on PATH)",
         run: () => {
           if (isOnPath("goose")) {
             const r = tryShell("goose", [
@@ -623,14 +796,14 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
               return {
                 label: "MCP server: `goose mcp add zeromind`",
                 status: "updated",
-                note: "Ran `goose mcp add` to register the server.",
+                note: "Ran `goose mcp add` (belt-and-suspenders alongside the config.yaml edit).",
               };
             }
           }
           return {
             label: "MCP server: `goose mcp add zeromind`",
-            status: "manual",
-            note: "`goose` CLI not on PATH. After installing Goose, run:\n  goose mcp add zeromind -- npx -y @origozero/zeromind\nOr register via the Goose desktop UI's MCP servers page.",
+            status: "skipped",
+            note: "`goose` CLI not on PATH. The config.yaml edit above is sufficient — no action needed.",
           };
         },
       },
@@ -644,7 +817,8 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
 
   junie: {
     name: "JetBrains Junie",
-    channel: "`AGENTS.md` + IDE-level MCP picker (manual)",
+    channel:
+      "`AGENTS.md` (project root or `.junie/AGENTS.md`) + `.junie/mcp/mcp.json` (Junie's own MCP config, NOT the JetBrains IDE picker)",
     defaultScope: "project",
     scopes: ["project"],
     steps: [
@@ -653,14 +827,12 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
         (ctx) => join(ctx.cwd, "AGENTS.md"),
         () => `## ZeroMind\n\n${MANUAL}`,
       ),
-      {
-        label: "MCP server: JetBrains AI MCP picker",
-        run: () => ({
-          label: "MCP server: JetBrains AI MCP picker",
-          status: "manual",
-          note: "Open your JetBrains IDE → Settings → Tools → AI Assistant → MCP Servers → Add:\n  command: npx\n  args: -y @origozero/zeromind\n  env: ZEROMIND_IDE_NAME=junie\nJetBrains doesn't expose a programmatic config path for this.",
-        }),
-      },
+      editJsonMcpServerStep(
+        "MCP server in .junie/mcp/mcp.json",
+        (ctx) => join(ctx.cwd, ".junie/mcp/mcp.json"),
+        "junie",
+        "mcpServers",
+      ),
     ],
   },
 
