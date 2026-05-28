@@ -1,14 +1,25 @@
 # ZeroMind for Zed
 
-[Zed](https://zed.dev/) supports MCP servers as "context servers" for its Agent panel.
+[Zed](https://zed.dev/) has a built-in Agent Panel that consumes both agent skills (`.claude/skills/<name>/SKILL.md` is auto-discovered) and a project `AGENTS.md`. MCP servers register as `context_servers`.
 
-## Prerequisite
-
-**Node.js 18 or newer must be installed.** Install from https://nodejs.org if needed.
+**Native channel:** agent skills + `AGENTS.md`.
 
 ## Install
 
-Add ZeroMind to Zed's settings (`~/.config/zed/settings.json`):
+Two pieces — the agent skill and the MCP server.
+
+### 1. The agent skill
+
+```
+npx @origozero/zeromind install zed             # writes .claude/skills/zeromind/SKILL.md
+npx @origozero/zeromind install zed --global    # writes ~/.claude/skills/zeromind/SKILL.md
+```
+
+Zed reads from the same `.claude/skills/` path Claude Code uses — if you already ran `zeromind install claude` you're done with this step.
+
+### 2. MCP server
+
+Add to `~/.config/zed/settings.json`:
 
 ```json
 {
@@ -24,12 +35,8 @@ Add ZeroMind to Zed's settings (`~/.config/zed/settings.json`):
 }
 ```
 
-Restart Zed. The first engine-related prompt will trigger the one-time device-code link.
-
-## What you get
-
-Same first-class onboarding as every other MCP client — orientation via MCP `instructions`, `getting_started` block on the first `auth_status` call, and on-demand long-form guides via `zeromind.help`.
+Restart Zed. The first engine-related prompt triggers the one-time device-code link.
 
 ## Troubleshooting
 
-**"status failed" after install** → Node.js isn't on Zed's PATH. Install from nodejs.org, restart Zed, retry.
+**"status failed"** → Node.js isn't on Zed's PATH. Install from nodejs.org, restart Zed.

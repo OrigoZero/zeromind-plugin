@@ -1,26 +1,48 @@
-# ZeroMind in any MCP client
+# ZeroMind across agent harnesses
 
-ZeroMind ships as a plain stdio MCP server, so any MCP-capable agent or IDE can use it. Every client gets the same first-class agent onboarding (MCP `instructions` on `initialize`, a `getting_started` orientation on the first `auth_status` call, and the long-form `zeromind.help` tool on demand).
+Each harness loads agent context through a different native channel. ZeroMind ships a **custom integration per harness**, plus a **generic MCP fallback** for anything not custom-crafted. There is no single "right" channel — `AGENTS.md`, `GEMINI.md`, skills, `.cursor/rules/*.mdc`, `.clinerules`, `CONVENTIONS.md`, `.goosehints` are all the harness deciding what shape it wants its context in.
 
-## Per-IDE install guides
+## Custom-crafted integrations
 
-- [Claude Code](./claude/README.md) — also gets bundled skills via the Claude Code plugin marketplace.
-- [Cursor](./cursor/install-link.md)
-- [Codex](./codex/README.md)
-- [Gemini CLI](./gemini/README.md)
-- [OpenCode](./opencode/README.md)
-- [Cline](./cline/README.md) (VS Code)
-- [Continue](./continue/README.md) (VS Code / JetBrains)
-- [Windsurf](./windsurf/README.md)
-- [Zed](./zed/README.md)
+| Harness | Native channel | One-shot install |
+|---|---|---|
+| [Claude Code](./claude/README.md) | skills (`.claude/skills/<name>/SKILL.md`) + plugin marketplace | `/plugin install zeromind` (or `npx @origozero/zeromind install claude`) |
+| [Cursor](./cursor/install-link.md) | `.cursor/rules/<name>.mdc` (MDC frontmatter, agent-requested) | `npx @origozero/zeromind install cursor` |
+| [Codex CLI](./codex/README.md) | `AGENTS.md` (project root or `~/.codex/AGENTS.md`) | `npx @origozero/zeromind install codex` |
+| [Gemini CLI](./gemini/README.md) | `GEMINI.md` (project root or `~/.gemini/GEMINI.md`) | `npx @origozero/zeromind install gemini` |
+| [OpenCode](./opencode/README.md) | skills (`.opencode/skills/<name>/SKILL.md`; also reads `.claude/skills/`, `AGENTS.md`) | `npx @origozero/zeromind install opencode` |
+| [Cline](./cline/README.md) | `.clinerules/<name>.md` | `npx @origozero/zeromind install cline` |
+| [Continue](./continue/README.md) | `.continue/rules/<name>.md` | `npx @origozero/zeromind install continue` |
+| [Windsurf](./windsurf/README.md) | `AGENTS.md` (Cascade reads it dynamically) | `npx @origozero/zeromind install windsurf` |
+| [Zed](./zed/README.md) | agent skills (`.claude/skills/<name>/SKILL.md`) + `AGENTS.md` | `npx @origozero/zeromind install zed` |
+| [openClaw](./openclaw/README.md) | skills (`<workspace>/skills/<name>/SKILL.md`, AgentSkills-compatible) | `npx @origozero/zeromind install openclaw` |
+| [JetBrains Junie](./junie/README.md) | `AGENTS.md` | `npx @origozero/zeromind install junie` |
+| [Sourcegraph Amp](./amp/README.md) | `AGENT.md` (singular) | `npx @origozero/zeromind install amp` |
+| [GitHub Copilot](./copilot/README.md) | `.github/copilot-instructions.md` | `npx @origozero/zeromind install copilot` |
+| [Block Goose](./goose/README.md) | `~/.config/goose/.goosehints` | `npx @origozero/zeromind install goose` |
+| [Aider](./aider/README.md) | `CONVENTIONS.md` (no MCP — instructions-only) | `npx @origozero/zeromind install aider` |
 
-## Generic install
+Every install command is idempotent — shared files (`AGENTS.md`, `GEMINI.md`, `CONVENTIONS.md`, `.goosehints`, `copilot-instructions.md`) get a delimited `<!-- BEGIN ZEROMIND --> … <!-- END ZEROMIND -->` block; owned files (skills, rule files) get a plain write that skips unless `--force` is passed.
 
-If your client isn't listed above, give it this stdio MCP server:
+List supported harnesses at the CLI:
+
+```
+npx @origozero/zeromind install --list
+```
+
+## Generic MCP fallback
+
+Anything not listed above falls back to the MCP protocol channel:
+
+- **`instructions`** field on `initialize` — Claude Code injects it into the agent's system prompt; most other harnesses don't (or behavior is unconfirmed). Treat as belt-and-suspenders.
+- **`zeromind.help` tool** — every MCP client can call this to fetch the full operating manual on demand (topics: `getting-started`, `library`, `linking`, `workflow`, `tools`).
+- **`getting_started` block** on the first `auth_status` call — surfaces the condensed orientation through a tool result, which every client returns to the agent verbatim.
+
+If your client speaks MCP, point it at:
 
 - **Command:** `npx`
 - **Args:** `-y @origozero/zeromind`
-- **Env:** `ZEROMIND_IDE_NAME=<your-client-name>` (free-form; helps ZeroMind tell installs apart in support cases)
+- **Env:** `ZEROMIND_IDE_NAME=<your-client>` (free-form; helps support cases)
 - **Transport:** stdio
 
 Equivalent JSON (the shape most clients accept):
@@ -37,18 +59,8 @@ Equivalent JSON (the shape most clients accept):
 }
 ```
 
-That's all the plugin needs. Restart your client, then the first time you ask it to do anything engine-related ("list my worlds", "make me a new world", "add an inventory system") it will:
+If your client has a native context channel we haven't custom-crafted, open an issue at https://github.com/OrigoZero/zeromind-plugin/issues — adding another harness to the `zeromind install` CLI is a 20-line entry in `src/cli-install.ts`.
 
-1. Call `auth_status` and read the returned `getting_started` orientation.
-2. Walk you through the one-time device-code link to your ZeroMind account.
-3. From there, drive ZeroMind discovery + the Zero engine in your browser the same way every other client does.
+## Hermes
 
-## What "first-class" means
-
-The plugin used to treat Claude Code as primary (only Claude Code got the bundled skills that teach an agent what ZeroMind is and how to use it). That's fixed — the same operating manual is now delivered through MCP itself, so every client's agent gets it:
-
-- **`instructions`** field on `initialize` — surfaced in the agent's system prompt by Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, and every other MCP-capable client.
-- **`getting_started` block** on the first `auth_status` call — backstop for clients that don't surface `instructions`. The tool description already tells the agent to call `auth_status` first, so this lands at the start of every session.
-- **`zeromind.help` tool** — on-demand long-form guides (`getting-started`, `library`, `linking`, `workflow`, `tools`). Same content the Claude Code plugin ships as bundled skills.
-
-Claude Code additionally gets the content as native skill files via the Claude Code marketplace, but no client is second-class anymore.
+Nous Research's [Hermes Agent](https://github.com/nousresearch/hermes-agent) generates its own skills from experience rather than loading user-authored ones, so it stays on the generic MCP fallback for now. Hermes is itself an MCP client, so `zeromind.help` + `getting_started` will work; whether Hermes injects the MCP `instructions` field into its agent's prompt is unconfirmed.

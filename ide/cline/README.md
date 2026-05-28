@@ -1,14 +1,22 @@
 # ZeroMind for Cline
 
-[Cline](https://github.com/cline/cline) is a VS Code AI coding extension with MCP support.
+[Cline](https://github.com/cline/cline) is a VS Code / JetBrains autonomous coding agent (5M+ installs).
 
-## Prerequisite
-
-**Node.js 18 or newer must be installed.** Install from https://nodejs.org if needed.
+**Native channel:** `.clinerules` (single file or directory of markdown rules in the project).
 
 ## Install
 
-In VS Code, open Cline's MCP settings (Command Palette → "Cline: MCP Servers" → "Configure MCP Servers") and add:
+Two pieces — the rules and the MCP server.
+
+### 1. .clinerules
+
+```
+npx @origozero/zeromind install cline   # writes .clinerules/zeromind.md
+```
+
+### 2. MCP server
+
+Open Cline's MCP settings (Command Palette → "Cline: MCP Servers" → "Configure MCP Servers") and add:
 
 ```json
 {
@@ -24,12 +32,8 @@ In VS Code, open Cline's MCP settings (Command Palette → "Cline: MCP Servers" 
 }
 ```
 
-Save and reload Cline. The first engine-related prompt will trigger the one-time device-code link.
-
-## What you get
-
-Same first-class onboarding as every other client — MCP `instructions` orientation on `initialize`, `getting_started` block on the first `auth_status` call, and on-demand long-form guides via `zeromind.help`.
+Reload Cline. The first engine-related prompt triggers the one-time device-code link.
 
 ## Troubleshooting
 
-**"status failed" after install** → Node.js isn't on VS Code's PATH. Install from nodejs.org, restart VS Code, retry.
+**"status failed"** → Node.js isn't on VS Code's PATH. Install from nodejs.org, restart VS Code.

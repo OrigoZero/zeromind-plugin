@@ -1,14 +1,22 @@
 # ZeroMind for Continue
 
-[Continue](https://www.continue.dev/) is an open-source AI assistant for VS Code and JetBrains with MCP support.
+[Continue](https://www.continue.dev/) is an open-source AI assistant for VS Code and JetBrains.
 
-## Prerequisite
-
-**Node.js 18 or newer must be installed.** Install from https://nodejs.org if needed.
+**Native channel:** `.continue/rules/<name>.md` — auto-activated per project (plus inline `rules:` strings in `config.yaml`).
 
 ## Install
 
-Add ZeroMind to Continue's MCP config (`~/.continue/config.yaml`):
+Two pieces — the rule and the MCP server.
+
+### 1. The rule
+
+```
+npx @origozero/zeromind install continue   # writes .continue/rules/zeromind.md
+```
+
+### 2. MCP server
+
+Add to `~/.continue/config.yaml`:
 
 ```yaml
 mcpServers:
@@ -21,12 +29,8 @@ mcpServers:
       ZEROMIND_IDE_NAME: continue
 ```
 
-Reload Continue. The first engine-related prompt will trigger the one-time device-code link.
-
-## What you get
-
-Same first-class onboarding as every other MCP client — orientation via MCP `instructions`, `getting_started` block on the first `auth_status` call, and on-demand long-form guides via `zeromind.help`.
+Reload Continue. The first engine-related prompt triggers the one-time device-code link.
 
 ## Troubleshooting
 
-**"status failed" after install** → Node.js isn't on PATH. Install from nodejs.org, restart your editor, retry.
+**"status failed"** → Node.js isn't on PATH. Install from nodejs.org, restart your editor.

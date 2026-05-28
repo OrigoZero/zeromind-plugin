@@ -581,10 +581,22 @@ const main = async (): Promise<void> => {
   await server.connect(transport);
 };
 
-void ensureRegistered({ ideName: IDE_NAME })
-  .then(() => main())
-  .catch((e) => {
-    // eslint-disable-next-line no-console
-    console.error(`zeromind: fatal: ${e}`);
-    process.exit(1);
+// CLI mode: `npx @origozero/zeromind install <harness>` (and friends)
+// dispatches to the per-harness installer instead of starting the MCP
+// server. Anything else falls through to the default MCP-server entrypoint
+// (which is what IDEs invoke via `npx -y @origozero/zeromind`).
+const cliArgs = process.argv.slice(2);
+if (cliArgs[0] === "install") {
+  // Lazy import keeps the MCP-server hot path free of fs+os deps.
+  void import("./cli-install.js").then(({ runInstallCli }) => {
+    runInstallCli(cliArgs.slice(1));
   });
+} else {
+  void ensureRegistered({ ideName: IDE_NAME })
+    .then(() => main())
+    .catch((e) => {
+      // eslint-disable-next-line no-console
+      console.error(`zeromind: fatal: ${e}`);
+      process.exit(1);
+    });
+}

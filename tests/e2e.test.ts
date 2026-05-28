@@ -117,7 +117,10 @@ describe("e2e stdio MCP", () => {
       "tools",
     ]);
     expect(body.overview).toMatch(/topic/);
-    expect(body.overview).toMatch(/Cursor, Codex, Gemini CLI/);
+    // Surfaces the per-harness custom integrations the installer ships.
+    expect(body.overview).toMatch(/zeromind install/);
+    expect(body.overview).toMatch(/AGENTS\.md/);
+    expect(body.overview).toMatch(/GEMINI\.md/);
   });
 
   it("zeromind.help returns the bundled library skill for non-Claude clients", async () => {

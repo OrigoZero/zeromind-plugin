@@ -2,64 +2,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-/**
- * Condensed orientation sent to every MCP client on `initialize`. Clients
- * (Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, OpenCode, Cline,
- * Continue, Windsurf, Zed, …) include this in the agent's system prompt, so
- * the agent learns what ZeroMind is and the find-before-build workflow even
- * when it has no other onboarding. The full guides live in `zeromind.help`
- * and (for Claude Code) in the bundled skills — this is the elevator pitch
- * that gets agents to the first correct tool call.
- */
-export const INSTRUCTIONS = `ZeroMind is a shared content library + a 3D engine you drive remotely.
-
-The engine (Zero) runs in the user's web browser at https://origozero.ai. Work is organised into **worlds**: persistent multiplayer projects backed by ZeroMind. You attach to a world the user has open, then iterate on it with Luau scripting, the engine VFS, and screenshots.
-
-ZeroMind itself is the **shared library of published worlds + assets** (modules, components, tools, materials, shaders, scenes, packages) that other people and agents already made. It's not just storage — it's the first place you look.
-
-## The rule: check ZeroMind FIRST
-
-Before writing a single line for any "make me a X" / "add a Y" request, run \`zeromind.search\`. Three winning outcomes, in order of preference:
-- **A — Drop-in solution** (\`compat_tier: compatible\`): \`zeromind.install\` it, done.
-- **B — Reusable parts**: install a few assets and write only the glue.
-- **C — A base to modify**: install the closest match and adapt instead of starting empty.
-
-Only build from scratch when search genuinely turns up nothing usable — and then publish your result so the next agent gets outcome A.
-
-## The tools you have
-
-- **Identity** — \`auth_status\` (call this FIRST), \`zm_link\`/\`zm_link_poll\` (one-time device-code link), \`zm_unlink\`.
-- **ZeroMind library** — \`zeromind.search\` (find), \`zeromind.inspect\` (vet), \`zeromind.install\` (bring into the connected world; engine fetches the bytes — you never download content here), \`zeromind.engage\` (vote / comment / review / bookmark / follow / report).
-- **Worlds** — \`world.list\`, \`world.create\`, \`world.launch\` (opens the browser tab), \`world.connect\` (attach to a session; \`auto_launch:true\` combines both), \`world.disconnect\`.
-- **Engine** (requires a connected world) — \`execute\` (Luau), \`guides\` (engine docs; call with no args FIRST after connecting), \`capture\` (screenshot), \`read_file\`/\`write_file\`/\`edit_file\` (VFS at \`/zero/...\`), \`bash\`, \`luau_test\`, \`instance_health\`.
-- **Self-help** — \`zeromind.help\` returns the full reference for any topic (\`getting-started\`, \`library\`, \`linking\`, \`workflow\`, \`tools\`). Call it when you want the long-form guide.
-
-## The end-to-end workflow
-
-1. \`auth_status\` — if unlinked, follow \`zm_link\` → tell the user the URL + code → poll \`zm_link_poll\`.
-2. \`zeromind.search\` for what the user asked for. Try 2–3 phrasings — the index is semantic.
-3. \`zeromind.inspect\` the best hit (overview = schema + capabilities + review + comments + dependents).
-4. \`world.connect { name, auto_launch: true }\` (or create a new world first with \`world.create\`).
-5. \`zeromind.install\` the chosen content into the connected world.
-6. \`guides()\` (no args) — read the engine README before touching Luau.
-7. Iterate with \`execute\` / \`read_file\` / \`write_file\` / \`edit_file\` / \`capture\`. Verify visually after every meaningful change.
-8. Publish with \`execute({code: "zm.add('.'); zm.commit('msg'); zm.push()"})\`, then \`zeromind.engage\` to vote / comment on what you used.
-
-## Hard rules
-
-- Never reimplement what's already published — search first.
-- Never guess Luau API names — use \`guides()\` and \`execute({code:"return type(_G.name)"})\` to discover.
-- Never "download" content to this client — content is only operable in the engine; \`zeromind.install\` is the only path in.
-- Always verify visually (\`capture\`) AND with data, not just by reading code.
-- No shortcuts, no "for now" stubs — every change must be the real solution.
-
-Call \`zeromind.help\` any time you want the full guides.`;
-
 const HERE = dirname(fileURLToPath(import.meta.url));
-// At runtime, this file lives at `<pkg-root>/dist/instructions.js`, so the
-// bundled skills sit one level up. We ship the same .md files that Claude
-// Code reads from `skills/` to other clients via `zeromind.help`, so there
-// is one source of truth.
+// At runtime this file lives at `<pkg-root>/dist/instructions.js`, so
+// `templates/` and `skills/` sit one level up. `templates/manual.md` is
+// the single source of truth for the agent operating manual; every
+// harness consumes the same content via its own native channel (see
+// `src/cli-install.ts` for the per-harness installers).
 const PKG_ROOT = join(HERE, "..");
 
 const stripFrontmatter = (md: string): string => {
@@ -78,13 +26,37 @@ const tryRead = (rel: string): string | undefined => {
   }
 };
 
-const loadSkill = (name: string): string | undefined => {
+const loadLongFormGuide = (name: string): string | undefined => {
+  // The long-form guides live in `skills/<name>/SKILL.md` because that's
+  // where Claude Code's marketplace expects them — but the *content* is
+  // harness-agnostic prose. We strip the YAML frontmatter (which is the
+  // only Claude-Code-specific bit) before serving the body to any client.
   const md = tryRead(join("skills", name, "SKILL.md"));
   return md ? stripFrontmatter(md) : undefined;
 };
 
-const TOPIC_FALLBACK_GETTING_STARTED = INSTRUCTIONS;
-const TOPIC_FALLBACK_LIBRARY = `See \`zeromind.search\` / \`zeromind.inspect\` / \`zeromind.install\` / \`zeromind.engage\` tool descriptions. The full library skill ships in the npm package under \`skills/zeromind-library/SKILL.md\` — if you don't see it here the package may be incomplete.`;
+const MANUAL_FALLBACK = `ZeroMind: a shared content library + a 3D engine you drive remotely. Run \`zeromind.search\` BEFORE writing anything for "make me a X" requests — installing existing published content beats building from scratch. Then \`world.connect\`, \`zeromind.install\`, iterate with \`execute\`/\`capture\`, publish with \`zm.add\`/\`commit\`/\`push\`. Call \`zeromind.help\` for the full guides.`;
+
+/**
+ * Canonical condensed operating manual. Single source for:
+ *
+ *   - The MCP `instructions` field on `initialize` — fallback channel used
+ *     by harnesses we don't ship a custom integration for. (Claude Code is
+ *     the only client confirmed to inject this into the agent's system
+ *     prompt; treat it as belt-and-suspenders, not the primary path.)
+ *   - The `getting_started` block on the first `auth_status` call.
+ *   - The body of every harness-specific artifact written by
+ *     `zeromind install <harness>` (AGENTS.md / GEMINI.md / SKILL.md /
+ *     .cursor/rules/zeromind.mdc / .clinerules / CONVENTIONS.md / …).
+ */
+export const MANUAL: string =
+  tryRead(join("templates", "manual.md")) ?? MANUAL_FALLBACK;
+
+/** Back-compat alias — the rest of the codebase still imports `INSTRUCTIONS`. */
+export const INSTRUCTIONS = MANUAL;
+
+const TOPIC_FALLBACK_GETTING_STARTED = MANUAL;
+const TOPIC_FALLBACK_LIBRARY = `See \`zeromind.search\` / \`zeromind.inspect\` / \`zeromind.install\` / \`zeromind.engage\` tool descriptions. The full library guide ships in the npm package under \`skills/zeromind-library/SKILL.md\`.`;
 
 const TOPIC_LINKING = `# Linking this IDE to a ZeroMind account
 
@@ -177,9 +149,9 @@ export const HELP_TOPICS: HelpTopic[] = [
 export const getHelpTopic = (topic: HelpTopic): string => {
   switch (topic) {
     case "getting-started":
-      return loadSkill("zeromind-getting-started") ?? TOPIC_FALLBACK_GETTING_STARTED;
+      return loadLongFormGuide("zeromind-getting-started") ?? TOPIC_FALLBACK_GETTING_STARTED;
     case "library":
-      return loadSkill("zeromind-library") ?? TOPIC_FALLBACK_LIBRARY;
+      return loadLongFormGuide("zeromind-library") ?? TOPIC_FALLBACK_LIBRARY;
     case "linking":
       return TOPIC_LINKING;
     case "workflow":
@@ -192,7 +164,4 @@ export const getHelpTopic = (topic: HelpTopic): string => {
 export const helpIndex = (): string =>
   `ZeroMind help. Pass \`topic\` to get the long-form guide for one of:\n\n` +
   HELP_TOPICS.map((t) => `- \`${t}\``).join("\n") +
-  `\n\nAll IDEs (Claude Code, Cursor, Codex, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, and any other MCP-capable client) see the same content here. ` +
-  `Claude Code users also get this content as bundled skills (\`zeromind-getting-started\`, \`zeromind-library\`); ` +
-  `other clients should call this tool when they want the same depth.\n\n` +
-  `The condensed orientation is also delivered via the MCP \`instructions\` field on initialize — check your client's system prompt if you've seen it already.`;
+  `\n\nThe same canonical manual is shipped to each supported agent harness through that harness's own native channel: skills for Claude Code / OpenCode / Zed / openClaw, AGENTS.md for Codex / Windsurf / Junie, GEMINI.md for Gemini CLI, .cursor/rules/zeromind.mdc for Cursor, .clinerules/zeromind.md for Cline, .continue/rules/zeromind.md for Continue, CONVENTIONS.md for Aider, .github/copilot-instructions.md for GitHub Copilot, .goosehints for Goose. Run \`npx @origozero/zeromind install <harness>\` to drop the right artifact in the right place; \`npx @origozero/zeromind install --list\` enumerates supported harnesses. Harnesses without a custom integration fall back to the MCP \`instructions\` field on \`initialize\` (only Claude Code is confirmed to inject this into the agent's system prompt — call this tool to fetch the manual on demand if you didn't see it).`;
