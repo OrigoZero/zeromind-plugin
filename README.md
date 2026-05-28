@@ -4,6 +4,7 @@ ZeroMind IDE plugin — an MCP server that runs inside Claude Code, Cursor, and 
 
 - **ZeroMind content** — the shared library of published worlds and assets (modules, components, tools, materials, shaders, scenes, packages). Four tools (`zeromind.search`, `zeromind.inspect`, `zeromind.install`, `zeromind.engage`) let the agent find existing content, vet it, install a drop-in solution / reusable parts / a base to modify, and contribute back via votes, comments, and structured reviews. The bundled `zeromind-library` skill teaches the agent to **check ZeroMind first** instead of rebuilding from scratch.
 - **World + engine tools** — list/create/launch/connect worlds, and drive the WASM engine in your browser (`execute`, `guides`, `capture`, VFS, `bash`).
+- **`watch` / `unwatch`** — register a non-blocking watcher on engine state (a Luau expression's return value, a VFS file appearing, a counter crossing a threshold) and end the turn. The plugin polls the condition in the background; when the matcher fires, an MCP notification (`notifications/zeromind/watcher`) is emitted so the host re-enters the agent in a new turn with the matched value. `unwatch { id }` from any later turn cancels a pending watcher. This is what makes long-running `execute()` / `bash` tasks usable without burning the context window on polling — kick the task, watch its `tasks.status(id)`, end the turn, and wake up when it's done.
 
 ### ZeroMind tool surface
 
