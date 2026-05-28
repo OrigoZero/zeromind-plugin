@@ -15,6 +15,14 @@ import { authStatus, zmLink, zmLinkPoll, zmUnlink } from "./tools/auth.js";
 import { WorldTools } from "./tools/world.js";
 import { EngineTools } from "./tools/engine.js";
 import { ContentTools, buildInstallLuau, type InstallArgs } from "./tools/content.js";
+import { WatchTools } from "./tools/watch.js";
+import {
+  WATCH_TOOL_DEF,
+  UNWATCH_TOOL_DEF,
+  WATCH_NOTIFICATION_METHOD,
+  type WatchArgs,
+  type WatchEvent,
+} from "./watch.js";
 import { loadConfig } from "./config.js";
 import { promptDefs, getPrompt } from "./prompts.js";
 import { VERSION } from "./update.js";
@@ -330,10 +338,13 @@ const toolDefs = [
     description: "Health snapshot of the connected engine session.",
     inputSchema: { type: "object", properties: {} },
   },
+  WATCH_TOOL_DEF,
+  UNWATCH_TOOL_DEF,
 ];
 
 type WorldCtx = { w: WorldTools };
 type EngineCtx = { b: Bridge; w: WorldTools; e: EngineTools };
+type WatchCtx = { wt: WatchTools };
 
 const dispatch = async (
   name: string,
@@ -341,6 +352,7 @@ const dispatch = async (
   ensureWorld: () => Promise<WorldCtx>,
   ensureEngine: () => Promise<EngineCtx>,
   ensureContent: () => ContentTools,
+  ensureWatch: () => Promise<WatchCtx>,
 ): Promise<unknown> => {
   switch (name) {
     case "auth_status":
@@ -416,6 +428,12 @@ const dispatch = async (
       return (await ensureEngine()).e.luau_test(args);
     case "instance_health":
       return (await ensureEngine()).e.instance_health();
+    case "watch":
+      return (await ensureWatch()).wt.watch(args as unknown as WatchArgs);
+    case "unwatch":
+      return (await ensureWatch()).wt.unwatch(
+        args as { id?: string; watcher_id?: string },
+      );
     default:
       throw new Error(`unknown tool: ${name}`);
   }
@@ -431,6 +449,7 @@ const main = async (): Promise<void> => {
   let worldTools: WorldTools | undefined;
   let engineTools: EngineTools | undefined;
   let contentTools: ContentTools | undefined;
+  let watchTools: WatchTools | undefined;
   let bridgeConnectError: Error | undefined;
   let initPromise: Promise<void> | undefined;
 
@@ -503,6 +522,30 @@ const main = async (): Promise<void> => {
     return { b: bridge!, w: worldTools!, e: engineTools! };
   };
 
+  // WatchTools is constructed lazily, after the engine is available. The
+  // emit callback turns each "watcher fired / timed out" event into an MCP
+  // notification on a dedicated method — the host's job is to wrap that into
+  // its native re-entry surface (Claude Code's <github-webhook-activity>
+  // equivalent, Codex's async-tool surface, Cursor's notification surface).
+  // The notification contract is identical across hosts; only the wrapping
+  // differs.
+  const emitWatchEvent = (event: WatchEvent): void => {
+    void server
+      .notification({ method: WATCH_NOTIFICATION_METHOD, params: event })
+      .catch((e) => {
+        // eslint-disable-next-line no-console
+        console.error(
+          `zeromind: failed to emit ${event.type} for ${event.watcher_id}: ${(e as Error).message}`,
+        );
+      });
+  };
+
+  const ensureWatch = async (): Promise<WatchCtx> => {
+    const ec = await ensureEngine();
+    if (!watchTools) watchTools = new WatchTools(ec.e, emitWatchEvent);
+    return { wt: watchTools };
+  };
+
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: toolDefs }));
 
   server.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts: promptDefs }));
@@ -516,7 +559,14 @@ const main = async (): Promise<void> => {
     const name = req.params.name;
     const args = (req.params.arguments ?? {}) as Record<string, unknown>;
     try {
-      const result = await dispatch(name, args, ensureWorld, ensureEngine, ensureContent);
+      const result = await dispatch(
+        name,
+        args,
+        ensureWorld,
+        ensureEngine,
+        ensureContent,
+        ensureWatch,
+      );
       if (name === "capture") {
         const r = result as { image_b64: string };
         return {
