@@ -39,9 +39,12 @@ export const compareVersions = (a: string, b: string): number => {
 
 const UPDATE_HINT =
   "A newer ZeroMind release is available. Tell the user and ask if they want to update — " +
-  "in Claude Code, run `/plugin` and update the `zeromind` plugin (OrigoZero/zeromind-plugin " +
-  "marketplace), then restart the IDE so the refreshed skills and the new MCP server " +
-  "(`npx @origozero/zeromind`) are picked up. The agent cannot update on its own.";
+  "the MCP server (`npx @origozero/zeromind`) picks up the new version on the next IDE " +
+  "restart in every client (Claude Code, Cursor, Codex, Gemini CLI, OpenCode, Cline, " +
+  "Continue, Windsurf, Zed, …), since `npx -y` resolves to the latest published version " +
+  "(clear the npx cache if it lags). Claude Code users additionally update the bundled " +
+  "skills via `/plugin` (update the `zeromind` plugin from the OrigoZero/zeromind-plugin " +
+  "marketplace) and then restart. The agent cannot update on its own.";
 
 const fetchLatest = async (): Promise<UpdateInfo> => {
   const current = VERSION;

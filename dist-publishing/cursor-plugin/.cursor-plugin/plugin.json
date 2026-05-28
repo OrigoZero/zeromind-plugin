@@ -1,0 +1,11 @@
+{
+  "name": "zeromind",
+  "version": "0.5.0",
+  "description": "Drive your browser-running Zero engine worlds from Cursor — search and install published assets, iterate the connected world with execute / capture / VFS tools. Bundles two agent skills and the MCP server.",
+  "author": {
+    "name": "OrigoZero",
+    "email": "support@origozero.ai"
+  },
+  "license": "MIT",
+  "keywords": ["zeromind", "origozero", "3d", "engine", "game-dev"]
+}

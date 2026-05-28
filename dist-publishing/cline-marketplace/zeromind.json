@@ -1,0 +1,14 @@
+{
+  "mcpId": "zeromind",
+  "githubUrl": "https://github.com/OrigoZero/zeromind-plugin",
+  "name": "ZeroMind",
+  "author": "OrigoZero",
+  "description": "Drive your browser-running Zero engine worlds from Cline. ZeroMind is a shared library of published worlds + assets — search and install drop-in solutions, reusable parts, or bases to modify instead of building from scratch. Then iterate the connected world with execute / capture / VFS tools.",
+  "codiconIcon": "rocket",
+  "logoUrl": "https://raw.githubusercontent.com/OrigoZero/zeromind-plugin/main/.claude-plugin/icon.png",
+  "category": "agent",
+  "tags": ["3d", "game-dev", "engine", "library", "discovery", "zero", "origozero"],
+  "requiresApiKey": false,
+  "readmeUrl": "https://raw.githubusercontent.com/OrigoZero/zeromind-plugin/main/ide/cline/README.md",
+  "llmsInstallationContent": "ZeroMind is an MCP plugin that drives a 3D engine running in the user's browser. Install via Cline's MCP Servers UI (Command Palette → \"Cline: MCP Servers\" → \"Configure MCP Servers\"):\n```json\n{\n  \"mcpServers\": {\n    \"zeromind\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@origozero/zeromind\"],\n      \"env\": { \"ZEROMIND_IDE_NAME\": \"cline\" },\n      \"disabled\": false,\n      \"autoApprove\": []\n    }\n  }\n}\n```\nThen drop the agent rule:\n```\nnpx @origozero/zeromind install cline\n```\nOr write `.clinerules/zeromind.md` yourself with the content of https://raw.githubusercontent.com/OrigoZero/zeromind-plugin/main/templates/manual.md\n\nFirst engine-related prompt triggers a one-time device-code link at https://origozero.ai/link."
+}

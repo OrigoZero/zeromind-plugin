@@ -37,6 +37,7 @@ describe("e2e stdio MCP", () => {
   let server: MockServerHandle;
   let tmp: ReturnType<typeof withTmpConfigDir>;
   let proc: ChildProcess;
+  let initResult: { instructions?: string } = {};
 
   beforeAll(async () => {
     if (!existsSync("dist/index.js")) {
@@ -54,7 +55,7 @@ describe("e2e stdio MCP", () => {
       },
       stdio: ["pipe", "pipe", "inherit"],
     });
-    await sendRpc(
+    initResult = (await sendRpc(
       proc,
       "initialize",
       {
@@ -63,13 +64,25 @@ describe("e2e stdio MCP", () => {
         clientInfo: { name: "e2e", version: "0" },
       },
       1,
-    );
+    )) as { instructions?: string };
   });
 
   afterAll(async () => {
     proc.kill();
     await server.stop();
     tmp.cleanup();
+  });
+
+  it("returns IDE-agnostic instructions on initialize", () => {
+    // The MCP `instructions` field is how every non-Claude-Code client
+    // (Cursor, Codex, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, …)
+    // gets the same operating manual that Claude Code agents get from the
+    // bundled skills. If this regresses, those clients silently lose
+    // their onboarding.
+    expect(initResult.instructions).toBeTypeOf("string");
+    expect(initResult.instructions!.length).toBeGreaterThan(500);
+    expect(initResult.instructions).toMatch(/ZeroMind/);
+    expect(initResult.instructions).toMatch(/zeromind\.search/);
   });
 
   it("lists tools", async () => {
@@ -85,6 +98,46 @@ describe("e2e stdio MCP", () => {
     expect(names).toContain("zeromind.inspect");
     expect(names).toContain("zeromind.install");
     expect(names).toContain("zeromind.engage");
+    expect(names).toContain("zeromind.help");
+  });
+
+  it("zeromind.help with no topic lists available topics", async () => {
+    const resp = (await sendRpc(
+      proc,
+      "tools/call",
+      { name: "zeromind.help", arguments: {} },
+      20,
+    )) as { content: { text: string }[] };
+    const body = JSON.parse(resp.content[0].text) as { topics: string[]; overview: string };
+    expect(body.topics).toEqual([
+      "getting-started",
+      "library",
+      "linking",
+      "workflow",
+      "tools",
+    ]);
+    expect(body.overview).toMatch(/topic/);
+    // Surfaces the per-harness custom integrations the installer ships.
+    expect(body.overview).toMatch(/zeromind install/);
+    expect(body.overview).toMatch(/AGENTS\.md/);
+    expect(body.overview).toMatch(/GEMINI\.md/);
+  });
+
+  it("zeromind.help returns the bundled library skill for non-Claude clients", async () => {
+    const resp = (await sendRpc(
+      proc,
+      "tools/call",
+      { name: "zeromind.help", arguments: { topic: "library" } },
+      21,
+    )) as { content: { text: string }[] };
+    const body = JSON.parse(resp.content[0].text) as { topic: string; text: string };
+    expect(body.topic).toBe("library");
+    // The library skill ships in skills/zeromind-library/SKILL.md and the
+    // server reads it at runtime so the content matches what Claude Code
+    // serves via the marketplace.
+    expect(body.text.length).toBeGreaterThan(1000);
+    expect(body.text).toMatch(/zeromind\.search/);
+    expect(body.text).toMatch(/zeromind\.install/);
   });
 
   it("lists prompts", async () => {

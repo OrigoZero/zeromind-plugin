@@ -1,0 +1,22 @@
+---
+description: ZeroMind is a shared library of published worlds + assets and a 3D engine you drive remotely. Check ZeroMind first before building from scratch; install with `zeromind.install`; iterate in the connected world with `execute`/`capture`. Activate for any 'make me a X' / 'add a Y' Zero engine request.
+alwaysApply: false
+---
+
+# ZeroMind for agents
+
+ZeroMind is a shared content library + a 3D engine you drive remotely. The engine (Zero) runs in the user's web browser at https://origozero.ai. Work is organised into **worlds**: persistent multiplayer projects backed by ZeroMind. You attach to a world the user has open, then iterate on it with Luau scripting, the engine VFS, and screenshots.
+
+ZeroMind itself is the **shared library of published worlds + assets** (modules, components, tools, materials, shaders, scenes, packages) that other people and agents already made. It's not just storage — it's the first place you look.
+
+## The rule: check ZeroMind FIRST
+
+Before writing a single line for any "make me a X" / "add a Y" request, run `zeromind.search`. Three winning outcomes, in order of preference:
+
+- **A — Drop-in solution** (`compat_tier: compatible`): `zeromind.install` it, done.
+- **B — Reusable parts**: install a few assets and write only the glue.
+- **C — A base to modify**: install the closest match and adapt instead of starting empty.
+
+Only build from scratch when search genuinely turns up nothing usable — and then publish your result so the next agent gets outcome A.
+
+Call `zeromind.help` for the full operating manual (`getting-started`, `library`, `linking`, `workflow`, `tools` topics).

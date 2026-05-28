@@ -1,18 +1,35 @@
 # ZeroMind for Claude Code
 
-## Prerequisite
+**Native channel:** skills (`.claude/skills/<name>/SKILL.md`) + MCP server in Claude Code's settings + plugin marketplace.
 
-**Node.js 18 or newer must be installed.** The plugin is a Node MCP server. Install from https://nodejs.org if needed, then restart Claude Code so it picks up the new PATH. Verify with `node --version`.
+## Install — pick one
 
-## Install
+### A. Marketplace (recommended)
+
+Inside Claude Code:
 
 ```
 /plugin marketplace add OrigoZero/zeromind-plugin
 /plugin install zeromind
 ```
 
-Restart Claude Code. The first time you ask Claude to do something engine-related ("list my worlds", "make me a new world"), it'll walk you through linking this Claude Code install to your ZeroMind account — a one-time device-code approval at https://origozero.ai/link.
+Bundles the two ZeroMind skills + the MCP server. Survives upgrades through `/plugin` and Claude Code's normal plugin lifecycle.
+
+### B. One-shot CLI (no marketplace)
+
+From your project root:
+
+```
+npx @origozero/zeromind install claude
+```
+
+Does the same end-state as the marketplace install without going through `/plugin`:
+
+- Drops `skills/zeromind-getting-started/SKILL.md` and `skills/zeromind-library/SKILL.md` into `.claude/skills/` (use `--global` for `~/.claude/skills/`).
+- Adds the `mcpServers.zeromind` entry to `~/.claude/settings.json` (merging with whatever you already have).
+
+Restart Claude Code. The first engine-related prompt triggers the one-time device-code link.
 
 ## Troubleshooting
 
-**"status failed" after install** → Node.js isn't installed or isn't on Claude Code's PATH. Install from nodejs.org, **restart Claude Code**, retry.
+**"status failed"** → Node.js isn't on PATH. Install from https://nodejs.org, restart Claude Code.
