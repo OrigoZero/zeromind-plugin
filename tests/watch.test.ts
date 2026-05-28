@@ -76,6 +76,11 @@ describe("WatchRegistry", () => {
       defaultTimeoutMs: 1_000,
     });
 
+  // Drop the initial "watching" state emit so each test asserts only the
+  // terminal events (fired / timeout) it cares about.
+  const terminal = (events: WatchEvent[]): WatchEvent[] =>
+    events.filter((e) => e.state !== "watching");
+
   it("register returns immediately and never blocks on the poll", async () => {
     let pollResolve: ((v: unknown) => void) | undefined;
     const slow = vi.fn(
@@ -104,6 +109,28 @@ describe("WatchRegistry", () => {
     reg.clear();
   });
 
+  it("emits an initial 'watching' state synchronously on register", () => {
+    const poll = vi.fn(async () => "running");
+    const events: WatchEvent[] = [];
+    const reg = mkRegistry(poll, (e) => events.push(e));
+    const { watcher_id } = reg.register({
+      status_field: "tasks.status(99)",
+      matcher: { equals: "finished" },
+      label: "boot",
+    });
+    // Watching event present before any poll runs.
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      state: "watching",
+      watcher_id,
+      label: "boot",
+      poll_count: 0,
+      matcher: { equals: "finished" },
+      source: { status_field: "tasks.status(99)" },
+    });
+    reg.unregister(watcher_id);
+  });
+
   it("fires watcher.fired with the matched value when equals matches", async () => {
     let n = 0;
     const poll = vi.fn(async () => {
@@ -118,9 +145,9 @@ describe("WatchRegistry", () => {
       label: "task-42",
     });
     await wait(150);
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
-      type: "watcher.fired",
+    expect(terminal(events)).toHaveLength(1);
+    expect(terminal(events)[0]).toMatchObject({
+      state: "fired",
       watcher_id,
       label: "task-42",
       value: "finished",
@@ -136,9 +163,9 @@ describe("WatchRegistry", () => {
     const reg = mkRegistry(poll, (e) => events.push(e));
     reg.register({ expr: "return v", matcher: { non_nil: true } });
     await wait(100);
-    expect(events).toHaveLength(1);
-    expect(events[0].type).toBe("watcher.fired");
-    expect((events[0] as { value: unknown }).value).toBe("anything");
+    expect(terminal(events)).toHaveLength(1);
+    expect(terminal(events)[0].state).toBe("fired");
+    expect((terminal(events)[0] as { value: unknown }).value).toBe("anything");
   });
 
   it("fires on gte when the polled number crosses the threshold", async () => {
@@ -148,8 +175,8 @@ describe("WatchRegistry", () => {
     const reg = mkRegistry(poll, (e) => events.push(e));
     reg.register({ expr: "return frame", matcher: { gte: 100 } });
     await wait(100);
-    expect(events).toHaveLength(1);
-    expect((events[0] as { value: unknown }).value).toBeGreaterThanOrEqual(100);
+    expect(terminal(events)).toHaveLength(1);
+    expect((terminal(events)[0] as { value: unknown }).value).toBeGreaterThanOrEqual(100);
   });
 
   it("retries on poll error, then fires once the value arrives", async () => {
@@ -164,8 +191,8 @@ describe("WatchRegistry", () => {
     reg.register({ expr: "return x", matcher: { equals: "ok" } });
     await wait(150);
     expect(poll.mock.calls.length).toBeGreaterThanOrEqual(3);
-    expect(events).toHaveLength(1);
-    expect(events[0].type).toBe("watcher.fired");
+    expect(terminal(events)).toHaveLength(1);
+    expect(terminal(events)[0].state).toBe("fired");
   });
 
   it("emits watcher.timeout when the matcher never fires", async () => {
@@ -178,9 +205,9 @@ describe("WatchRegistry", () => {
       timeout_ms: 60,
     });
     await wait(150);
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
-      type: "watcher.timeout",
+    expect(terminal(events)).toHaveLength(1);
+    expect(terminal(events)[0]).toMatchObject({
+      state: "timeout",
       watcher_id,
       timeout_ms: 60,
     });
@@ -208,7 +235,7 @@ describe("WatchRegistry", () => {
     await wait(150);
     // No further polls scheduled, no events.
     expect(pollCalls).toBeLessThanOrEqual(callsAtCancel + 1);
-    expect(events).toHaveLength(0);
+    expect(terminal(events)).toHaveLength(0);
     expect(reg.has(watcher_id)).toBe(false);
   });
 
@@ -242,7 +269,7 @@ describe("WatchRegistry", () => {
     // Resolve the poll with a value that WOULD have matched.
     resolvePoll?.("finished");
     await wait(50);
-    expect(events).toHaveLength(0);
+    expect(terminal(events)).toHaveLength(0);
   });
 
   it("multiple watchers run independently", async () => {
@@ -258,9 +285,9 @@ describe("WatchRegistry", () => {
     const a = reg.register({ expr: "return a", matcher: { equals: "yes" }, timeout_ms: 80 });
     const b = reg.register({ expr: "return b", matcher: { equals: "yes" } });
     await wait(150);
-    const byId = new Map(events.map((e) => [e.watcher_id, e]));
-    expect(byId.get(a.watcher_id)?.type).toBe("watcher.timeout");
-    expect(byId.get(b.watcher_id)?.type).toBe("watcher.fired");
+    const byId = new Map(terminal(events).map((e) => [e.watcher_id, e]));
+    expect(byId.get(a.watcher_id)?.state).toBe("timeout");
+    expect(byId.get(b.watcher_id)?.state).toBe("fired");
     expect((byId.get(b.watcher_id) as { value?: unknown }).value).toBe("yes");
   });
 
@@ -287,5 +314,105 @@ describe("WatchRegistry", () => {
     // With min=5, in ~100ms we should see <30 polls (closer to 20). The
     // exact count varies by scheduler, so we just assert it didn't go wild.
     expect(poll.mock.calls.length).toBeLessThan(60);
+  });
+
+  it("fired event carries matcher, timestamps, and poll_count — but no poll history", async () => {
+    let n = 0;
+    const poll = vi.fn(async () => {
+      n++;
+      return n >= 4 ? "finished" : "running";
+    });
+    const events: WatchEvent[] = [];
+    const reg = mkRegistry(poll, (e) => events.push(e));
+    reg.register({
+      status_field: "tasks.status(42)",
+      matcher: { equals: "finished" },
+      label: "task-42",
+    });
+    await wait(150);
+    expect(terminal(events)).toHaveLength(1);
+    const event = terminal(events)[0] as Extract<WatchEvent, { state: "fired" }>;
+    expect(event.state).toBe("fired");
+    expect(event.matcher).toEqual({ equals: "finished" });
+    expect(event.poll_count).toBeGreaterThanOrEqual(4);
+    expect(event.started_at).toBeLessThanOrEqual(event.matched_at);
+    // The fire payload is the wake signal, not a log dump. Per-poll history
+    // is intentionally absent — agent reads engine logs directly if it cares.
+    expect(event).not.toHaveProperty("polls");
+    expect(event).not.toHaveProperty("polls_truncated");
+  });
+
+  it("timeout event carries matcher and poll_count too", async () => {
+    const poll = vi.fn(async () => "stuck");
+    const events: WatchEvent[] = [];
+    const reg = mkRegistry(poll, (e) => events.push(e));
+    reg.register({
+      expr: "return s",
+      matcher: { equals: "done" },
+      timeout_ms: 80,
+    });
+    await wait(150);
+    expect(terminal(events)).toHaveLength(1);
+    const event = terminal(events)[0] as Extract<WatchEvent, { state: "timeout" }>;
+    expect(event.state).toBe("timeout");
+    expect(event.poll_count).toBeGreaterThan(0);
+    expect(event.timeout_ms).toBe(80);
+    expect(event.matcher).toEqual({ equals: "done" });
+    expect(event).not.toHaveProperty("polls");
+  });
+
+  it("timeout event includes last_value when last poll returned successfully", async () => {
+    const poll = vi.fn(async () => "still-running");
+    const events: WatchEvent[] = [];
+    const reg = mkRegistry(poll, (e) => events.push(e));
+    reg.register({
+      expr: "return s",
+      matcher: { equals: "finished" },
+      timeout_ms: 80,
+    });
+    await wait(150);
+    const event = terminal(events)[0] as Extract<WatchEvent, { state: "timeout" }>;
+    expect(event.last_value).toBe("still-running");
+    expect(event.last_error).toBeUndefined();
+  });
+
+  it("timeout event includes last_error when last poll threw", async () => {
+    const poll = vi.fn(async () => {
+      throw new Error("bridge disconnected");
+    });
+    const events: WatchEvent[] = [];
+    const reg = mkRegistry(poll, (e) => events.push(e));
+    reg.register({
+      expr: "return s",
+      matcher: { equals: "ok" },
+      timeout_ms: 80,
+    });
+    await wait(150);
+    const event = terminal(events)[0] as Extract<WatchEvent, { state: "timeout" }>;
+    expect(event.last_error).toBe("bridge disconnected");
+    expect(event.last_value).toBeUndefined();
+  });
+
+  it("timeout's last_* tracks whichever poll happened MOST recently", async () => {
+    // Alternates: succeed, fail, succeed, fail, ...
+    let n = 0;
+    const poll = vi.fn(async () => {
+      n++;
+      if (n % 2 === 1) return "value-" + n;
+      throw new Error("error-" + n);
+    });
+    const events: WatchEvent[] = [];
+    const reg = mkRegistry(poll, (e) => events.push(e));
+    reg.register({
+      expr: "return s",
+      matcher: { equals: "never" },
+      timeout_ms: 80,
+    });
+    await wait(150);
+    const event = terminal(events)[0] as Extract<WatchEvent, { state: "timeout" }>;
+    // Exactly one of last_value / last_error is populated.
+    const hasValue = event.last_value !== undefined;
+    const hasError = event.last_error !== undefined;
+    expect(hasValue !== hasError).toBe(true);
   });
 });

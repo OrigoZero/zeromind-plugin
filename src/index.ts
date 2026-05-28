@@ -535,7 +535,7 @@ const main = async (): Promise<void> => {
       .catch((e) => {
         // eslint-disable-next-line no-console
         console.error(
-          `zeromind: failed to emit ${event.type} for ${event.watcher_id}: ${(e as Error).message}`,
+          `zeromind: failed to emit ${event.state} for ${event.watcher_id}: ${(e as Error).message}`,
         );
       });
   };

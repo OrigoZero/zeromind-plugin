@@ -35,25 +35,43 @@ export type WatchArgs = {
   label?: string;
 };
 
-export type WatchFireEvent = {
-  type: "watcher.fired";
+// The watcher's state file holds one of three states. The file exists from
+// register() onward and is rewritten atomically when the state transitions.
+// Reading the file at any time tells the agent the current state without
+// needing to wake or query the plugin.
+
+type CommonFields = {
   watcher_id: string;
   label?: string;
-  value: unknown;
   source: WatchSource;
+  matcher: Matcher;
+  started_at: number;
+  poll_count: number;
+};
+
+export type WatchingState = CommonFields & {
+  state: "watching";
+};
+
+export type FiredState = CommonFields & {
+  state: "fired";
+  value: unknown;
   matched_at: number;
 };
 
-export type WatchTimeoutEvent = {
-  type: "watcher.timeout";
-  watcher_id: string;
-  label?: string;
-  source: WatchSource;
+export type TimeoutState = CommonFields & {
+  state: "timeout";
   timeout_ms: number;
   fired_at: number;
+  // Most recent poll outcome — exactly one populated. last_value if the
+  // last poll returned (matcher just never matched), last_error if the
+  // last poll threw (engine error, bridge blip, file not found...). Both
+  // undefined if no poll completed before the deadline.
+  last_value?: unknown;
+  last_error?: string;
 };
 
-export type WatchEvent = WatchFireEvent | WatchTimeoutEvent;
+export type WatchEvent = WatchingState | FiredState | TimeoutState;
 
 export type PollExecutor = (source: WatchSource) => Promise<unknown>;
 
@@ -133,6 +151,11 @@ type Entry = {
   inFlight: boolean;
   cancelled: boolean;
   pollCount: number;
+  // Most recent poll outcome — exactly one populated at any time (or
+  // neither if no poll has completed yet). Used to fill last_value /
+  // last_error on the timeout event.
+  lastValue?: unknown;
+  lastError?: string;
 };
 
 export type WatchRegistryOptions = {
@@ -201,6 +224,22 @@ export class WatchRegistry {
       pollCount: 0,
     };
     this.entries.set(id, entry);
+    // Emit the initial "watching" state immediately so the file exists from
+    // register() onward (the agent can verify the watcher exists and read
+    // its state any time, without waking or querying the plugin).
+    try {
+      this.emit({
+        state: "watching",
+        watcher_id: id,
+        label: entry.label,
+        source: entry.source,
+        matcher: entry.matcher,
+        started_at: entry.created_at,
+        poll_count: 0,
+      });
+    } catch {
+      // Emit failure is the host's problem — never let it block registration.
+    }
     entry.deadlineTimer = this.setTimeoutFn(() => this.onTimeout(id), timeout_ms);
     // First poll fires on the next tick — register() must return immediately.
     entry.pollTimer = this.setTimeoutFn(() => {
@@ -239,13 +278,21 @@ export class WatchRegistry {
     let pollFailed = false;
     try {
       value = await this.poll(entry.source);
-    } catch {
+    } catch (e) {
       // Transient poll failure (engine error, file not found, bridge blip):
       // treat as "no match yet, retry". The timeout bounds total wait so a
       // permanently-broken source still wakes the agent via a timeout event.
+      // We surface the LAST error on the timeout event so the agent knows
+      // whether the matcher just never matched or the source was broken.
       pollFailed = true;
+      entry.lastError = (e as Error)?.message ?? String(e);
+      entry.lastValue = undefined;
     } finally {
       entry.inFlight = false;
+    }
+    if (!pollFailed) {
+      entry.lastValue = value;
+      entry.lastError = undefined;
     }
     // unregister() may have fired while the poll was in flight.
     if (!this.entries.has(id) || entry.cancelled) return;
@@ -257,12 +304,15 @@ export class WatchRegistry {
       this.entries.delete(id);
       try {
         this.emit({
-          type: "watcher.fired",
+          state: "fired",
           watcher_id: id,
           label: entry.label,
           value,
           source: entry.source,
+          matcher: entry.matcher,
           matched_at: this.nowFn(),
+          started_at: entry.created_at,
+          poll_count: entry.pollCount,
         });
       } catch {
         // The emit channel is the host's problem — never let it kill the loop.
@@ -281,12 +331,17 @@ export class WatchRegistry {
     this.entries.delete(id);
     try {
       this.emit({
-        type: "watcher.timeout",
+        state: "timeout",
         watcher_id: id,
         label: entry.label,
         source: entry.source,
+        matcher: entry.matcher,
         timeout_ms: entry.timeout_ms,
         fired_at: this.nowFn(),
+        started_at: entry.created_at,
+        poll_count: entry.pollCount,
+        last_value: entry.lastValue,
+        last_error: entry.lastError,
       });
     } catch {
       // see tick()
@@ -299,16 +354,20 @@ export class WatchRegistry {
 export const WATCH_TOOL_DEF = {
   name: "watch",
   description:
-    "Register a non-blocking watcher on engine state and END YOUR TURN. " +
-    "Polls the chosen source on a background timer; when the matcher fires, a host re-entry " +
-    "event delivers the matched value to a NEW turn. " +
-    "DO NOT loop on this — call once, get { watcher_id }, finish your turn. " +
-    "To wait for a long-running execute() task: kick it, receive its { taskId }, then call " +
+    "Register a non-blocking watcher on engine state. The plugin polls the chosen source on a " +
+    "background timer and maintains a state file on the host's local filesystem (path returned " +
+    "as `fire_path`). The file is written immediately as `{state: \"watching\", ...}` and " +
+    "rewritten atomically when the matcher resolves: `{state: \"fired\", value, ...}` or " +
+    "`{state: \"timeout\", last_value | last_error, ...}`. Both states also carry source, " +
+    "matcher, timestamps, and poll_count. Read the file any time to check status. " +
+    "Engine task logs / intermediate state are fetched separately via execute() / read_file. " +
+    "Typical use: kick a long execute() task, take its { taskId }, then call " +
     "watch({ expr: 'return tasks.status(' .. taskId .. ')', matcher: { equals: 'finished' } }). " +
-    "Other sources: vfs_path (a VFS file's existence/content) or status_field (sugar — evaluates " +
-    "'return <field>'). Matchers (exactly one): equals (deep-equality on the polled value), " +
-    "non_nil (value present), gte (numeric ≥ threshold), exists (vfs_path only — file present). " +
-    "Returns { watcher_id } immediately; cancel it later with unwatch from a different turn.",
+    "Sources: expr (a Luau snippet whose return value is matched), vfs_path (a VFS file's " +
+    "existence/content), or status_field (sugar for 'return <field>'). " +
+    "Matchers (exactly one): equals (deep-equality on the polled value), non_nil (value present), " +
+    "gte (numeric ≥ threshold), exists (vfs_path only — file present). " +
+    "Returns { watcher_id, fire_path, wake_instructions } immediately. Cancel with unwatch.",
   inputSchema: {
     type: "object",
     properties: {
@@ -357,10 +416,9 @@ export const WATCH_TOOL_DEF = {
 export const UNWATCH_TOOL_DEF = {
   name: "unwatch",
   description:
-    "Cancel a watcher previously registered with watch. Safe to call from any turn AFTER the " +
-    "watch turn — that is the whole point: watch is non-blocking so unwatch from a later turn " +
-    "actually works. Returns { ok: true, cancelled: <bool> } (cancelled is false if the id " +
-    "wasn't found, e.g. it already fired or was never registered).",
+    "Cancel a watcher previously registered with watch. Returns { ok: true, cancelled: <bool> } " +
+    "(cancelled is false if the id wasn't found — already fired, already cancelled, or never " +
+    "registered). Also removes the fire file if one was already written.",
   inputSchema: {
     type: "object",
     properties: {

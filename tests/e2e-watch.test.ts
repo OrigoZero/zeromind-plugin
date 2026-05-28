@@ -288,7 +288,7 @@ describe("watch e2e (stdio MCP)", () => {
       );
       expect(fire).toBeDefined();
       expect(fire!.params).toMatchObject({
-        type: "watcher.fired",
+        state: "fired",
         watcher_id: watchRes.watcher_id,
         label: "task-42-finished",
         value: "finished",
@@ -409,7 +409,7 @@ describe("watch e2e (stdio MCP)", () => {
       );
       expect(note).toBeDefined();
       expect(note!.params).toMatchObject({
-        type: "watcher.timeout",
+        state: "timeout",
         watcher_id: watchRes.watcher_id,
         timeout_ms: 200,
       });
