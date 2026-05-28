@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { startMockServer, type MockServerHandle } from "../tools/mock-zeromind/index.js";
 import { withTmpConfigDir } from "./helpers/tmp-config.js";
-import { authStatus, zmLink, zmLinkPoll, zmUnlink } from "../src/tools/auth.js";
+import {
+  authStatus,
+  zmLink,
+  zmLinkPoll,
+  zmUnlink,
+  resetGettingStartedFlag,
+} from "../src/tools/auth.js";
 import { resetUpdateCache, VERSION } from "../src/update.js";
 
 describe("auth tools", () => {
@@ -19,6 +25,7 @@ describe("auth tools", () => {
     process.env.ZEROMIND_ISSUER = server.url;
     process.env.ZEROMIND_NPM_REGISTRY = server.url;
     resetUpdateCache();
+    resetGettingStartedFlag();
   });
   afterEach(() => {
     delete process.env.ZEROMIND_CONFIG_DIR;
@@ -34,6 +41,14 @@ describe("auth tools", () => {
     // The mock registry advertises an older version → no update.
     expect(s.update.update_available).toBe(false);
     expect(s.update.current).toBe(VERSION);
+  });
+
+  it("authStatus returns getting_started orientation only on the first call of a process", async () => {
+    const first = await authStatus();
+    expect(first.getting_started).toBeTypeOf("string");
+    expect(first.getting_started).toMatch(/ZeroMind/);
+    const second = await authStatus();
+    expect(second.getting_started).toBeUndefined();
   });
 
   it("zmLink returns pending code on first call, approved after user approves", async () => {

@@ -18,6 +18,13 @@ import { ContentTools, buildInstallLuau, type InstallArgs } from "./tools/conten
 import { loadConfig } from "./config.js";
 import { promptDefs, getPrompt } from "./prompts.js";
 import { VERSION } from "./update.js";
+import {
+  INSTRUCTIONS,
+  HELP_TOPICS,
+  getHelpTopic,
+  helpIndex,
+  type HelpTopic,
+} from "./instructions.js";
 
 const IDE_NAME = process.env.ZEROMIND_IDE_NAME ?? "unknown-ide";
 
@@ -25,8 +32,23 @@ const toolDefs = [
   {
     name: "auth_status",
     description:
-      "Report this install's ID, link state, and the user_id if linked. Call this FIRST. It also returns an `update` object from a one-time check against npm: if `update.update_available` is true, relay `update.how_to_update` to the user and ask whether they'd like to update the ZeroMind plugin (you can't update it yourself).",
+      "Report this install's ID, link state, and the user_id if linked. Call this FIRST. On the first call of a session it also returns a `getting_started` orientation (what ZeroMind is, the find-before-build rule, the full workflow) — read it before doing anything else, regardless of which IDE you're running in. It also returns an `update` object from a one-time check against npm: if `update.update_available` is true, relay `update.how_to_update` to the user and ask whether they'd like to update the ZeroMind plugin (you can't update it yourself).",
     inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "zeromind.help",
+    description:
+      "Long-form ZeroMind guides — what it is, how to use it, the four library tools, the engine workflow, the device-code link flow. Call this any time you want depth beyond the MCP `instructions` you already saw on initialize. Same content the Claude Code plugin ships as bundled skills, exposed here so every MCP client (Cursor, Codex, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, …) gets first-class onboarding. No `topic` lists available topics; pass `topic` for one of: `getting-started` (the full engine + workflow reference), `library` (the find-before-build skill — search/inspect/install/engage), `linking` (device-code walkthrough), `workflow` (end-to-end example), `tools` (tool-by-tool reference).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        topic: {
+          type: "string",
+          enum: ["getting-started", "library", "linking", "workflow", "tools"],
+          description: "Which guide to return. Omit to list available topics.",
+        },
+      },
+    },
   },
   {
     name: "zm_link",
@@ -345,6 +367,16 @@ const dispatch = async (
   switch (name) {
     case "auth_status":
       return authStatus();
+    case "zeromind.help": {
+      const topic = (args.topic as HelpTopic | undefined) ?? undefined;
+      if (!topic) return { topics: HELP_TOPICS, overview: helpIndex() };
+      if (!HELP_TOPICS.includes(topic)) {
+        throw new Error(
+          `unknown topic '${topic}'. Available: ${HELP_TOPICS.join(", ")}`,
+        );
+      }
+      return { topic, text: getHelpTopic(topic) };
+    }
     case "zm_link":
       return zmLink({ ideName: IDE_NAME });
     case "zm_link_poll":
@@ -424,7 +456,16 @@ const dispatch = async (
 const main = async (): Promise<void> => {
   const server = new Server(
     { name: "zeromind", version: VERSION },
-    { capabilities: { tools: {}, prompts: {} } },
+    {
+      capabilities: { tools: {}, prompts: {} },
+      // Delivered to every MCP client on `initialize` and surfaced in the
+      // agent's system prompt by Claude Code, Claude Desktop, Cursor, Codex,
+      // Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, and every
+      // other MCP-capable client. This is how non-Claude-Code clients get
+      // the same operating manual that Claude Code agents get from the
+      // bundled skills — the plugin is first-class everywhere.
+      instructions: INSTRUCTIONS,
+    },
   );
 
   let bridge: Bridge | undefined;

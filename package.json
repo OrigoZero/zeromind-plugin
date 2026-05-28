@@ -1,7 +1,7 @@
 {
   "name": "@origozero/zeromind",
   "version": "0.5.0",
-  "description": "ZeroMind IDE plugin — MCP server for Claude Code, Cursor, and Codex",
+  "description": "ZeroMind IDE plugin — MCP server with first-class support for every MCP client (Claude Code, Cursor, Codex, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, …)",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -9,6 +9,7 @@
   },
   "files": [
     "dist/",
+    "skills/",
     "README.md",
     "LICENSE"
   ],
@@ -53,6 +54,12 @@
     "claude-code",
     "cursor",
     "codex",
+    "gemini-cli",
+    "opencode",
+    "cline",
+    "continue",
+    "windsurf",
+    "zed",
     "origozero",
     "zero-engine"
   ]
