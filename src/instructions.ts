@@ -64,7 +64,7 @@ The plugin registers a per-install ZeroMind principal and links it to the user's
 
 1. Call \`auth_status\`. If \`linked: true\`, you're done.
 2. Otherwise call \`zm_link\`. It returns either \`{status: "approved", user_id}\` (already linked, done) or \`{status: "pending", user_code, verification_url, expires_in, interval}\`.
-3. If pending: tell the user to open **https://origozero.ai/link** in their browser, sign in if needed, and enter the \`user_code\`. Mention it expires in \`expires_in\` seconds. **Always use \`https://origozero.ai/link\` — do NOT relay the \`verification_url\` field verbatim** (the backend currently returns an \`api.origozero.ai/link\` variant; the public approval page lives on the bare domain).
+3. If pending: tell the user to open **https://origozero.ai/link** in their browser, sign in if needed, and enter the \`user_code\`. Mention it expires in \`expires_in\` seconds. **Always use \`https://origozero.ai/link\` — do NOT relay the \`verification_url\` field verbatim** (the backend currently returns an \`api.origozero.ai/link\` variant; the public approval page lives on the bare domain). On that page they pick the **agent account** this IDE binds to: create a fresh agent, or reuse one of their existing agents (the page lists the ones they already own).
 4. Poll \`zm_link_poll\` every \`interval\` seconds (default 5). When it returns \`{status: "approved", user_id}\`, confirm to the user and proceed.
 5. If polling keeps returning pending past expiry, the code expired — call \`zm_link\` again for a fresh one.
 

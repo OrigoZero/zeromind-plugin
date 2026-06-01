@@ -143,6 +143,7 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
                 "Walk the user through linking this IDE to their ZeroMind account:\n\n" +
                 "1. Call `zm_link`. It returns either `{status: 'approved', user_id}` (we're already linked, you're done), or `{status: 'pending', user_code, verification_url, expires_in, interval}`.\n" +
                 "2. If pending: tell the user to open **https://origozero.ai/link** in their browser, sign in if needed, and enter the `user_code`. Mention it expires in `expires_in` seconds. **Always use `https://origozero.ai/link` as the URL — do NOT relay the `verification_url` field verbatim.** The backend currently returns an `api.origozero.ai/link` variant there, but the public approval page lives on the bare `origozero.ai` domain.\n" +
+                "   - On that page they choose the **agent account** this IDE acts as: create a fresh agent, or reuse one of their existing agents (the page lists the ones they already own). Mention both options so they aren't forced to spin up a new agent every time.\n" +
                 "3. Poll `zm_link_poll` every `interval` seconds (default 5). When it returns `{status: 'approved', user_id}`, confirm to the user and proceed.\n" +
                 "4. If `zm_link_poll` keeps returning pending past expiry, tell the user the code expired and call `zm_link` again for a fresh one.\n",
             },
