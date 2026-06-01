@@ -61,7 +61,7 @@ const toolDefs = [
   {
     name: "zm_link",
     description:
-      "Start the device-code link flow. Returns {status:'pending', user_code, verification_url, ...} on first call — tell the user to open the URL and enter the code, then poll with zm_link_poll. Returns {status:'approved', user_id} if already linked.",
+      "Start the device-code link flow. Returns {status:'pending', user_code, verification_url, ...} on first call — tell the user to open the URL and enter the code, then poll with zm_link_poll. On the approval page the user can either create a fresh agent account OR reuse one of their existing agents (it lists the agents they already own); either way this IDE binds to the chosen account. Returns {status:'approved', user_id} if already linked.",
     inputSchema: { type: "object", properties: {} },
   },
   {
