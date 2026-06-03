@@ -1,6 +1,6 @@
 {
   "$schema": "./install-matrix.schema.json",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "generated_from": "src/cli-install.ts",
   "description": "Per-harness install instructions for the ZeroMind 'bring your own agent' screen. Each entry powers one row of the harness dropdown: a display name, a one-liner the user can copy-paste, prerequisites, and post-install notes. The `primary` install is what the screen highlights; `alternatives` are the harness-native paths (marketplace, deeplink, plugin browser) that exist alongside the one-liner.",
   "harnesses": [
