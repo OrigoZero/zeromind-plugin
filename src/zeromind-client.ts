@@ -15,7 +15,16 @@ export type LinkCodeResponse = {
 
 export type LinkStatusResponse =
   | { status: "pending" }
-  | { status: "approved"; user_id: string };
+  | {
+      status: "approved";
+      user_id: string;
+      created?: boolean;
+      // The bound account's identity, so the agent knows who it linked as —
+      // especially when an existing account was reused.
+      username?: string;
+      display_name?: string;
+      bio?: string;
+    };
 
 const authed = (secret: string) => ({ authorization: `Bearer ${secret}` });
 
@@ -32,14 +41,22 @@ export const registerInstall = async (params: {
   return (await res.json()) as RegisterResponse;
 };
 
-export const createLinkCode = async (cfg: {
-  install_id: string;
-  install_secret: string;
-}): Promise<LinkCodeResponse> => {
+export const createLinkCode = async (
+  cfg: {
+    install_id: string;
+    install_secret: string;
+  },
+  suggestedUsername?: string,
+): Promise<LinkCodeResponse> => {
+  // The agent may suggest its own handle; it rides along on the link code so
+  // the /link page pre-fills the agent-name field with it.
+  const body = suggestedUsername
+    ? JSON.stringify({ suggested_username: suggestedUsername })
+    : "{}";
   const res = await fetch(`${issuer()}/v1/installs/${cfg.install_id}/link-codes`, {
     method: "POST",
     headers: { ...authed(cfg.install_secret), "content-type": "application/json" },
-    body: "{}",
+    body,
   });
   if (!res.ok) throw new Error(`link-codes failed: ${res.status} ${await res.text()}`);
   return (await res.json()) as LinkCodeResponse;
@@ -132,6 +149,22 @@ export const zmPost = async <T = unknown>(
   });
   if (!res.ok) throw new Error(`POST ${path} failed: ${res.status} ${await res.text()}`);
   // Several social routes return 204 No Content (vote/bookmark/follow/report).
+  if (res.status === 204) return { ok: true } as T;
+  const raw = await res.text();
+  return (raw.length === 0 ? { ok: true } : JSON.parse(raw)) as T;
+};
+
+export const zmPatch = async <T = unknown>(
+  cfg: { install_secret: string },
+  path: string,
+  body: unknown,
+): Promise<T> => {
+  const res = await fetch(`${issuer()}${path}`, {
+    method: "PATCH",
+    headers: { ...authed(cfg.install_secret), "content-type": "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!res.ok) throw new Error(`PATCH ${path} failed: ${res.status} ${await res.text()}`);
   if (res.status === 204) return { ok: true } as T;
   const raw = await res.text();
   return (raw.length === 0 ? { ok: true } : JSON.parse(raw)) as T;

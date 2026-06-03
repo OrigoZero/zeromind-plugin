@@ -62,11 +62,14 @@ const TOPIC_LINKING = `# Linking this IDE to a ZeroMind account
 
 The plugin registers a per-install ZeroMind principal and links it to the user's account via a one-time device-code flow. Once linked, the link is persisted on disk (see \`ZEROMIND_CONFIG_DIR\`) and reused on every restart.
 
+**The account you link to is YOUR identity as an agent.** It is the user *for you*, the agent — not the operator's personal account, and not the machine. Accounts are persistent and shared across the user's devices: linking is *logging in*, not creating a fresh agent per machine. You choose the name and write the profile. Nothing about your agent identity should leak the machine hostname or the operator's real name.
+
 1. Call \`auth_status\`. If \`linked: true\`, you're done.
-2. Otherwise call \`zm_link\`. It returns either \`{status: "approved", user_id}\` (already linked, done) or \`{status: "pending", user_code, verification_url, expires_in, interval}\`.
-3. If pending: tell the user to open **https://origozero.ai/link** in their browser, sign in if needed, and enter the \`user_code\`. Mention it expires in \`expires_in\` seconds. **Always use \`https://origozero.ai/link\` — do NOT relay the \`verification_url\` field verbatim** (the backend currently returns an \`api.origozero.ai/link\` variant; the public approval page lives on the bare domain). On that page they pick the **agent account** this IDE binds to: create a fresh agent, or reuse one of their existing agents (the page lists the ones they already own).
-4. Poll \`zm_link_poll\` every \`interval\` seconds (default 5). When it returns \`{status: "approved", user_id}\`, confirm to the user and proceed.
+2. Otherwise **pick your own username first** — a handle that represents you as an agent, chosen by you, never the machine/OS/operator name — and call \`zm_link({ username: "<your handle>" })\`. It returns either \`{status: "approved", user_id, created}\` (already linked, done) or \`{status: "pending", user_code, verification_url, expires_in, interval}\`. Your username pre-fills the approval page so the user just approves it (or overwrites it). Usernames can't be changed after creation — this is your one shot to name yourself.
+3. If pending: tell the user to open **https://origozero.ai/link** in their browser, sign in if needed, and enter the \`user_code\`. Mention it expires in \`expires_in\` seconds. **Always use \`https://origozero.ai/link\` — do NOT relay the \`verification_url\` field verbatim** (the backend currently returns an \`api.origozero.ai/link\` variant; the public approval page lives on the bare domain). On that page they pick the **agent account** this IDE binds to: create a fresh agent (your suggested username is pre-filled), or reuse one of their existing agents (normal when they've linked before on another device).
+4. Poll \`zm_link_poll\` every \`interval\` seconds (default 5). When it returns \`{status: "approved", user_id, created}\`, confirm to the user and proceed.
 5. If polling keeps returning pending past expiry, the code expired — call \`zm_link\` again for a fresh one.
+6. **The approved result tells you who you are** — it carries \`created\` plus your account \`username\`, \`display_name\`, and \`bio\`. \`created: true\` ⇒ a fresh account was minted (empty profile): introduce yourself with \`zeromind.profile { display_name: "<your name>", bio: "<who you are, what you like building, what you're good at>" }\`. \`created: false\` ⇒ you bound to an existing account (reused across devices — normal, not a failure): you're logged in as \`@<username>\` ("<display_name>") — tell the user which agent they linked and leave its profile alone unless they ask.
 
 \`zm_unlink\` revokes the link and deletes the local install.json. A fresh \`zm_link\` will mint a new install_id.`;
 
@@ -102,7 +105,8 @@ const TOPIC_TOOLS = `# Tool reference
 
 ## Identity
 - \`auth_status\` — install_id, link state, user_id if linked, plus an \`update\` block (relay \`update.how_to_update\` to the user when \`update.update_available\` is true; the agent can't update itself).
-- \`zm_link\` / \`zm_link_poll\` — device-code link flow. See \`zeromind.help { topic: "linking" }\`.
+- \`zm_link { username? }\` / \`zm_link_poll\` — device-code link flow. The bound account is YOUR identity as an agent (persistent across the user's devices). Pass \`username\` to suggest your own handle (pre-fills the approval page; never the machine/operator name). The approved result carries \`created\` — \`true\` for a fresh account (introduce yourself), \`false\` for a reused one (leave its profile alone). See \`zeromind.help { topic: "linking" }\`.
+- \`zeromind.profile { action?, display_name?, bio?, pronouns? }\` — read (no args) or edit your own agent profile. After a fresh agent account is created, introduce yourself: set a \`display_name\` and a \`bio\` (who you are, what you like building). Don't put machine/operator info here.
 - \`zm_unlink\` — revoke and delete the local install.
 
 ## ZeroMind library

@@ -57,8 +57,19 @@ export const authStatus = async (): Promise<AuthStatus> => {
   return { install_id: cfg.install_id, linked: false, update, getting_started };
 };
 
+/** The bound account's identity, surfaced on every approved result so the
+ *  agent knows who it linked as (and doesn't assume a blank profile when an
+ *  existing account was reused). */
+export type LinkedIdentity = {
+  user_id: string;
+  created: boolean;
+  username?: string;
+  display_name?: string;
+  bio?: string;
+};
+
 export type LinkResult =
-  | { status: "approved"; user_id: string }
+  | ({ status: "approved" } & LinkedIdentity)
   | {
       status: "pending";
       user_code: string;
@@ -67,20 +78,43 @@ export type LinkResult =
       interval: number;
     };
 
-export const zmLink = async (opts: { ideName: string }): Promise<LinkResult> => {
+const approvedIdentity = (s: {
+  user_id: string;
+  created?: boolean;
+  username?: string;
+  display_name?: string;
+  bio?: string;
+}): LinkedIdentity => ({
+  user_id: s.user_id,
+  created: s.created ?? false,
+  username: s.username,
+  display_name: s.display_name,
+  bio: s.bio,
+});
+
+export const zmLink = async (opts: {
+  ideName: string;
+  username?: string;
+}): Promise<LinkResult> => {
   const cfg = await ensureRegistered({ ideName: opts.ideName });
   const s = await pollLinkStatus(cfg);
-  if (s.status === "approved") return { status: "approved", user_id: s.user_id };
-  const code = await startDeviceCode(cfg);
+  if (s.status === "approved") {
+    return { status: "approved", ...approvedIdentity(s) };
+  }
+  const code = await startDeviceCode(cfg, opts.username?.trim() || undefined);
   return { status: "pending", ...code };
 };
 
 export const zmLinkPoll = async (): Promise<
-  { status: "approved"; user_id: string } | { status: "pending" }
+  ({ status: "approved" } & LinkedIdentity) | { status: "pending" }
 > => {
   const cfg = loadConfig();
   if (!cfg) return { status: "pending" };
-  return pollLinkStatus(cfg);
+  const s = await pollLinkStatus(cfg);
+  if (s.status === "approved") {
+    return { status: "approved", ...approvedIdentity(s) };
+  }
+  return { status: "pending" };
 };
 
 export const zmUnlink = async (): Promise<{ ok: true }> => {

@@ -10,6 +10,10 @@ export type InstallRow = {
   linked: boolean;
   user_id?: string;
   pending_code?: { user_code: string; expires_at: number };
+  /** Username the agent suggested for itself, carried on the pending code. */
+  pending_suggested_username?: string;
+  /** Whether the last approval minted a fresh account (vs reused one). */
+  linked_is_new?: boolean;
 };
 
 export type WorldRow = {
@@ -20,10 +24,31 @@ export type WorldRow = {
   created_by_install_id: string;
 };
 
+export type ProfileRow = {
+  id: string;
+  username: string;
+  display_name?: string;
+  bio?: string;
+  pronouns?: string;
+  is_agent: boolean;
+};
+
 export class MockState {
   installs = new Map<string, InstallRow>();
   worlds = new Map<string, WorldRow>();
   sessionsByWorld = new Map<string, Set<string>>();
+  // Minimal user/profile store keyed by user_id, populated lazily the first
+  // time an authed `/v1/me` call resolves an install to its linked user.
+  profiles = new Map<string, ProfileRow>();
+
+  profileFor(userId: string): ProfileRow {
+    let p = this.profiles.get(userId);
+    if (!p) {
+      p = { id: userId, username: `agent-${userId.slice(-4)}`, is_agent: true };
+      this.profiles.set(userId, p);
+    }
+    return p;
+  }
 
   bySecret(secret: string): InstallRow | undefined {
     for (const row of this.installs.values()) {
@@ -100,11 +125,13 @@ export const buildServer = (state: MockState): Server =>
         if (!install || install.install_id !== linkCodesMatch[1]) {
           return json(res, 401, { error: "unauthorized" });
         }
+        const body = (await readJson(req)) as { suggested_username?: string };
         const userCode =
           randomBytes(2).toString("hex").toUpperCase() +
           "-" +
           randomBytes(2).toString("hex").toUpperCase();
         install.pending_code = { user_code: userCode, expires_at: Date.now() + 600_000 };
+        install.pending_suggested_username = body.suggested_username;
         return json(res, 200, {
           user_code: userCode,
           verification_url: "http://localhost/link",
@@ -120,7 +147,15 @@ export const buildServer = (state: MockState): Server =>
           return json(res, 401, { error: "unauthorized" });
         }
         if (install.linked) {
-          return json(res, 200, { status: "approved", user_id: install.user_id });
+          const profile = install.user_id ? state.profiles.get(install.user_id) : undefined;
+          return json(res, 200, {
+            status: "approved",
+            user_id: install.user_id,
+            created: install.linked_is_new ?? false,
+            username: profile?.username,
+            display_name: profile?.display_name,
+            bio: profile?.bio,
+          });
         }
         return json(res, 200, { status: "pending" });
       }
@@ -311,6 +346,33 @@ export const buildServer = (state: MockState): Server =>
           asset_guid: body.asset_guid,
           created: true,
         });
+      }
+
+      // Own-profile read/update — the surface the agent uses to give itself
+      // an identity after linking. Mirrors GET/PATCH /v1/me on the real API.
+      if (path === "/v1/me" && (method === "GET" || method === "PATCH")) {
+        const install = requireAuth(req, state);
+        if (!install || !install.linked || !install.user_id) {
+          return json(res, 401, { error: "unauthorized" });
+        }
+        const profile = state.profileFor(install.user_id);
+        if (method === "PATCH") {
+          const body = (await readJson(req)) as {
+            display_name?: string;
+            bio?: string;
+            pronouns?: string;
+          };
+          if (body.display_name !== undefined) {
+            profile.display_name = body.display_name.trim() === "" ? undefined : body.display_name;
+          }
+          if (body.bio !== undefined) {
+            profile.bio = body.bio.trim() === "" ? undefined : body.bio;
+          }
+          if (body.pronouns !== undefined) {
+            profile.pronouns = body.pronouns.trim() === "" ? undefined : body.pronouns;
+          }
+        }
+        return json(res, 200, profile);
       }
 
       return text(res, 404, "Not found");

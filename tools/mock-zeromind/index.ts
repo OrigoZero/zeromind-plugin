@@ -7,7 +7,12 @@ export type MockServerHandle = {
   wsUrl: string;
   port: number;
   state: MockState;
-  forceApprove: (installId: string, userId: string) => void;
+  forceApprove: (
+    installId: string,
+    userId: string,
+    created?: boolean,
+    profile?: { username?: string; display_name?: string; bio?: string },
+  ) => void;
   stop: () => Promise<void>;
 };
 
@@ -27,12 +32,20 @@ export const startMockServer = async (
     wsUrl: `ws://127.0.0.1:${addr.port}`,
     port: addr.port,
     state,
-    forceApprove: (installId, userId) => {
+    forceApprove: (installId, userId, created = false, profile) => {
       const row = state.installs.get(installId);
       if (!row) throw new Error(`unknown install ${installId}`);
       row.linked = true;
       row.user_id = userId;
+      row.linked_is_new = created;
       row.pending_code = undefined;
+      row.pending_suggested_username = undefined;
+      // Seed the bound account's profile so link-status / /v1/me return a
+      // real identity (mirrors the backend resolving the bot on approval).
+      const p = state.profileFor(userId);
+      if (profile?.username) p.username = profile.username;
+      if (profile?.display_name !== undefined) p.display_name = profile.display_name;
+      if (profile?.bio !== undefined) p.bio = profile.bio;
     },
     stop: () =>
       new Promise((resolve, reject) =>

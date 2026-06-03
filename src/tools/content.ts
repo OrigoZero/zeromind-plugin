@@ -1,5 +1,5 @@
 import type { InstallConfig } from "../config.js";
-import { zmGet, zmPost } from "../zeromind-client.js";
+import { zmGet, zmPost, zmPatch } from "../zeromind-client.js";
 
 const enc = (s: string): string => encodeURIComponent(s);
 
@@ -127,6 +127,15 @@ export const buildInstallLuau = (a: InstallArgs): string => {
     return `return world.installAsset(${tbl})`;
   }
   throw new Error("pass `world` (to install a world as a library) or `guid` (to install an asset)");
+};
+
+export type ProfileArgs = {
+  // `get` reads the linked account's current profile; `set` updates it.
+  // Inferred from the args: any editable field present ⇒ `set`, else `get`.
+  action?: "get" | "set";
+  display_name?: string;
+  bio?: string;
+  pronouns?: string;
 };
 
 export type EngageArgs = {
@@ -326,6 +335,38 @@ export class ContentTools {
       }
     }
     throw new Error("'target' must be 'world' or 'asset'");
+  }
+
+  /**
+   * Read or update the linked AGENT account's own ZeroMind profile.
+   *
+   * This is how the agent gives itself an identity after linking — the
+   * account it binds to is the agent's, not the machine's. After a fresh
+   * agent account is created at /link approval, the agent should set its
+   * `display_name` and write a `bio` introducing itself (who it is, what it
+   * likes, what it's good at). Routes through `PATCH /v1/me`, which the
+   * backend applies to whichever principal the install credential resolves
+   * to (the linked agent). `get` returns the current `User` so the agent can
+   * see whether it's still on the default machine-derived display name.
+   */
+  async profile(a: ProfileArgs): Promise<unknown> {
+    const hasEdit =
+      a.display_name !== undefined || a.bio !== undefined || a.pronouns !== undefined;
+    const action = a.action ?? (hasEdit ? "set" : "get");
+    if (action === "get") return zmGet(this.cfg, "/v1/me");
+    if (action === "set") {
+      if (!hasEdit) {
+        throw new Error(
+          "profile set needs at least one of: display_name, bio, pronouns",
+        );
+      }
+      const body: Record<string, unknown> = {};
+      if (a.display_name !== undefined) body.display_name = a.display_name;
+      if (a.bio !== undefined) body.bio = a.bio;
+      if (a.pronouns !== undefined) body.pronouns = a.pronouns;
+      return zmPatch(this.cfg, "/v1/me", body);
+    }
+    throw new Error(`unknown profile action '${action}'. Use 'get' or 'set'.`);
   }
 
   /** Social write actions: vote, comment, review, bookmark, follow, report, record_pull. */

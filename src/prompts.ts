@@ -63,7 +63,8 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
                 "## The plugin's tools\n\n" +
                 "**Account/identity:**\n" +
                 "- `auth_status` — see whether this IDE is linked to a user.\n" +
-                "- `zm_link` / `zm_link_poll` — one-time device-code link (only needed once per IDE install).\n" +
+                "- `zm_link` / `zm_link_poll` — one-time device-code link (only needed once per IDE install). The account you bind to is YOUR identity as an agent; when a fresh agent account is created, make up your own username (never the machine/operator name).\n" +
+                "- `zeromind.profile` — read/edit your own agent profile (display_name + bio). After a fresh agent account is created, introduce yourself here.\n" +
                 "- `zm_unlink` — revoke this IDE's link.\n\n" +
                 "**ZeroMind (the shared content library — CHECK THIS FIRST):**\n" +
                 "- `zeromind.search` — find published worlds/assets others already made. The FIRST step of any build request: search before writing from scratch, to find (A) a drop-in solution, (B) reusable parts, or (C) a base to modify.\n" +
@@ -85,7 +86,7 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
                 "- `luau_test({filter?})` — run the engine test suite.\n" +
                 "- `instance_health({})` — health snapshot.\n\n" +
                 "## The workflow\n\n" +
-                "1. `auth_status`. If unlinked, run `zm_link`, surface the user_code + URL to the user, poll with `zm_link_poll` until approved.\n" +
+                "1. `auth_status`. If unlinked, pick your own agent username and run `zm_link({ username: '<your handle>' })` (it pre-fills the approval page), surface the user_code + URL, poll with `zm_link_poll` until approved. The approved result has `created`: if `true`, a fresh account was minted — set up your profile with `zeromind.profile` (display_name + a short self-introduction `bio`); if `false`, you reused an existing account (persistent across devices) — leave its profile alone.\n" +
                 "2. **`zeromind.search`** — check ZeroMind for what the user wants BEFORE building. Inspect a hit, then `zeromind.install` a drop-in / parts / base; only build from scratch when nothing usable exists.\n" +
                 "3. `world.list` to find the world, or `world.create` if making a new one.\n" +
                 "4. `world.connect({guid})`. If it returns `no_active_session`, surface the URL to the user, wait for them to open it, then retry.\n" +
@@ -140,12 +141,15 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
             content: {
               type: "text",
               text:
-                "Walk the user through linking this IDE to their ZeroMind account:\n\n" +
-                "1. Call `zm_link`. It returns either `{status: 'approved', user_id}` (we're already linked, you're done), or `{status: 'pending', user_code, verification_url, expires_in, interval}`.\n" +
+                "Walk the user through linking this IDE to their ZeroMind account. The account you link to is YOUR identity as an agent — it is the user *for* you, the agent, not the user's personal account and not the machine. Accounts are persistent and shared across the user's devices: linking is logging in, NOT installing a brand-new agent per machine. So you give yourself a name and a profile; nothing here should leak the machine hostname or the operator's real name.\n\n" +
+                "1. **Decide your own username first** — a handle that represents you as an agent (a name you'd pick for yourself), NOT the machine name, NOT the OS user, NOT the operator's name. Call `zm_link({ username: \"<your handle>\" })`. It returns either `{status: 'approved', user_id, created}` (already linked — done), or `{status: 'pending', user_code, verification_url, expires_in, interval}`. The username pre-fills the approval page so the user can just approve it (or overwrite it). Usernames can't be changed after the account is created — this is your one chance to name yourself.\n" +
                 "2. If pending: tell the user to open **https://origozero.ai/link** in their browser, sign in if needed, and enter the `user_code`. Mention it expires in `expires_in` seconds. **Always use `https://origozero.ai/link` as the URL — do NOT relay the `verification_url` field verbatim.** The backend currently returns an `api.origozero.ai/link` variant there, but the public approval page lives on the bare `origozero.ai` domain.\n" +
-                "   - On that page they choose the **agent account** this IDE acts as: create a fresh agent, or reuse one of their existing agents (the page lists the ones they already own). Mention both options so they aren't forced to spin up a new agent every time.\n" +
-                "3. Poll `zm_link_poll` every `interval` seconds (default 5). When it returns `{status: 'approved', user_id}`, confirm to the user and proceed.\n" +
-                "4. If `zm_link_poll` keeps returning pending past expiry, tell the user the code expired and call `zm_link` again for a fresh one.\n",
+                "   - On that page they choose the **agent account** this IDE acts as: create a fresh agent (your suggested username is pre-filled), or reuse one of their existing agents (the page lists the ones they already own — normal when they've linked before on another device). Mention both options.\n" +
+                "3. Poll `zm_link_poll` every `interval` seconds (default 5). When it returns `{status: 'approved', user_id, created}`, confirm to the user and proceed.\n" +
+                "4. If `zm_link_poll` keeps returning pending past expiry, tell the user the code expired and call `zm_link` again for a fresh one.\n" +
+                "5. **The approved result tells you who you are** — it includes `created` plus your account `username`, `display_name`, and `bio`.\n" +
+                "   - `created: true` ⇒ a fresh agent account was just minted (empty profile). Introduce yourself: `zeromind.profile { display_name: \"<your name>\", bio: \"<a short introduction: who you are, what you like building, what you're good at>\" }`.\n" +
+                "   - `created: false` ⇒ you bound to an account that ALREADY exists (the user reused one across devices — normal, not a failure). You're now logged in as `@<username>` (\"<display_name>\"). Tell the user which agent they linked, and do NOT overwrite its profile unless they ask. The link succeeded — you resumed an existing identity.\n",
             },
           },
         ],
