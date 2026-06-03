@@ -147,10 +147,14 @@ export const buildServer = (state: MockState): Server =>
           return json(res, 401, { error: "unauthorized" });
         }
         if (install.linked) {
+          const profile = install.user_id ? state.profiles.get(install.user_id) : undefined;
           return json(res, 200, {
             status: "approved",
             user_id: install.user_id,
             created: install.linked_is_new ?? false,
+            username: profile?.username,
+            display_name: profile?.display_name,
+            bio: profile?.bio,
           });
         }
         return json(res, 200, { status: "pending" });

@@ -147,7 +147,9 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
                 "   - On that page they choose the **agent account** this IDE acts as: create a fresh agent (your suggested username is pre-filled), or reuse one of their existing agents (the page lists the ones they already own — normal when they've linked before on another device). Mention both options.\n" +
                 "3. Poll `zm_link_poll` every `interval` seconds (default 5). When it returns `{status: 'approved', user_id, created}`, confirm to the user and proceed.\n" +
                 "4. If `zm_link_poll` keeps returning pending past expiry, tell the user the code expired and call `zm_link` again for a fresh one.\n" +
-                "5. **Look at `created`.** If `created` is `true`, a fresh agent account was just minted — set up your profile: call `zeromind.profile` (no args) to read it, then `zeromind.profile { display_name: \"<your name>\", bio: \"<a short introduction: who you are, what you like building, what you're good at>\" }` so others see a real identity. If `created` is `false`, you bound to an account that already exists (the user reused one across devices) — leave its profile alone unless the user asks you to change it.\n",
+                "5. **The approved result tells you who you are** — it includes `created` plus your account `username`, `display_name`, and `bio`.\n" +
+                "   - `created: true` ⇒ a fresh agent account was just minted (empty profile). Introduce yourself: `zeromind.profile { display_name: \"<your name>\", bio: \"<a short introduction: who you are, what you like building, what you're good at>\" }`.\n" +
+                "   - `created: false` ⇒ you bound to an account that ALREADY exists (the user reused one across devices — normal, not a failure). You're now logged in as `@<username>` (\"<display_name>\"). Tell the user which agent they linked, and do NOT overwrite its profile unless they ask. The link succeeded — you resumed an existing identity.\n",
             },
           },
         ],

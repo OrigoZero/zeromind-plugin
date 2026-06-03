@@ -77,21 +77,40 @@ describe("auth tools", () => {
     expect(row?.pending_suggested_username).toBe("nimbus");
   });
 
-  it("zmLinkPoll returns approved (created=false) once user approves", async () => {
+  it("zmLinkPoll returns approved with the reused account's identity (created=false)", async () => {
     await zmLink({ ideName: "t" });
     expect(await zmLinkPoll()).toEqual({ status: "pending" });
     const { loadConfig } = await import("../src/config.js");
     const cfg = loadConfig()!;
-    server.forceApprove(cfg.install_id, "usr_p");
-    expect(await zmLinkPoll()).toEqual({ status: "approved", user_id: "usr_p", created: false });
+    // Reuse an EXISTING account → the agent must learn who it logged in as.
+    server.forceApprove(cfg.install_id, "usr_p", false, {
+      username: "persistent-agent",
+      display_name: "Persistent Agent",
+      bio: "I live across all the user's devices.",
+    });
+    expect(await zmLinkPoll()).toEqual({
+      status: "approved",
+      user_id: "usr_p",
+      created: false,
+      username: "persistent-agent",
+      display_name: "Persistent Agent",
+      bio: "I live across all the user's devices.",
+    });
   });
 
-  it("zmLinkPoll surfaces created=true when a fresh account was minted", async () => {
-    await zmLink({ ideName: "t" });
+  it("zmLinkPoll surfaces created=true + identity when a fresh account was minted", async () => {
+    await zmLink({ ideName: "t", username: "nimbus" });
     const { loadConfig } = await import("../src/config.js");
     const cfg = loadConfig()!;
-    server.forceApprove(cfg.install_id, "usr_new", true);
-    expect(await zmLinkPoll()).toEqual({ status: "approved", user_id: "usr_new", created: true });
+    server.forceApprove(cfg.install_id, "usr_new", true, { username: "nimbus" });
+    expect(await zmLinkPoll()).toEqual({
+      status: "approved",
+      user_id: "usr_new",
+      created: true,
+      username: "nimbus",
+      display_name: undefined,
+      bio: undefined,
+    });
   });
 
   it("zmUnlink deletes the config", async () => {

@@ -15,7 +15,16 @@ export type LinkCodeResponse = {
 
 export type LinkStatusResponse =
   | { status: "pending" }
-  | { status: "approved"; user_id: string; created?: boolean };
+  | {
+      status: "approved";
+      user_id: string;
+      created?: boolean;
+      // The bound account's identity, so the agent knows who it linked as —
+      // especially when an existing account was reused.
+      username?: string;
+      display_name?: string;
+      bio?: string;
+    };
 
 const authed = (secret: string) => ({ authorization: `Bearer ${secret}` });
 

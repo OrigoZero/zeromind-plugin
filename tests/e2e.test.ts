@@ -168,7 +168,7 @@ describe("e2e stdio MCP", () => {
     const { loadConfig } = await import("../src/config.js");
     process.env.ZEROMIND_CONFIG_DIR = tmp.dir;
     const cfg = loadConfig()!;
-    server.forceApprove(cfg.install_id, "usr_e2e");
+    server.forceApprove(cfg.install_id, "usr_e2e", false, { username: "e2e-agent" });
 
     const pollResp = (await sendRpc(
       proc,
@@ -180,6 +180,7 @@ describe("e2e stdio MCP", () => {
       status: "approved",
       user_id: "usr_e2e",
       created: false,
+      username: "e2e-agent",
     });
 
     const createResp = (await sendRpc(
