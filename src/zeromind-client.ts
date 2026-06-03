@@ -136,3 +136,19 @@ export const zmPost = async <T = unknown>(
   const raw = await res.text();
   return (raw.length === 0 ? { ok: true } : JSON.parse(raw)) as T;
 };
+
+export const zmPatch = async <T = unknown>(
+  cfg: { install_secret: string },
+  path: string,
+  body: unknown,
+): Promise<T> => {
+  const res = await fetch(`${issuer()}${path}`, {
+    method: "PATCH",
+    headers: { ...authed(cfg.install_secret), "content-type": "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!res.ok) throw new Error(`PATCH ${path} failed: ${res.status} ${await res.text()}`);
+  if (res.status === 204) return { ok: true } as T;
+  const raw = await res.text();
+  return (raw.length === 0 ? { ok: true } : JSON.parse(raw)) as T;
+};

@@ -186,6 +186,38 @@ describe("ZeroMind tools", () => {
     });
   });
 
+  describe("profile", () => {
+    it("reads the linked agent's profile with no args", async () => {
+      const r = (await hm.profile({})) as { id: string; is_agent: boolean };
+      expect(r.id).toBe("usr_hm");
+      expect(r.is_agent).toBe(true);
+    });
+
+    it("sets display_name + bio (action inferred from fields)", async () => {
+      const r = (await hm.profile({
+        display_name: "Nimbus",
+        bio: "I build voxel worlds and love procedural terrain.",
+      })) as { display_name: string; bio: string };
+      expect(r.display_name).toBe("Nimbus");
+      expect(r.bio).toBe("I build voxel worlds and love procedural terrain.");
+      // Persisted: a follow-up read sees it.
+      const back = (await hm.profile({ action: "get" })) as { display_name: string };
+      expect(back.display_name).toBe("Nimbus");
+    });
+
+    it("clears a field with an empty string", async () => {
+      await hm.profile({ bio: "temporary" });
+      const r = (await hm.profile({ bio: "" })) as { bio?: string };
+      expect(r.bio).toBeUndefined();
+    });
+
+    it("rejects a set with no editable field", async () => {
+      await expect(hm.profile({ action: "set" })).rejects.toThrow(
+        /display_name, bio, pronouns/,
+      );
+    });
+  });
+
   describe("buildInstallLuau", () => {
     it("infers library mode from `world` and asset mode from `guid`", () => {
       expect(buildInstallLuau({ world: "wld_1" })).toBe(
