@@ -179,6 +179,7 @@ describe("e2e stdio MCP", () => {
     expect(JSON.parse(pollResp.content[0].text)).toEqual({
       status: "approved",
       user_id: "usr_e2e",
+      created: false,
     });
 
     const createResp = (await sendRpc(

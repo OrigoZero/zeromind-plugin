@@ -10,6 +10,10 @@ export type InstallRow = {
   linked: boolean;
   user_id?: string;
   pending_code?: { user_code: string; expires_at: number };
+  /** Username the agent suggested for itself, carried on the pending code. */
+  pending_suggested_username?: string;
+  /** Whether the last approval minted a fresh account (vs reused one). */
+  linked_is_new?: boolean;
 };
 
 export type WorldRow = {
@@ -121,11 +125,13 @@ export const buildServer = (state: MockState): Server =>
         if (!install || install.install_id !== linkCodesMatch[1]) {
           return json(res, 401, { error: "unauthorized" });
         }
+        const body = (await readJson(req)) as { suggested_username?: string };
         const userCode =
           randomBytes(2).toString("hex").toUpperCase() +
           "-" +
           randomBytes(2).toString("hex").toUpperCase();
         install.pending_code = { user_code: userCode, expires_at: Date.now() + 600_000 };
+        install.pending_suggested_username = body.suggested_username;
         return json(res, 200, {
           user_code: userCode,
           verification_url: "http://localhost/link",
@@ -141,7 +147,11 @@ export const buildServer = (state: MockState): Server =>
           return json(res, 401, { error: "unauthorized" });
         }
         if (install.linked) {
-          return json(res, 200, { status: "approved", user_id: install.user_id });
+          return json(res, 200, {
+            status: "approved",
+            user_id: install.user_id,
+            created: install.linked_is_new ?? false,
+          });
         }
         return json(res, 200, { status: "pending" });
       }

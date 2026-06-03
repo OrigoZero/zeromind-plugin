@@ -7,7 +7,7 @@ export type MockServerHandle = {
   wsUrl: string;
   port: number;
   state: MockState;
-  forceApprove: (installId: string, userId: string) => void;
+  forceApprove: (installId: string, userId: string, created?: boolean) => void;
   stop: () => Promise<void>;
 };
 
@@ -27,12 +27,14 @@ export const startMockServer = async (
     wsUrl: `ws://127.0.0.1:${addr.port}`,
     port: addr.port,
     state,
-    forceApprove: (installId, userId) => {
+    forceApprove: (installId, userId, created = false) => {
       const row = state.installs.get(installId);
       if (!row) throw new Error(`unknown install ${installId}`);
       row.linked = true;
       row.user_id = userId;
+      row.linked_is_new = created;
       row.pending_code = undefined;
+      row.pending_suggested_username = undefined;
     },
     stop: () =>
       new Promise((resolve, reject) =>

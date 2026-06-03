@@ -7,8 +7,10 @@ import {
 } from "./zeromind-client.js";
 import { deleteConfig, type InstallConfig } from "./config.js";
 
-export const startDeviceCode = async (cfg: InstallConfig): Promise<LinkCodeResponse> =>
-  createLinkCode(cfg);
+export const startDeviceCode = async (
+  cfg: InstallConfig,
+  suggestedUsername?: string,
+): Promise<LinkCodeResponse> => createLinkCode(cfg, suggestedUsername);
 
 export const pollLinkStatus = async (cfg: InstallConfig): Promise<LinkStatusResponse> =>
   getLinkStatus(cfg);

@@ -61,8 +61,17 @@ const toolDefs = [
   {
     name: "zm_link",
     description:
-      "Start the device-code link flow. Returns {status:'pending', user_code, verification_url, ...} on first call — tell the user to open the URL and enter the code, then poll with zm_link_poll. On the approval page the user can either create a fresh agent account OR reuse one of their existing agents (it lists the agents they already own); either way this IDE binds to the chosen account. The account is YOUR identity as an agent, not the machine's — when creating a fresh one, make up your OWN username (a handle that represents you) and suggest it to the user to enter; never use the machine hostname or the operator's name. After a fresh account is created, introduce yourself with zeromind.profile (set display_name + bio). Returns {status:'approved', user_id} if already linked.",
-    inputSchema: { type: "object", properties: {} },
+      "Start the device-code link flow. Pass `username` to suggest YOUR OWN agent handle (a name you pick for yourself, never the machine hostname or the operator's name) — it pre-fills the agent-name field on the approval page so the user just approves it (or overwrites it). Usernames can't be changed after the account is created, so this is your one chance to name yourself. Returns {status:'pending', user_code, verification_url, ...} on first call — tell the user to open the URL and enter the code, then poll with zm_link_poll. On the approval page the user can create a fresh agent account OR reuse one of their existing agents (accounts are persistent across devices — reusing is normal, not every device needs a new one). When the poll returns {status:'approved', user_id, created}: if `created` is true a fresh account was minted — introduce yourself with zeromind.profile (set display_name + bio); if `created` is false you bound to an existing account — do NOT overwrite its profile.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        username: {
+          type: "string",
+          description:
+            "Optional. The handle you choose for yourself as an agent; pre-fills the approval page. Never the machine/operator name.",
+        },
+      },
+    },
   },
   {
     name: "zm_link_poll",
@@ -411,7 +420,7 @@ const dispatch = async (
       return { topic, text: getHelpTopic(topic) };
     }
     case "zm_link":
-      return zmLink({ ideName: IDE_NAME });
+      return zmLink({ ideName: IDE_NAME, username: args.username as string | undefined });
     case "zm_link_poll":
       return zmLinkPoll();
     case "zm_unlink":

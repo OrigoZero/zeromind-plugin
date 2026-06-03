@@ -15,7 +15,7 @@ export type LinkCodeResponse = {
 
 export type LinkStatusResponse =
   | { status: "pending" }
-  | { status: "approved"; user_id: string };
+  | { status: "approved"; user_id: string; created?: boolean };
 
 const authed = (secret: string) => ({ authorization: `Bearer ${secret}` });
 
@@ -32,14 +32,22 @@ export const registerInstall = async (params: {
   return (await res.json()) as RegisterResponse;
 };
 
-export const createLinkCode = async (cfg: {
-  install_id: string;
-  install_secret: string;
-}): Promise<LinkCodeResponse> => {
+export const createLinkCode = async (
+  cfg: {
+    install_id: string;
+    install_secret: string;
+  },
+  suggestedUsername?: string,
+): Promise<LinkCodeResponse> => {
+  // The agent may suggest its own handle; it rides along on the link code so
+  // the /link page pre-fills the agent-name field with it.
+  const body = suggestedUsername
+    ? JSON.stringify({ suggested_username: suggestedUsername })
+    : "{}";
   const res = await fetch(`${issuer()}/v1/installs/${cfg.install_id}/link-codes`, {
     method: "POST",
     headers: { ...authed(cfg.install_secret), "content-type": "application/json" },
-    body: "{}",
+    body,
   });
   if (!res.ok) throw new Error(`link-codes failed: ${res.status} ${await res.text()}`);
   return (await res.json()) as LinkCodeResponse;

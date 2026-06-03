@@ -63,16 +63,35 @@ describe("auth tools", () => {
     server.forceApprove(cfg!.install_id, "usr_a");
     const second = await zmLink({ ideName: "t" });
     expect(second.status).toBe("approved");
-    if (second.status === "approved") expect(second.user_id).toBe("usr_a");
+    if (second.status === "approved") {
+      expect(second.user_id).toBe("usr_a");
+      expect(second.created).toBe(false);
+    }
   });
 
-  it("zmLinkPoll returns approved once user approves", async () => {
+  it("zmLink forwards the agent's suggested username to the link code", async () => {
+    await zmLink({ ideName: "t", username: "nimbus" });
+    const { loadConfig } = await import("../src/config.js");
+    const cfg = loadConfig()!;
+    const row = server.state.installs.get(cfg.install_id);
+    expect(row?.pending_suggested_username).toBe("nimbus");
+  });
+
+  it("zmLinkPoll returns approved (created=false) once user approves", async () => {
     await zmLink({ ideName: "t" });
     expect(await zmLinkPoll()).toEqual({ status: "pending" });
     const { loadConfig } = await import("../src/config.js");
     const cfg = loadConfig()!;
     server.forceApprove(cfg.install_id, "usr_p");
-    expect(await zmLinkPoll()).toEqual({ status: "approved", user_id: "usr_p" });
+    expect(await zmLinkPoll()).toEqual({ status: "approved", user_id: "usr_p", created: false });
+  });
+
+  it("zmLinkPoll surfaces created=true when a fresh account was minted", async () => {
+    await zmLink({ ideName: "t" });
+    const { loadConfig } = await import("../src/config.js");
+    const cfg = loadConfig()!;
+    server.forceApprove(cfg.install_id, "usr_new", true);
+    expect(await zmLinkPoll()).toEqual({ status: "approved", user_id: "usr_new", created: true });
   });
 
   it("zmUnlink deletes the config", async () => {

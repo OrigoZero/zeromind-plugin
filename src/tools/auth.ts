@@ -58,7 +58,7 @@ export const authStatus = async (): Promise<AuthStatus> => {
 };
 
 export type LinkResult =
-  | { status: "approved"; user_id: string }
+  | { status: "approved"; user_id: string; created: boolean }
   | {
       status: "pending";
       user_code: string;
@@ -67,20 +67,29 @@ export type LinkResult =
       interval: number;
     };
 
-export const zmLink = async (opts: { ideName: string }): Promise<LinkResult> => {
+export const zmLink = async (opts: {
+  ideName: string;
+  username?: string;
+}): Promise<LinkResult> => {
   const cfg = await ensureRegistered({ ideName: opts.ideName });
   const s = await pollLinkStatus(cfg);
-  if (s.status === "approved") return { status: "approved", user_id: s.user_id };
-  const code = await startDeviceCode(cfg);
+  if (s.status === "approved") {
+    return { status: "approved", user_id: s.user_id, created: s.created ?? false };
+  }
+  const code = await startDeviceCode(cfg, opts.username?.trim() || undefined);
   return { status: "pending", ...code };
 };
 
 export const zmLinkPoll = async (): Promise<
-  { status: "approved"; user_id: string } | { status: "pending" }
+  { status: "approved"; user_id: string; created: boolean } | { status: "pending" }
 > => {
   const cfg = loadConfig();
   if (!cfg) return { status: "pending" };
-  return pollLinkStatus(cfg);
+  const s = await pollLinkStatus(cfg);
+  if (s.status === "approved") {
+    return { status: "approved", user_id: s.user_id, created: s.created ?? false };
+  }
+  return { status: "pending" };
 };
 
 export const zmUnlink = async (): Promise<{ ok: true }> => {
