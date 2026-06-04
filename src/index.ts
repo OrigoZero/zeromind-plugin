@@ -405,6 +405,7 @@ const dispatch = async (
   ensureEngine: () => Promise<EngineCtx>,
   ensureContent: () => ContentTools,
   ensureWatch: () => Promise<WatchCtx>,
+  resetClients: () => Promise<void>,
 ): Promise<unknown> => {
   switch (name) {
     case "auth_status":
@@ -419,12 +420,35 @@ const dispatch = async (
       }
       return { topic, text: getHelpTopic(topic) };
     }
-    case "zm_link":
-      return zmLink({ ideName: IDE_NAME, username: args.username as string | undefined });
-    case "zm_link_poll":
-      return zmLinkPoll();
-    case "zm_unlink":
-      return zmUnlink();
+    case "zm_link": {
+      // zm_link mints a fresh install (new install_secret on disk) whenever
+      // the install isn't already registered. Any world/engine/content
+      // client memoized from a previous install now holds a stale secret —
+      // drop them so the next tool call rebuilds against the new credential.
+      const r = await zmLink({
+        ideName: IDE_NAME,
+        username: args.username as string | undefined,
+      });
+      await resetClients();
+      return r;
+    }
+    case "zm_link_poll": {
+      // On approval the install's principal/credential is now authoritative;
+      // rebuild the clients (and reconnect the bridge, which may have failed
+      // while the install was still unlinked) on the next call.
+      const r = await zmLinkPoll();
+      if (r.status === "approved") await resetClients();
+      return r;
+    }
+    case "zm_unlink": {
+      // Unlink deletes install.json and revokes the secret server-side. The
+      // memoized clients would otherwise keep presenting the now-unlinked
+      // secret — which the backend correctly rejects with 401 even though a
+      // subsequent re-link reports linked. See OrigoZero/ZeroMind#130.
+      const r = await zmUnlink();
+      await resetClients();
+      return r;
+    }
     case "zeromind.search":
       return ensureContent().search(args);
     case "zeromind.inspect":
@@ -560,6 +584,34 @@ const main = async (): Promise<void> => {
     return initPromise;
   };
 
+  // Tear down every memoized client so the next tool call rebuilds them from
+  // the current install.json. The world/engine/content clients each capture
+  // the install credential at construction time (WorldTools/ContentTools hold
+  // the `cfg`, the Bridge dials the WSS with it). When the credential changes
+  // under us — a re-link mints a new install_secret, an unlink revokes it —
+  // those captured copies go stale. Without this reset, world.*/engine.*/
+  // zeromind.* keep presenting the previous (now-unlinked) secret and the
+  // backend rejects every authenticated call with 401, even though auth_status
+  // (which re-reads the config on each call) reports the install as linked.
+  // See OrigoZero/ZeroMind#130.
+  const resetClients = async (): Promise<void> => {
+    const staleBridge = bridge;
+    initPromise = undefined;
+    bridge = undefined;
+    worldTools = undefined;
+    engineTools = undefined;
+    contentTools = undefined;
+    watchTools = undefined;
+    bridgeConnectError = undefined;
+    if (staleBridge) {
+      try {
+        await staleBridge.close();
+      } catch {
+        // best-effort — we're discarding the socket regardless.
+      }
+    }
+  };
+
   const ensureWorld = async (): Promise<WorldCtx> => {
     await ensureInit();
     return { w: worldTools! };
@@ -641,6 +693,7 @@ const main = async (): Promise<void> => {
         ensureEngine,
         ensureContent,
         ensureWatch,
+        resetClients,
       );
       if (name === "capture") {
         const r = result as { image_b64: string };
