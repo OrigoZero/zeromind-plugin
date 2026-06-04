@@ -5,7 +5,7 @@ import { fetch } from "undici";
  * The MCP server reports this, and the first-use update check compares it
  * against the latest version published to npm.
  */
-export const VERSION = "0.5.1";
+export const VERSION = "0.5.2";
 
 const PKG = "@origozero/zeromind";
 
