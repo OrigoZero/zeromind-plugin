@@ -696,10 +696,13 @@ const main = async (): Promise<void> => {
         resetClients,
       );
       if (name === "capture") {
-        const r = result as { image_b64: string };
+        // The engine sends an MCP image block { type:"image", mime_type, data }.
+        // Read `data`/`mime_type` (NOT the never-existent `image_b64`), mapping
+        // to MCP's camelCase `mimeType`.
+        const r = result as { data?: string; mime_type?: string };
         return {
           content: [
-            { type: "image", data: r.image_b64, mimeType: "image/png" },
+            { type: "image", data: r.data ?? "", mimeType: r.mime_type ?? "image/png" },
             { type: "text", text: JSON.stringify(result) },
           ],
         };

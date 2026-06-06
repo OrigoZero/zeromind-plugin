@@ -41,7 +41,10 @@ export class EngineTools {
       height?: number;
       format?: string;
     } = {},
-  ): Promise<{ image_b64: string; width: number; height: number; format: string }> {
+    // The engine returns an MCP image content block: { type, mime_type, data }
+    // (data = base64 PNG). NOT a flat { image_b64, width, height } — that shape
+    // never existed on the wire. See zero crates/zero_code_mode/src/mcp_tools.rs.
+  ): Promise<{ type: "image"; mime_type: string; data: string }> {
     return call(this.bridge, this.world, "capture", params);
   }
   read_file(params: { path: string }): Promise<{ content?: string; content_b64?: string }> {
