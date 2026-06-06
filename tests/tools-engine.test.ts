@@ -95,18 +95,19 @@ describe("engine tools", () => {
       browser.on("message", (raw) => {
         const f = JSON.parse(raw.toString()) as { id?: string; method?: string };
         if (f.method === "capture") {
+          // The real engine replies with an MCP image content block.
           browser.send(
             JSON.stringify({
               type: "rpc.response",
               id: f.id,
-              result: { image_b64: "AAAA", width: 4, height: 4, format: "png" },
+              result: { type: "image", mime_type: "image/png", data: "AAAA" },
             }),
           );
         }
       });
       const engine = new EngineTools(b, worldTools);
       const r = await engine.capture({});
-      expect(r).toEqual({ image_b64: "AAAA", width: 4, height: 4, format: "png" });
+      expect(r).toEqual({ type: "image", mime_type: "image/png", data: "AAAA" });
       await b.close();
       browser.close();
     } finally {
