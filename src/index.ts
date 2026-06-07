@@ -24,6 +24,7 @@ import {
   type WatchEvent,
 } from "./watch.js";
 import { loadConfig } from "./config.js";
+import { withTimeout, toolTimeoutMs, TOOL_TIMEOUT_BUFFER_MS } from "./timeout.js";
 import { promptDefs, getPrompt } from "./prompts.js";
 import { VERSION } from "./update.js";
 import {
@@ -529,6 +530,20 @@ const dispatch = async (
   }
 };
 
+// The watchdog budget for a tool call. Most tools get the flat configured cap.
+// world.connect is the one tool that legitimately blocks for a caller-supplied
+// duration (it long-polls up to `timeout_ms`, default 60s, then resolves
+// gracefully); give its watchdog that duration plus headroom so the cap only
+// fires if the connect path itself hangs past its own timeout.
+const timeoutBudget = (name: string, args: Record<string, unknown>): number => {
+  const base = toolTimeoutMs();
+  if (name === "world.connect") {
+    const own = typeof args.timeout_ms === "number" ? args.timeout_ms : 60_000;
+    return Math.max(base, own + TOOL_TIMEOUT_BUFFER_MS);
+  }
+  return base;
+};
+
 const main = async (): Promise<void> => {
   const server = new Server(
     { name: "zeromind", version: VERSION },
@@ -686,14 +701,18 @@ const main = async (): Promise<void> => {
     const name = req.params.name;
     const args = (req.params.arguments ?? {}) as Record<string, unknown>;
     try {
-      const result = await dispatch(
+      const result = await withTimeout(
+        dispatch(
+          name,
+          args,
+          ensureWorld,
+          ensureEngine,
+          ensureContent,
+          ensureWatch,
+          resetClients,
+        ),
+        timeoutBudget(name, args),
         name,
-        args,
-        ensureWorld,
-        ensureEngine,
-        ensureContent,
-        ensureWatch,
-        resetClients,
       );
       if (name === "capture") {
         // The engine sends an MCP image block { type:"image", mime_type, data }.
