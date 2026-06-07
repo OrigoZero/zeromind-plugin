@@ -1,6 +1,6 @@
 {
   "name": "@origozero/zeromind",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "ZeroMind IDE plugin — MCP server with first-class support for every MCP client (Claude Code, Cursor, Codex, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, …)",
   "type": "module",
   "main": "dist/index.js",
