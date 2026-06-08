@@ -7,6 +7,10 @@ import { Bridge } from "../src/bridge.js";
 import { WorldTools } from "../src/tools/world.js";
 import { EngineTools } from "../src/tools/engine.js";
 import { createWorld } from "../src/zeromind-client.js";
+import { uploadFile } from "../src/upload.js";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 const setEnv = (server: MockServerHandle, dir: string): void => {
   process.env.ZEROMIND_CONFIG_DIR = dir;
@@ -113,6 +117,46 @@ describe("engine tools", () => {
     } finally {
       clearEnv();
       tmp.cleanup();
+    }
+  });
+
+  it("upload_file forwards a local binary file to engine write_file over the bridge", async () => {
+    const tmp = withTmpConfigDir();
+    setEnv(server, tmp.dir);
+    const srcDir = await fs.mkdtemp(path.join(os.tmpdir(), "zm-up-e2e-"));
+    try {
+      const { b, worldTools, browser } = await setupConnectedSession(server, "usr_e4");
+      // Non-UTF-8 bytes: proves the binary survives the round-trip intact.
+      const payload = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe]);
+      const src = path.join(srcDir, "model.glb");
+      await fs.writeFile(src, payload);
+
+      let received: { path?: string; content_b64?: string } | undefined;
+      browser.on("message", (raw) => {
+        const f = JSON.parse(raw.toString()) as {
+          id?: string;
+          method?: string;
+          params?: { path?: string; content_b64?: string };
+        };
+        if (f.method === "write_file") {
+          received = f.params;
+          browser.send(JSON.stringify({ type: "rpc.response", id: f.id, result: { ok: true } }));
+        }
+      });
+
+      const engine = new EngineTools(b, worldTools);
+      const r = await uploadFile(engine, { local_path: src, vfs_path: "/source/model.glb" });
+      expect(r.uploaded).toBe(1);
+      expect(r.bytes).toBe(payload.length);
+      expect(received?.path).toBe("/source/model.glb");
+      expect(Buffer.from(received!.content_b64!, "base64").equals(payload)).toBe(true);
+
+      await b.close();
+      browser.close();
+    } finally {
+      clearEnv();
+      tmp.cleanup();
+      await fs.rm(srcDir, { recursive: true, force: true });
     }
   });
 });

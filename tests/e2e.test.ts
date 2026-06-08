@@ -92,6 +92,7 @@ describe("e2e stdio MCP", () => {
     const names = result.tools.map((t) => t.name);
     expect(names).toContain("auth_status");
     expect(names).toContain("execute");
+    expect(names).toContain("upload_file");
     expect(names).toContain("world.create");
     expect(names).toContain("zm_link");
     expect(names).toContain("zeromind.search");

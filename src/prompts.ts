@@ -82,6 +82,7 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
                 "- `guides({path?, query?, list?})` — engine docs. Always `guides()` (no args) FIRST after every `world.connect` to load the README.\n" +
                 "- `capture({})` — screenshot, returns base64 PNG.\n" +
                 "- `read_file({path})` / `write_file({path, content})` / `edit_file({path, old_string, new_string})` — engine VFS (`/zero/...`).\n" +
+                "- `upload_file({local_path, vfs_path})` — push a local file or folder (image, model, audio, asset pack) into the engine VFS. Binary-safe; reads bytes off disk so nothing is base64-inlined into the call.\n" +
                 "- `bash({command})` — engine's scene-VFS bash.\n" +
                 "- `luau_test({filter?})` — run the engine test suite.\n" +
                 "- `instance_health({})` — health snapshot.\n\n" +

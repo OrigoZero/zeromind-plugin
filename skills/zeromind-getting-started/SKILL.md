@@ -396,7 +396,10 @@ bash       { "command": "ls /zero/runtime/layers/main/entities" }
 bash       { "command": "cat /zero/source/Camera.component" }   # same output as asset.inspect("Camera")
 read_file  { "path": "/zero/runtime/layers/main/entities/car/position" }   # JSON
 write_file { "path": "/source/MyComponent.component/init.luau", "content": "..." }
+upload_file { "local_path": "~/assets/car.glb", "vfs_path": "/source/models/car.glb" }   # local file/folder → VFS, binary-safe
 ```
+
+**Uploading binary assets** (images, GLB/GLTF models, audio, fonts, whole asset packs): use `upload_file { local_path, vfs_path }` rather than base64-inlining bytes into `write_file`. It reads the file (or recursively, the folder) straight off the local machine and streams each one into the engine VFS, preserving the tree layout — so a single call can drop a full `textures/` + `models/` pack into `/source/`. Needs a connected world.
 
 **Write paths**: all writes go to `/zero/source/`. Component files live under `/source/<Name>.component/init.luau`. Materials are `<Name>.material/`, shaders are `.wgsl`, bundles are `<name>.bundle/`. The engine auto-registers them — `asset.list()` / `asset.inspect()` confirms.
 
