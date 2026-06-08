@@ -25,6 +25,7 @@ import {
 } from "./watch.js";
 import { loadConfig } from "./config.js";
 import { withTimeout, toolTimeoutMs, TOOL_TIMEOUT_BUFFER_MS } from "./timeout.js";
+import { toToolContent } from "./mcp-result.js";
 import { promptDefs, getPrompt } from "./prompts.js";
 import { VERSION } from "./update.js";
 import {
@@ -714,19 +715,11 @@ const main = async (): Promise<void> => {
         timeoutBudget(name, args),
         name,
       );
-      if (name === "capture") {
-        // The engine sends an MCP image block { type:"image", mime_type, data }.
-        // Read `data`/`mime_type` (NOT the never-existent `image_b64`), mapping
-        // to MCP's camelCase `mimeType`.
-        const r = result as { data?: string; mime_type?: string };
-        return {
-          content: [
-            { type: "image", data: r.data ?? "", mimeType: r.mime_type ?? "image/png" },
-            { type: "text", text: JSON.stringify(result) },
-          ],
-        };
-      }
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      // Image-shaped results (capture always; read_file for PNGs) become an
+      // MCP image content block so the client renders them as a viewable
+      // image instead of a base64 text blob (zero#3840, zero#3844). All other
+      // results become a JSON text block. See ./mcp-result.ts.
+      return toToolContent(result);
     } catch (e) {
       const err = e as Error & { code?: string };
       return {
