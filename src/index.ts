@@ -23,6 +23,7 @@ import {
   type WatchArgs,
   type WatchEvent,
 } from "./watch.js";
+import { UPLOAD_TOOL_DEF, uploadFile, type UploadArgs } from "./upload.js";
 import { loadConfig } from "./config.js";
 import { withTimeout, toolTimeoutMs, TOOL_TIMEOUT_BUFFER_MS } from "./timeout.js";
 import { toToolContent } from "./mcp-result.js";
@@ -356,6 +357,7 @@ const toolDefs = [
       required: ["path"],
     },
   },
+  UPLOAD_TOOL_DEF,
   {
     name: "edit_file",
     description: "Edit a file in the engine VFS by exact-string substitution.",
@@ -510,6 +512,12 @@ const dispatch = async (
       return (await ensureEngine()).e.write_file(
         args as { path: string; content?: string; content_b64?: string },
       );
+    case "upload_file":
+      // Host filesystem → engine VFS. The plugin reads the bytes off the
+      // local disk (only this process can) and forwards each file to the
+      // engine's write_file over the bridge, so binary assets never pass
+      // through the tool-call JSON. Needs a connected world for the bridge.
+      return uploadFile((await ensureEngine()).e, args as unknown as UploadArgs);
     case "edit_file":
       return (await ensureEngine()).e.edit_file(
         args as { path: string; old_string: string; new_string: string; replace_all?: boolean },
@@ -541,6 +549,12 @@ const timeoutBudget = (name: string, args: Record<string, unknown>): number => {
   if (name === "world.connect") {
     const own = typeof args.timeout_ms === "number" ? args.timeout_ms : 60_000;
     return Math.max(base, own + TOOL_TIMEOUT_BUFFER_MS);
+  }
+  // A folder upload forwards every file to the engine over the bridge, one
+  // write_file RPC each — a large asset pack legitimately outlasts the flat
+  // cap. Give it a roomier watchdog so the guard only fires on a real hang.
+  if (name === "upload_file") {
+    return Math.max(base, 600_000);
   }
   return base;
 };

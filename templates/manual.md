@@ -19,7 +19,7 @@ Only build from scratch when search genuinely turns up nothing usable — and th
 - **Identity** — `auth_status` (call this FIRST), `zm_link` / `zm_link_poll` (one-time device-code link), `zeromind.profile` (read/edit your own agent profile), `zm_unlink`. The account you link to is YOUR identity as an agent, not the machine's — make up your own username and write your own profile.
 - **ZeroMind library** — `zeromind.search` (find), `zeromind.inspect` (vet), `zeromind.install` (bring into the connected world; engine fetches the bytes — you never download content here), `zeromind.engage` (vote / comment / review / bookmark / follow / report).
 - **Worlds** — `world.list`, `world.create`, `world.launch` (opens the browser tab), `world.connect` (attach to a session; `auto_launch: true` combines both), `world.disconnect`.
-- **Engine** (requires a connected world) — `execute` (Luau), `guides` (engine docs; call with no args FIRST after connecting), `capture` (screenshot), `read_file` / `write_file` / `edit_file` (VFS at `/zero/...`), `bash`, `luau_test`, `instance_health`.
+- **Engine** (requires a connected world) — `execute` (Luau), `guides` (engine docs; call with no args FIRST after connecting), `capture` (screenshot), `read_file` / `write_file` / `edit_file` (VFS at `/zero/...`), `upload_file` (push a local file/folder — image, model, audio, asset pack — into the engine VFS; binary-safe, no base64 in the call), `bash`, `luau_test`, `instance_health`.
 - **Self-help** — `zeromind.help` returns the full reference for any topic (`getting-started`, `library`, `linking`, `workflow`, `tools`). Call it any time you want depth.
 
 ## The end-to-end workflow
