@@ -10,7 +10,9 @@ import { deleteConfig, type InstallConfig } from "./config.js";
 export const startDeviceCode = async (
   cfg: InstallConfig,
   suggestedUsername?: string,
-): Promise<LinkCodeResponse> => createLinkCode(cfg, suggestedUsername);
+  suggestedDisplayName?: string,
+): Promise<LinkCodeResponse> =>
+  createLinkCode(cfg, suggestedUsername, suggestedDisplayName);
 
 export const pollLinkStatus = async (cfg: InstallConfig): Promise<LinkStatusResponse> =>
   getLinkStatus(cfg);

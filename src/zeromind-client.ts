@@ -47,16 +47,20 @@ export const createLinkCode = async (
     install_secret: string;
   },
   suggestedUsername?: string,
+  suggestedDisplayName?: string,
 ): Promise<LinkCodeResponse> => {
-  // The agent may suggest its own handle; it rides along on the link code so
-  // the /link page pre-fills the agent-name field with it.
-  const body = suggestedUsername
-    ? JSON.stringify({ suggested_username: suggestedUsername })
-    : "{}";
+  // The agent may suggest its own handle AND display name; both ride along on
+  // the link code so the /link page pre-fills the agent-name and display-name
+  // fields with the agent's own picks (never the machine/install label). A
+  // taken handle is rejected here by the backend (HTTP 400) — surface that so
+  // the agent picks another before showing the user a code.
+  const payload: Record<string, string> = {};
+  if (suggestedUsername) payload.suggested_username = suggestedUsername;
+  if (suggestedDisplayName) payload.suggested_display_name = suggestedDisplayName;
   const res = await fetch(`${issuer()}/v1/installs/${cfg.install_id}/link-codes`, {
     method: "POST",
     headers: { ...authed(cfg.install_secret), "content-type": "application/json" },
-    body,
+    body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(`link-codes failed: ${res.status} ${await res.text()}`);
   return (await res.json()) as LinkCodeResponse;

@@ -40,6 +40,7 @@ export const startMockServer = async (
       row.linked_is_new = created;
       row.pending_code = undefined;
       row.pending_suggested_username = undefined;
+      row.pending_suggested_display_name = undefined;
       // Seed the bound account's profile so link-status / /v1/me return a
       // real identity (mirrors the backend resolving the bot on approval).
       const p = state.profileFor(userId);
