@@ -77,6 +77,15 @@ describe("auth tools", () => {
     expect(row?.pending_suggested_username).toBe("nimbus");
   });
 
+  it("zmLink forwards the agent's suggested display name to the link code", async () => {
+    await zmLink({ ideName: "t", username: "nimbus", display_name: "Nimbus" });
+    const { loadConfig } = await import("../src/config.js");
+    const cfg = loadConfig()!;
+    const row = server.state.installs.get(cfg.install_id);
+    expect(row?.pending_suggested_username).toBe("nimbus");
+    expect(row?.pending_suggested_display_name).toBe("Nimbus");
+  });
+
   it("zmLinkPoll returns approved with the reused account's identity (created=false)", async () => {
     await zmLink({ ideName: "t" });
     expect(await zmLinkPoll()).toEqual({ status: "pending" });

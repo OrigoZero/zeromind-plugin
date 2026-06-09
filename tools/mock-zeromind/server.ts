@@ -12,6 +12,8 @@ export type InstallRow = {
   pending_code?: { user_code: string; expires_at: number };
   /** Username the agent suggested for itself, carried on the pending code. */
   pending_suggested_username?: string;
+  /** Display name the agent suggested for itself, carried on the pending code. */
+  pending_suggested_display_name?: string;
   /** Whether the last approval minted a fresh account (vs reused one). */
   linked_is_new?: boolean;
 };
@@ -125,13 +127,17 @@ export const buildServer = (state: MockState): Server =>
         if (!install || install.install_id !== linkCodesMatch[1]) {
           return json(res, 401, { error: "unauthorized" });
         }
-        const body = (await readJson(req)) as { suggested_username?: string };
+        const body = (await readJson(req)) as {
+          suggested_username?: string;
+          suggested_display_name?: string;
+        };
         const userCode =
           randomBytes(2).toString("hex").toUpperCase() +
           "-" +
           randomBytes(2).toString("hex").toUpperCase();
         install.pending_code = { user_code: userCode, expires_at: Date.now() + 600_000 };
         install.pending_suggested_username = body.suggested_username;
+        install.pending_suggested_display_name = body.suggested_display_name;
         return json(res, 200, {
           user_code: userCode,
           verification_url: "http://localhost/link",

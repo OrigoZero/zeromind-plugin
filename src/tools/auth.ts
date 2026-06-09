@@ -95,13 +95,18 @@ const approvedIdentity = (s: {
 export const zmLink = async (opts: {
   ideName: string;
   username?: string;
+  display_name?: string;
 }): Promise<LinkResult> => {
   const cfg = await ensureRegistered({ ideName: opts.ideName });
   const s = await pollLinkStatus(cfg);
   if (s.status === "approved") {
     return { status: "approved", ...approvedIdentity(s) };
   }
-  const code = await startDeviceCode(cfg, opts.username?.trim() || undefined);
+  const code = await startDeviceCode(
+    cfg,
+    opts.username?.trim() || undefined,
+    opts.display_name?.trim() || undefined,
+  );
   return { status: "pending", ...code };
 };
 
