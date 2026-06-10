@@ -62,6 +62,49 @@ Claude Code users get the install bundled (server + skills) via the plugin marke
 
 Any MCP-capable harness we haven't custom-crafted for can still use the plugin — see [`ide/README.md`](ide/README.md#generic-mcp-fallback) for the generic stdio MCP wiring. Hermes Agent currently falls here too (it generates its own skills rather than loading user-authored ones).
 
+## Pointing the plugin at a local / self-hosted ZeroMind
+
+Every backend URL the plugin uses is derived from one environment variable:
+
+| Variable | Default | What it controls |
+|---|---|---|
+| `ZEROMIND_ISSUER` | `https://origozero.ai` | Base for **all** REST calls (`/v1/installs/*`, `/v1/me/worlds`, `/v1/worlds`, the content/social surface) and for the bridge websocket URL, which is derived as `issuer.replace(/^http/, "ws")` — so `http://` → `ws://` and `https://` → `wss://` automatically. Also used to build `/edit/<guid>` world links. |
+| `ZEROMIND_BRIDGE_URL` | *(derived from issuer)* | Optional override for the bridge websocket origin only, e.g. `ws://127.0.0.1:3003`. The plugin appends `/v1/bridge?role=ide`. Only needed when the bridge lives on a different origin than the REST API. |
+| `ZEROMIND_CONFIG_DIR` | `~/.config/zeromind` (XDG) | Where `install.json` (the per-install `install_id`/`install_secret` identity) is stored. Point it somewhere separate (e.g. `~/.config/zeromind-local`) so your local backend gets a **fresh install identity** instead of replaying credentials registered against prod. |
+
+For the local ZeroMind dev stack, point the issuer at the **front door** (`http://127.0.0.1:3003`), **not** the bare API on `:3001` — the front door proxies the `/v1` REST surface *and* the `/v1/bridge` websocket *and* serves the web app (including the `/link` approval page and the `/edit/<guid>` engine pages) on a single origin, which is what the plugin assumes.
+
+```jsonc
+// .mcp.json
+{
+  "mcpServers": {
+    "zeromind-local": {
+      "command": "npx",
+      "args": ["-y", "@origozero/zeromind"],
+      "env": {
+        "ZEROMIND_ISSUER": "http://127.0.0.1:3003",
+        "ZEROMIND_CONFIG_DIR": "/home/you/.config/zeromind-local"
+      }
+    }
+  }
+}
+```
+
+Or with the Claude Code CLI:
+
+```bash
+claude mcp add zeromind-local \
+  --env ZEROMIND_ISSUER=http://127.0.0.1:3003 \
+  --env ZEROMIND_CONFIG_DIR=$HOME/.config/zeromind-local \
+  -- npx -y @origozero/zeromind
+```
+
+Notes:
+
+- The device-code **link approval flow happens at `<issuer>/link`** — for a local stack that's `http://127.0.0.1:3003/link`. The agent-facing manual text (`src/instructions.ts` / `src/prompts.ts`) intentionally hardcodes the production `https://origozero.ai/link` URL; when running against a local backend, open your local `/link` page instead.
+- Plain `http://` issuers work end-to-end: REST goes through `fetch` and the bridge derives `ws://` (no TLS-only assumptions, no cookies — auth is a Bearer header on every request and on the websocket upgrade).
+- `ZEROMIND_NPM_REGISTRY` (update check) is independent of the backend and does not need to change.
+
 ## Status
 
 v0.1.0 — feature-complete against the in-repo mock ZeroMind server. End-to-end (stdio MCP) tested. Production use against the live `origozero.ai` depends on:
