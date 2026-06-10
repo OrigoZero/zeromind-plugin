@@ -37,18 +37,31 @@ const buildExpr = (source: WatchSource): string => {
   throw new Error("buildExpr expects expr or status_field");
 };
 
-const unwrapEngineValue = (result: unknown): unknown => {
-  // engine.execute commonly returns `{ value: <user-return> }`; unwrap one
-  // level so the agent can write `matcher: { equals: 'finished' }` against a
-  // Luau `return 'finished'`. Only unwrap when `value` is the sole key.
-  if (
-    result &&
-    typeof result === "object" &&
-    !Array.isArray(result) &&
-    "value" in (result as object) &&
-    Object.keys(result as object).length === 1
-  ) {
-    return (result as { value: unknown }).value;
+export const unwrapEngineValue = (result: unknown): unknown => {
+  // Unwrap the engine's execute response down to the script's return value so
+  // the agent can write `matcher: { equals: 'finished' }` against a Luau
+  // `return 'finished'`. Two wire shapes exist:
+  //
+  // 1. Envelope (engines from zero PR #3941 onward): execute ALWAYS returns
+  //    `{ result: <user-return>, logs?: [...], diagnostics?: [...],
+  //       state: {...} }`. Unwrap `result` ONLY when at least one marker key
+  //    (`state` / `logs` / `diagnostics`) is present — a script returning its
+  //    own `{ result = ... }` table without markers must NOT be unwrapped.
+  //    (Mirrors `unwrap_execute_envelope` in zero's
+  //    crates/zero_proxy_mcp/src/envelope.rs.)
+  // 2. Legacy `{ value: <user-return> }` with `value` as the sole key
+  //    (pre-envelope engines). Kept for backward compatibility.
+  if (result && typeof result === "object" && !Array.isArray(result)) {
+    const obj = result as Record<string, unknown>;
+    if (
+      "result" in obj &&
+      ("state" in obj || "logs" in obj || "diagnostics" in obj)
+    ) {
+      return obj.result;
+    }
+    if ("value" in obj && Object.keys(obj).length === 1) {
+      return obj.value;
+    }
   }
   return result;
 };

@@ -124,7 +124,7 @@ const TOPIC_TOOLS = `# Tool reference
 - \`world.disconnect\`.
 
 ## Engine (need a connected world)
-- \`execute { code }\` — Luau snippet in the engine.
+- \`execute { code }\` — Luau snippet in the engine. Success responses are the envelope \`{ result, logs?, diagnostics?, state }\`; \`state\` = \`{ mode, paused, timeScale, activeLayer, activeScene, world }\` — read it instead of guessing engine mode/pause. Long scripts promote to \`{ status: "running", taskId, state }\`.
 - \`guides { path?, query?, list? }\` — engine docs. \`guides()\` (no args) first after every \`world.connect\`.
 - \`capture { pass?, layers?, width?, height?, format? }\` — screenshot, base64 PNG.
 - \`read_file\` / \`write_file\` / \`edit_file\` — engine VFS at \`/zero/...\`.

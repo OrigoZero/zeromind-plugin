@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WatchTools, fireFilePathFor } from "../src/tools/watch.js";
+import { WatchTools, fireFilePathFor, unwrapEngineValue } from "../src/tools/watch.js";
 import type { EngineTools } from "../src/tools/engine.js";
 import type { WatchEvent } from "../src/watch.js";
 
@@ -325,6 +325,107 @@ describe("WatchTools — file-based wake-up channel", () => {
     await wait(60);
     expect(failNotify).toHaveBeenCalled();
     expect(existsSync(res.fire_path)).toBe(true);
+    tools.shutdown();
+  });
+});
+
+// Engines from zero PR #3941 onward wrap every execute success in the
+// structured envelope `{ result, logs?, diagnostics?, state }`. The poll path
+// must match against the inner `result`, never the envelope object — and a
+// script returning its OWN `{ result = ... }` table (no marker keys) must
+// pass through un-unwrapped.
+describe("unwrapEngineValue — execute response envelope", () => {
+  it("unwraps the state-marked envelope to the inner result", () => {
+    expect(
+      unwrapEngineValue({ result: "finished", state: { mode: "edit", paused: true } }),
+    ).toBe("finished");
+  });
+
+  it("unwraps with logs/diagnostics markers too", () => {
+    expect(unwrapEngineValue({ result: 7, logs: ["[INFO] hi"] })).toBe(7);
+    expect(
+      unwrapEngineValue({ result: 7, diagnostics: [{ severity: "warning" }] }),
+    ).toBe(7);
+  });
+
+  it("a Luau `return nil` envelope unwraps to null (non_nil must NOT match)", () => {
+    const inner = unwrapEngineValue({ result: null, state: { mode: "play" } });
+    expect(inner).toBeNull();
+  });
+
+  it("does NOT unwrap an object with a result key but no marker keys", () => {
+    const own = { result: 1, other: 2 };
+    expect(unwrapEngineValue(own)).toBe(own);
+  });
+
+  it("legacy sole-key { value } still unwraps (pre-envelope engines)", () => {
+    expect(unwrapEngineValue({ value: "finished" })).toBe("finished");
+    // value + another key is NOT the legacy shape — pass through.
+    const notLegacy = { value: 1, extra: true };
+    expect(unwrapEngineValue(notLegacy)).toBe(notLegacy);
+  });
+
+  it("bare values pass through", () => {
+    expect(unwrapEngineValue("finished")).toBe("finished");
+    expect(unwrapEngineValue(42)).toBe(42);
+    expect(unwrapEngineValue(undefined)).toBeUndefined();
+  });
+});
+
+describe("WatchTools — envelope-shaped engine responses", () => {
+  let fireDir: string;
+  const fastRegistry = { minPollMs: 5, defaultPollMs: 10, defaultTimeoutMs: 1_000 };
+
+  beforeEach(() => {
+    fireDir = mkdtempSync(join(tmpdir(), "zeromind-fire-"));
+  });
+
+  afterEach(() => {
+    rmSync(fireDir, { recursive: true, force: true });
+  });
+
+  it("equals matcher fires against the envelope's inner result", async () => {
+    const fake = makeFakeEngine();
+    let n = 0;
+    fake.setExecuteHandler(() => {
+      n++;
+      return {
+        result: n >= 3 ? "finished" : "running",
+        state: { mode: "edit", paused: true, timeScale: 1.0 },
+      };
+    });
+    const tools = new WatchTools(fake.engine, () => undefined, {
+      fireDir,
+      registry: fastRegistry,
+    });
+    const res = tools.watch({
+      status_field: "tasks.status(42)",
+      matcher: { equals: "finished" },
+    });
+    await wait(150);
+    const payload = JSON.parse(readFileSync(res.fire_path, "utf8")) as WatchEvent;
+    expect(payload.state).toBe("fired");
+    expect((payload as Extract<WatchEvent, { state: "fired" }>).value).toBe("finished");
+    tools.shutdown();
+  });
+
+  it("non_nil does NOT false-positive on an envelope wrapping a nil return", async () => {
+    const fake = makeFakeEngine();
+    fake.setExecuteHandler(() => ({ result: null, state: { mode: "edit" } }));
+    const tools = new WatchTools(fake.engine, () => undefined, {
+      fireDir,
+      registry: fastRegistry,
+    });
+    const res = tools.watch({
+      expr: "return maybeValue()",
+      matcher: { non_nil: true },
+      timeout_ms: 60,
+    });
+    await wait(150);
+    const payload = JSON.parse(readFileSync(res.fire_path, "utf8")) as WatchEvent;
+    // Must time out — the inner value is nil even though the envelope object
+    // itself is non-null.
+    expect(payload.state).toBe("timeout");
     tools.shutdown();
   });
 });
