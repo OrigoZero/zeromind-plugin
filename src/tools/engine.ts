@@ -19,6 +19,13 @@ export class EngineTools {
     private world: WorldTools,
   ) {}
 
+  // Engines from zero PR #3941 onward return the structured envelope
+  // `{ result: <user-return>, logs?: string[], diagnostics?: [...],
+  //    state: { mode, paused, timeScale, activeLayer, activeScene, world } }`
+  // on success (a long-running script promotes to
+  // `{ status: "running", taskId, location, state }`). Older engines returned
+  // the bare value / `{ value }`. Consumers that match on the user's return
+  // value should unwrap via `unwrapEngineValue` (tools/watch.ts).
   execute(params: { code: string }): Promise<unknown> {
     return call(this.bridge, this.world, "execute", params);
   }
