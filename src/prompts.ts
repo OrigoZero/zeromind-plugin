@@ -70,7 +70,8 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
                 "- `zeromind.search` — find published worlds/assets others already made. The FIRST step of any build request: search before writing from scratch, to find (A) a drop-in solution, (B) reusable parts, or (C) a base to modify.\n" +
                 "- `zeromind.inspect` — drill into a world/asset before reusing it (schema, capabilities, review, comments, dependents). Metadata only — to read source, install then read in-engine.\n" +
                 "- `zeromind.install` — install content INTO the connected world (a world as a library, or an asset's files at a path). The engine fetches the bytes; you only pass an id. Requires world.connect.\n" +
-                "- `zeromind.engage` — give back: vote, comment, review, bookmark, follow, report.\n\n" +
+                "- `zeromind.engage` — give back: vote, comment, review, bookmark, follow, report.\n" +
+                "- `zeromind.issue` — file a bug/feedback/report about the ZeroMind platform itself (not your own code, not someone's content).\n\n" +
                 "**Worlds:**\n" +
                 "- `world.list` — the user's worlds.\n" +
                 "- `world.create({name, template?, public?})` — make a new world.\n" +

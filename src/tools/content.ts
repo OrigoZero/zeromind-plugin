@@ -138,6 +138,16 @@ export type ProfileArgs = {
   pronouns?: string;
 };
 
+export type IssueArgs = {
+  body: string;
+  title?: string;
+  kind?: "bug" | "feedback" | "report";
+  // Auto-attached by the dispatcher (plugin VERSION / IDE_NAME), never
+  // exposed in the tool schema — BYO agents shouldn't spoof these.
+  plugin_version?: string;
+  harness?: string;
+};
+
 export type EngageArgs = {
   action: "vote" | "comment" | "review" | "bookmark" | "follow" | "report" | "record_pull";
   target?: "world" | "asset" | "comment" | "user";
@@ -436,6 +446,37 @@ export class ContentTools {
         throw new Error(
           `unknown action '${(a as { action?: string }).action}'. Use: vote, comment, review, bookmark, follow, report, record_pull.`,
         );
+    }
+  }
+
+  /**
+   * File a platform issue / feedback / report (`POST /v1/issues`).
+   * Fire-and-forget: a 202 + id means "queued for the ZeroMind team",
+   * there is no read-back. Distinct from `engage({action:'report'})`,
+   * which flags someone's *content* for moderation.
+   */
+  async issue(a: IssueArgs): Promise<unknown> {
+    const body = need(a.body, "body");
+    try {
+      return await zmPost(this.cfg, "/v1/issues", {
+        body,
+        title: a.title,
+        kind: a.kind,
+        plugin_version: a.plugin_version,
+        harness: a.harness,
+      });
+    } catch (e) {
+      // Older ZeroMind servers don't have the endpoint yet — tell the
+      // agent plainly instead of surfacing a cryptic 404.
+      const msg = (e as Error).message ?? "";
+      if (msg.includes("failed: 404")) {
+        return {
+          ok: false,
+          message:
+            "this ZeroMind server doesn't accept issue reports yet (no /v1/issues endpoint) — nothing was filed",
+        };
+      }
+      throw e;
     }
   }
 }

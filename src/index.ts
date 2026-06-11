@@ -28,6 +28,7 @@ import { loadConfig } from "./config.js";
 import { withTimeout, toolTimeoutMs, TOOL_TIMEOUT_BUFFER_MS } from "./timeout.js";
 import { toToolContent } from "./mcp-result.js";
 import { promptDefs, getPrompt } from "./prompts.js";
+import { toolContext } from "./zeromind-client.js";
 import { VERSION } from "./update.js";
 import {
   INSTRUCTIONS,
@@ -212,6 +213,34 @@ const toolDefs = [
         resolved_commit: { type: "string", description: "record_pull: pinned commit of the asset's world." },
       },
       required: ["action"],
+    },
+  },
+  {
+    name: "zeromind.issue",
+    description:
+      "File an issue, feedback, or a report about the ZeroMind PLATFORM itself: an API call that " +
+      "failed in an unexpected/contradictory way, installed library content that's broken or won't " +
+      "load, docs/guides/tool descriptions that misled you, or a capability you needed and couldn't " +
+      "find. Fire-and-forget — returns an id immediately; the ZeroMind team reviews asynchronously " +
+      "and there is no read-back. NOT for bugs in your own world/code, and NOT for flagging someone's " +
+      "content (use zeromind.engage action:'report' for content moderation). Plugin version and " +
+      "harness are attached automatically. Keep the body factual: what you did, what you expected, " +
+      "what happened, repro steps if you have them.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        body: {
+          type: "string",
+          description: "What happened / what you expected / repro steps. Required, ≤16 KB.",
+        },
+        title: { type: "string", description: "One-line summary, ≤200 chars." },
+        kind: {
+          type: "string",
+          enum: ["bug", "feedback", "report"],
+          description: "Default 'feedback'. 'bug' = something is broken; 'report' = a longer write-up (test/eval results, structured findings).",
+        },
+      },
+      required: ["body"],
     },
   },
   {
@@ -470,6 +499,14 @@ const dispatch = async (
       return ensureContent().engage(
         args as { action: "vote" | "comment" | "review" | "bookmark" | "follow" | "report" | "record_pull" },
       );
+    case "zeromind.issue":
+      return ensureContent().issue({
+        body: args.body as string,
+        title: args.title as string | undefined,
+        kind: args.kind as "bug" | "feedback" | "report" | undefined,
+        plugin_version: VERSION,
+        harness: IDE_NAME,
+      });
     case "zeromind.profile":
       return ensureContent().profile(
         args as { action?: "get" | "set"; display_name?: string; bio?: string; pronouns?: string },
@@ -716,15 +753,21 @@ const main = async (): Promise<void> => {
     const name = req.params.name;
     const args = (req.params.arguments ?? {}) as Record<string, unknown>;
     try {
+      // toolContext carries the tool name into every REST call made on
+      // behalf of this dispatch (sent as `x-zeromind-tool` for backend
+      // telemetry). AsyncLocalStorage keeps attribution correct even
+      // when the IDE issues tool calls concurrently.
       const result = await withTimeout(
-        dispatch(
-          name,
-          args,
-          ensureWorld,
-          ensureEngine,
-          ensureContent,
-          ensureWatch,
-          resetClients,
+        toolContext.run(name, () =>
+          dispatch(
+            name,
+            args,
+            ensureWorld,
+            ensureEngine,
+            ensureContent,
+            ensureWatch,
+            resetClients,
+          ),
         ),
         timeoutBudget(name, args),
         name,
