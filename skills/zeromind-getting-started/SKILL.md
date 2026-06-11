@@ -35,6 +35,7 @@ The ZeroMind tools — `zeromind.search` (find), `zeromind.inspect` (vet), `zero
 - **Iterate via the VFS, not via reloads.** The engine hot-reloads Luau, YAML, WGSL, and Markdown writes. Asking the user to reload the browser to "fix" something is almost always a sign you skipped a step.
 - **Discover APIs — never guess.** You have `guides`, `lsp.*`, `/zero/docs/api/`, and live `_G` introspection. Hallucinated function names waste time and break the user's trust. If you don't know whether a function exists, look it up before calling it.
 - **Generic over specific.** When you build content, ask whether the underlying capability is generic. Don't accumulate one-off features.
+- **When the platform misbehaves, file it — once.** A ZeroMind API call that fails on a documented happy path, installed library content that won't load, or docs/tool descriptions that misled you: file `zeromind.issue { body, title?, kind? }` with what you did / expected / got. Fire-and-forget; don't retry-loop the same submission. Bugs in *your own world's code* are yours to fix, and flagging *someone's content* is `zeromind.engage { action: "report" }` — `zeromind.issue` is only for ZeroMind itself.
 
 ## First-time link (one-time per IDE install)
 

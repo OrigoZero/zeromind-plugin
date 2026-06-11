@@ -3,6 +3,9 @@ import { startMockServer, type MockServerHandle } from "../tools/mock-zeromind/i
 import { withTmpConfigDir } from "./helpers/tmp-config.js";
 import { ensureRegistered } from "../src/install.js";
 import { ContentTools, buildInstallLuau } from "../src/tools/content.js";
+import { toolContext } from "../src/zeromind-client.js";
+import { VERSION } from "../src/update.js";
+import { createServer } from "node:http";
 import type { InstallConfig } from "../src/config.js";
 
 describe("ZeroMind tools", () => {
@@ -263,6 +266,73 @@ describe("ZeroMind tools", () => {
 
     it("requires a world or a guid when neither is given", () => {
       expect(() => buildInstallLuau({})).toThrow(/pass `world`.*or `guid`/);
+    });
+  });
+
+  describe("issue", () => {
+    beforeEach(() => {
+      server.state.issues.length = 0;
+    });
+
+    it("posts to /v1/issues with auto-attached context and surfaces the id", async () => {
+      const r = (await hm.issue({
+        body: "search returned html instead of json",
+        title: "search broke",
+        kind: "bug",
+        plugin_version: VERSION,
+        harness: "test-ide",
+      })) as { id: string; status: string };
+      expect(r.status).toBe("accepted");
+      expect(r.id).toMatch(/^01MOCKISSUE/);
+
+      expect(server.state.issues).toHaveLength(1);
+      const sub = server.state.issues[0];
+      expect(sub.body).toMatchObject({
+        body: "search returned html instead of json",
+        title: "search broke",
+        kind: "bug",
+        plugin_version: VERSION,
+        harness: "test-ide",
+      });
+    });
+
+    it("requires body", async () => {
+      await expect(hm.issue({ body: "" } as never)).rejects.toThrow(/body/);
+    });
+
+    it("sends x-zeromind-client on every call and x-zeromind-tool inside a dispatch context", async () => {
+      await toolContext.run("zeromind.issue", () => hm.issue({ body: "ctx test" }));
+      const sub = server.state.issues[0];
+      expect(sub.headers["x-zeromind-client"]).toBe(`zeromind-plugin/${VERSION}`);
+      expect(sub.headers["x-zeromind-tool"]).toBe("zeromind.issue");
+
+      // Outside a dispatch context the tool header is simply absent.
+      await hm.issue({ body: "no ctx" });
+      expect(server.state.issues[1].headers["x-zeromind-client"]).toBe(
+        `zeromind-plugin/${VERSION}`,
+      );
+      expect(server.state.issues[1].headers["x-zeromind-tool"]).toBeUndefined();
+    });
+
+    it("degrades gracefully against a server without the endpoint (404)", async () => {
+      const bare = createServer((_req, res) => {
+        res.writeHead(404, { "content-type": "text/plain" });
+        res.end("not found");
+      });
+      await new Promise<void>((resolve) => bare.listen(0, "127.0.0.1", resolve));
+      const addr = bare.address() as { port: number };
+      const prev = process.env.ZEROMIND_ISSUER;
+      process.env.ZEROMIND_ISSUER = `http://127.0.0.1:${addr.port}`;
+      try {
+        const r = (await hm.issue({ body: "old server" })) as { ok: boolean; message: string };
+        expect(r.ok).toBe(false);
+        expect(r.message).toMatch(/doesn't accept issue reports yet/);
+      } finally {
+        process.env.ZEROMIND_ISSUER = prev;
+        await new Promise<void>((resolve, reject) =>
+          bare.close((e) => (e ? reject(e) : resolve())),
+        );
+      }
     });
   });
 });

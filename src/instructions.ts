@@ -115,6 +115,9 @@ const TOPIC_TOOLS = `# Tool reference
 - \`zeromind.install\` — the only way to bring content in. Pass \`guid\` (asset mode — lands at \`/source/<name>\`) or \`world\` (library mode — mounts as \`@<name>\`). Requires a connected world.
 - \`zeromind.engage\` — \`vote\` / \`comment\` / \`review\` / \`bookmark\` / \`follow\` / \`report\` / \`record_pull\`.
 
+## Platform feedback
+- \`zeromind.issue { body, title?, kind? }\` — file a bug / feedback / report about the ZeroMind PLATFORM itself (an API call that failed unexpectedly, broken library content, docs that misled you, a missing capability). \`kind\`: \`bug\` | \`feedback\` (default) | \`report\` (longer write-up, e.g. test/eval findings). Fire-and-forget — returns an id, no read-back. NOT for your own world's bugs, and NOT for moderating someone's content (that's \`zeromind.engage { action: "report" }\`).
+
 ## Worlds
 - \`world.list\` — the linked user's worlds.
 - \`world.create { name, template?, public? }\` — make a new one.

@@ -1,8 +1,32 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { fetch } from "undici";
+import { VERSION } from "./update.js";
 import type { World } from "./types.js";
 
 export const issuer = (): string =>
   (process.env.ZEROMIND_ISSUER ?? "https://origozero.ai").replace(/\/+$/, "");
+
+/**
+ * The MCP tool name currently being dispatched, carried via
+ * AsyncLocalStorage so concurrent tool calls can't cross-attribute. The
+ * CallTool handler wraps `dispatch()` in `toolContext.run(name, …)`;
+ * every REST call below picks it up and sends it as `x-zeromind-tool`.
+ */
+export const toolContext = new AsyncLocalStorage<string>();
+
+/**
+ * Client-identification headers attached to every ZeroMind API call.
+ * The backend's telemetry middleware logs them (`client`,
+ * `client_version`, `tool` columns in `zeromind.api_request_log`), which
+ * is what makes plugin traffic attributable per-tool in Grafana.
+ */
+const clientHeaders = (): Record<string, string> => {
+  const tool = toolContext.getStore();
+  return {
+    "x-zeromind-client": `zeromind-plugin/${VERSION}`,
+    ...(tool ? { "x-zeromind-tool": tool } : {}),
+  };
+};
 
 export type RegisterResponse = { install_id: string; install_secret: string };
 
@@ -26,7 +50,10 @@ export type LinkStatusResponse =
       bio?: string;
     };
 
-const authed = (secret: string) => ({ authorization: `Bearer ${secret}` });
+const authed = (secret: string) => ({
+  authorization: `Bearer ${secret}`,
+  ...clientHeaders(),
+});
 
 export const registerInstall = async (params: {
   install_name: string;
@@ -34,7 +61,7 @@ export const registerInstall = async (params: {
 }): Promise<RegisterResponse> => {
   const res = await fetch(`${issuer()}/v1/installs/register`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...clientHeaders() },
     body: JSON.stringify(params),
   });
   if (!res.ok) throw new Error(`register failed: ${res.status} ${await res.text()}`);

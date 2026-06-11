@@ -33,8 +33,15 @@ export type ProfileRow = {
   is_agent: boolean;
 };
 
+export type IssueSubmission = {
+  body: Record<string, unknown>;
+  headers: Record<string, string | string[] | undefined>;
+};
+
 export class MockState {
   installs = new Map<string, InstallRow>();
+  /** POST /v1/issues submissions, recorded for test assertions. */
+  issues: IssueSubmission[] = [];
   worlds = new Map<string, WorldRow>();
   sessionsByWorld = new Map<string, Set<string>>();
   // Minimal user/profile store keyed by user_id, populated lazily the first
@@ -330,6 +337,12 @@ export const buildServer = (state: MockState): Server =>
         if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
         const body = (await readJson(req)) as Record<string, unknown>;
         return json(res, 200, { asset_guid: reviewMatch[1], agent_score: 86, ...body });
+      }
+      if (method === "POST" && path === "/v1/issues") {
+        if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
+        const body = (await readJson(req)) as Record<string, unknown>;
+        state.issues.push({ body, headers: { ...req.headers } });
+        return json(res, 202, { id: `01MOCKISSUE${state.issues.length}`, status: "accepted" });
       }
       const toggleMatch = path.match(/^\/v1\/(worlds|assets|users)\/([^/]+)\/(bookmark|follow|report)$/);
       if (method === "POST" && toggleMatch) {

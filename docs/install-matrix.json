@@ -1,6 +1,6 @@
 {
   "$schema": "./install-matrix.schema.json",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "generated_from": "src/cli-install.ts",
   "description": "Per-harness install instructions for the ZeroMind 'bring your own agent' screen. Each entry powers one row of the harness dropdown: a display name, a one-liner the user can copy-paste, prerequisites, and post-install notes. The `primary` install is what the screen highlights; `alternatives` are the harness-native paths (marketplace, deeplink, plugin browser) that exist alongside the one-liner.",
   "harnesses": [
@@ -10,7 +10,9 @@
       "category": "cli-agent",
       "icon_hint": "claude",
       "tools_available": true,
-      "prerequisites": ["Node.js 18+"],
+      "prerequisites": [
+        "Node.js 18+"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install claude",
@@ -37,7 +39,10 @@
       "category": "ide",
       "icon_hint": "cursor",
       "tools_available": true,
-      "prerequisites": ["Node.js 18+", "Cursor 3.0+ for the plugin path"],
+      "prerequisites": [
+        "Node.js 18+",
+        "Cursor 3.0+ for the plugin path"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install cursor",
@@ -66,7 +71,9 @@
       "category": "cli-agent",
       "icon_hint": "openai",
       "tools_available": true,
-      "prerequisites": ["Node.js 18+"],
+      "prerequisites": [
+        "Node.js 18+"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install codex",
@@ -89,7 +96,9 @@
       "category": "cli-agent",
       "icon_hint": "google",
       "tools_available": true,
-      "prerequisites": ["Node.js 18+"],
+      "prerequisites": [
+        "Node.js 18+"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install gemini",
@@ -112,7 +121,9 @@
       "category": "cli-agent",
       "icon_hint": "sst",
       "tools_available": true,
-      "prerequisites": ["Node.js 18+ or Bun"],
+      "prerequisites": [
+        "Node.js 18+ or Bun"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install opencode",
@@ -129,12 +140,15 @@
       "category": "ide-extension",
       "icon_hint": "cline",
       "tools_available": true,
-      "prerequisites": ["VS Code or JetBrains IDE", "Node.js 18+"],
+      "prerequisites": [
+        "VS Code or JetBrains IDE",
+        "Node.js 18+"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install cline",
         "label": "Run in your project root",
-        "post_install_note": "Open Cline's MCP Servers UI (Command Palette → 'Cline: MCP Servers') and add the JSON block shown after install."
+        "post_install_note": "Open Cline's MCP Servers UI (Command Palette \u2192 'Cline: MCP Servers') and add the JSON block shown after install."
       },
       "alternatives": [
         {
@@ -152,7 +166,10 @@
       "category": "ide-extension",
       "icon_hint": "continue",
       "tools_available": true,
-      "prerequisites": ["VS Code or JetBrains IDE", "Node.js 18+"],
+      "prerequisites": [
+        "VS Code or JetBrains IDE",
+        "Node.js 18+"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install continue",
@@ -175,7 +192,9 @@
       "category": "ide",
       "icon_hint": "codeium",
       "tools_available": true,
-      "prerequisites": ["Node.js 18+"],
+      "prerequisites": [
+        "Node.js 18+"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install windsurf",
@@ -192,12 +211,14 @@
       "category": "ide",
       "icon_hint": "zed",
       "tools_available": true,
-      "prerequisites": ["Node.js 18+"],
+      "prerequisites": [
+        "Node.js 18+"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install zed",
         "label": "Run in your project root",
-        "post_install_note": "Restart Zed. Command Palette → 'zed: extensions' confirms ZeroMind is loaded."
+        "post_install_note": "Restart Zed. Command Palette \u2192 'zed: extensions' confirms ZeroMind is loaded."
       },
       "alternatives": [
         {
@@ -215,7 +236,9 @@
       "category": "personal-agent",
       "icon_hint": "openclaw",
       "tools_available": false,
-      "prerequisites": ["Node.js 18+"],
+      "prerequisites": [
+        "Node.js 18+"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install openclaw",
@@ -239,7 +262,10 @@
       "icon_hint": "aider",
       "tools_available": false,
       "tools_note": "Aider does not support MCP. Only the operating manual reaches the agent (no zeromind.* tool calls available).",
-      "prerequisites": ["Python 3.10+ (Aider)", "Node.js 18+ for the install command"],
+      "prerequisites": [
+        "Python 3.10+ (Aider)",
+        "Node.js 18+ for the install command"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install aider",
@@ -257,7 +283,11 @@
       "icon_hint": "github",
       "tools_available": true,
       "tools_note": "Tools are only callable in VS Code's Copilot agent mode (not Copilot Chat).",
-      "prerequisites": ["VS Code", "GitHub Copilot subscription", "Node.js 18+"],
+      "prerequisites": [
+        "VS Code",
+        "GitHub Copilot subscription",
+        "Node.js 18+"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install copilot",
@@ -274,7 +304,9 @@
       "category": "personal-agent",
       "icon_hint": "goose",
       "tools_available": true,
-      "prerequisites": ["Node.js 18+"],
+      "prerequisites": [
+        "Node.js 18+"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install goose",
@@ -297,7 +329,11 @@
       "category": "ide-extension",
       "icon_hint": "jetbrains",
       "tools_available": true,
-      "prerequisites": ["JetBrains IDE", "Junie plugin", "Node.js 18+"],
+      "prerequisites": [
+        "JetBrains IDE",
+        "Junie plugin",
+        "Node.js 18+"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install junie",
@@ -314,7 +350,9 @@
       "category": "ide-extension",
       "icon_hint": "sourcegraph",
       "tools_available": true,
-      "prerequisites": ["Node.js 18+"],
+      "prerequisites": [
+        "Node.js 18+"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install amp",
@@ -331,7 +369,10 @@
       "category": "personal-agent",
       "icon_hint": "nous",
       "tools_available": true,
-      "prerequisites": ["Hermes Agent installed", "Node.js 18+"],
+      "prerequisites": [
+        "Hermes Agent installed",
+        "Node.js 18+"
+      ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install hermes",
@@ -355,12 +396,15 @@
       "icon_hint": "mcp",
       "tools_available": true,
       "tools_note": "Generic fallback for any MCP-capable client not listed above. The agent gets the operating manual via MCP `instructions` (Claude Code is confirmed to honor this; others vary) + the `zeromind.help` tool on demand + a `getting_started` block returned by the first `auth_status` call.",
-      "prerequisites": ["Node.js 18+", "an MCP-capable client"],
+      "prerequisites": [
+        "Node.js 18+",
+        "an MCP-capable client"
+      ],
       "primary_install": {
         "kind": "config-snippet",
         "label": "Add as a stdio MCP server",
         "snippet": "{\n  \"mcpServers\": {\n    \"zeromind\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@origozero/zeromind\"],\n      \"env\": { \"ZEROMIND_IDE_NAME\": \"your-client\" }\n    }\n  }\n}",
-        "post_install_note": "Whatever the client calls its MCP-server config file — drop this in."
+        "post_install_note": "Whatever the client calls its MCP-server config file \u2014 drop this in."
       },
       "alternatives": [],
       "native_channel": "stdio MCP server",
