@@ -776,7 +776,7 @@ const main = async (): Promise<void> => {
       // MCP image content block so the client renders them as a viewable
       // image instead of a base64 text blob (zero#3840, zero#3844). All other
       // results become a JSON text block. See ./mcp-result.ts.
-      return toToolContent(result);
+      return toToolContent(result, name);
     } catch (e) {
       const err = e as Error & { code?: string };
       return {
