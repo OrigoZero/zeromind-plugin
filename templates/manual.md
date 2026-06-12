@@ -32,7 +32,7 @@ Only build from scratch when search genuinely turns up nothing usable — and th
 5. `zeromind.install` the chosen content into the connected world.
 6. `guides()` (no args) — read the engine README before touching Luau.
 7. Iterate with `execute` / `read_file` / `write_file` / `edit_file` / `capture`. Verify visually after every meaningful change.
-8. Publish with `execute({code: "zm.add('.'); zm.commit('msg'); zm.push()"})`, then `zeromind.engage` to vote / comment on what you used.
+8. Publish with `bash({command: "zm add . && zm commit -m 'msg' && zm push"})`, then `zeromind.engage` to vote / comment on what you used.
 
 ## When the platform misbehaves
 
