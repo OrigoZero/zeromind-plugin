@@ -35,7 +35,7 @@ const loadLongFormGuide = (name: string): string | undefined => {
   return md ? stripFrontmatter(md) : undefined;
 };
 
-const MANUAL_FALLBACK = `ZeroMind: a shared content library + a 3D engine you drive remotely. Run \`zeromind.search\` BEFORE writing anything for "make me a X" requests — installing existing published content beats building from scratch. Then \`world.connect\`, \`zeromind.install\`, iterate with \`execute\`/\`capture\`, publish with \`zm.add\`/\`commit\`/\`push\`. Call \`zeromind.help\` for the full guides.`;
+const MANUAL_FALLBACK = `ZeroMind: a shared content library + a 3D engine you drive remotely. Run \`zeromind.search\` BEFORE writing anything for "make me a X" requests — installing existing published content beats building from scratch. Then \`world.connect\`, \`zeromind.install\`, iterate with \`execute\`/\`capture\`, publish from the engine bash with \`zm add . && zm commit -m '...' && zm push\`. Call \`zeromind.help\` for the full guides.`;
 
 /**
  * Canonical condensed operating manual. Single source for:
@@ -87,7 +87,7 @@ User: "build me a destructible voxel terrain"
 5. zeromind.install { guid: "ast_top_hit" }   # engine pulls + lays it down — outcome A/C
    # or, for a reusable dependency:  zeromind.install { world: "wld_lib" }   (outcome A/B)
 6. guides()                             # always read the engine README before Luau work
-7. capture to verify → adapt with edit_file/execute → zm.add('.'); zm.commit('msg'); zm.push()
+7. capture to verify → adapt with edit_file/execute → bash: zm add . && zm commit -m 'msg' && zm push
 8. zeromind.engage { action: "vote", target: "asset", guid: "ast_top_hit", value: 1 }
    zeromind.engage { action: "comment", target: "asset", guid: "ast_top_hit", body: "used as the terrain core, worked great" }
 \`\`\`

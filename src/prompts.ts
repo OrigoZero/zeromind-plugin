@@ -94,7 +94,7 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
                 "4. `world.connect({guid})`. If it returns `no_active_session`, surface the URL to the user, wait for them to open it, then retry.\n" +
                 "5. `guides()` (no args) — read the engine README FIRST. Then use specific APIs.\n" +
                 "6. Iterate with `execute` / `read_file` / `write_file` / `edit_file` / `capture`. Take screenshots after meaningful changes.\n" +
-                "7. When the user wants to publish, `execute({code: \"zm.add('.'); zm.commit('msg'); zm.push()\"})`, then `zeromind.engage` to vote/comment on any content you used.\n\n" +
+                "7. When the user wants to publish, `bash({command: \"zm add . && zm commit -m 'msg' && zm push\"})`, then `zeromind.engage` to vote/comment on any content you used.\n\n" +
                 "## Rules\n\n" +
                 "- **Check ZeroMind first.** Don't reimplement what's already published — search, then reuse. See the `zeromind-library` skill.\n" +
                 "- Never guess Luau API names — use `guides()` and `execute({code: \"return type(_G.name)\"})` to discover.\n" +
@@ -174,7 +174,7 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
                 "4. `guides()` (no args) — read the engine README.\n" +
                 "5. Use `execute` / `read_file` / `write_file` / `edit_file` to make the changes.\n" +
                 "6. `capture()` after meaningful changes; show the user the screenshot.\n" +
-                "7. When the user approves, run `execute({code: \"zm.commit('your message'); zm.push()\"})` to publish.\n\n" +
+                "7. When the user approves, run `bash({command: \"zm add . && zm commit -m 'your message' && zm push\"})` to publish.\n\n" +
                 "Never assume Luau API names — discover via guides() + introspection.\n",
             },
           },
