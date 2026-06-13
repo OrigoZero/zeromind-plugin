@@ -51,6 +51,13 @@ describe("ZeroMind tools", () => {
       expect((await hm.search({ scope: "kinds" }) as { kinds: unknown[] }).kinds).toBeDefined();
     });
 
+    it("sends lean=true for assets and worlds scopes", async () => {
+      const a = (await hm.search({ scope: "assets", q: "x" })) as { received_lean?: boolean };
+      expect(a.received_lean).toBe(true);
+      const w = (await hm.search({ scope: "worlds", q: "x" })) as { received_lean?: boolean };
+      expect(w.received_lean).toBe(true);
+    });
+
     it("routes scope=similar with the seed asset in the path", async () => {
       const r = (await hm.search({ scope: "similar", asset_guid: "ast_seed" })) as {
         query_echo: { seed_asset: string };
