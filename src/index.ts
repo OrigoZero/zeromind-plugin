@@ -283,6 +283,23 @@ const toolDefs = [
     },
   },
   {
+    name: "world.fork",
+    description:
+      "Fork an existing world into your namespace — copy someone else's world as a starting point (GitHub-style). Pass `source` = the `world_guid` from `zeromind.search { scope: 'worlds' }` (a foreign world), or a name of one of your own worlds. The fork inherits the source's visibility (a fork of a public world is public — you can't privatise it). Optional `name` overrides the default \"<name>-fork\". Returns the new `world_guid`; follow with world.connect { guid, auto_launch: true } to open it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        source: {
+          type: "string",
+          description:
+            "The world_guid to fork (from zeromind.search scope=worlds), or a name of your own world.",
+        },
+        name: { type: "string", description: "Optional new name/title for the fork." },
+      },
+      required: ["source"],
+    },
+  },
+  {
     name: "world.open_in_browser",
     description:
       "Return the URL to open a world in the user's browser. Useful when you want to relay the URL to the user manually. For the seamless flow, prefer world.launch (opens it for them) or world.connect with auto_launch:true (opens + waits). Pass `name` (preferred — looked up via world.list) or `guid` (already-resolved).",
@@ -516,6 +533,10 @@ const dispatch = async (
     case "world.create":
       return (await ensureWorld()).w.create(
         args as { name: string; template?: string; public?: boolean },
+      );
+    case "world.fork":
+      return (await ensureWorld()).w.fork(
+        args as { source?: string; world?: string; guid?: string; name_or_guid?: string; name?: string },
       );
     case "world.open_in_browser":
       return (await ensureWorld()).w.openInBrowser(
