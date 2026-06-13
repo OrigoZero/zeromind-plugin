@@ -210,6 +210,9 @@ export class ContentTools {
           offset: a.offset,
           include_matched_chunks: a.include_matched_chunks,
           chunks_per_hit: a.chunks_per_hit,
+          // Scale-first: the agent gets the slim, differentiating projection;
+          // depth comes from zeromind.inspect. (Web omits this → rich shape.)
+          lean: true,
         });
       case "worlds":
         return zmGet(this.cfg, "/v1/discover/worlds", {
@@ -224,6 +227,7 @@ export class ContentTools {
           offset: a.offset,
           include_matched_chunks: a.include_matched_chunks,
           chunks_per_hit: a.chunks_per_hit,
+          lean: true,
         });
       case "both":
         return zmGet(this.cfg, "/v1/search", {
