@@ -47,6 +47,36 @@ describe("world tools", () => {
     }
   });
 
+  it("fork creates a new world owned by the caller, inheriting visibility", async () => {
+    const tmp = withTmpConfigDir();
+    setEnv(server, tmp.dir);
+    try {
+      const cfg = await ensureRegistered({ ideName: "t" });
+      server.forceApprove(cfg.install_id, "usr_fork");
+      const b = new Bridge(cfg);
+      await b.connect();
+      const tools = new WorldTools(cfg, b);
+
+      // Seed a source world to fork (its guid is what search returns).
+      const src = await tools.create({ name: "src-world", public: true });
+
+      const forked = await tools.fork({ source: src.guid, name: "my-fork" });
+      if ("error" in forked) throw new Error(`fork errored: ${forked.error}`);
+      expect(forked.world_guid).toBeDefined();
+      expect(forked.world_guid).not.toBe(src.guid);
+      expect(forked.bootstrapped).toBe(false);
+      expect(forked.source_guid).toBe(src.guid);
+
+      // The fork shows up in the caller's own world list.
+      const list = await tools.list();
+      expect(list.find((x) => x.guid === forked.world_guid)).toBeDefined();
+      await b.close();
+    } finally {
+      clearEnv();
+      tmp.cleanup();
+    }
+  });
+
   it("connect with no active session returns no_active_session + url", async () => {
     const tmp = withTmpConfigDir();
     setEnv(server, tmp.dir);

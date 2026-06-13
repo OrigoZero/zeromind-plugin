@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import type { InstallConfig } from "../config.js";
 import type { Bridge } from "../bridge.js";
 import type { World, SessionOpened, SessionClosed } from "../types.js";
-import { listWorlds, createWorld, issuer } from "../zeromind-client.js";
+import { listWorlds, createWorld, forkWorld, issuer } from "../zeromind-client.js";
 
 export type ConnectResult =
   | { ok: true; session_id: string }
@@ -51,6 +51,40 @@ export class WorldTools {
     public?: boolean;
   }): Promise<World> {
     return createWorld(this.cfg, params);
+  }
+
+  /**
+   * Fork an existing world into the caller's namespace. The source is
+   * typically a `world_guid` from `zeromind.search { scope: 'worlds' }`
+   * (a foreign public world); a bare name resolves only against your own
+   * worlds. The fork inherits the source's visibility (GitHub-style).
+   */
+  async fork(params: {
+    source?: string;
+    world?: string;
+    guid?: string;
+    name_or_guid?: string;
+    name?: string;
+  }): Promise<
+    | { world_guid: string; bootstrapped: boolean; source_guid: string; message: string }
+    | { error: string }
+  > {
+    const candidate = params.source ?? params.world;
+    const r = await this.resolveGuid({
+      guid: params.guid,
+      name_or_guid: params.name_or_guid ?? candidate,
+    });
+    if (r.error) return { error: r.error };
+    const srcGuid = r.guid!;
+    const forked = await forkWorld(this.cfg, srcGuid, { name: params.name });
+    return {
+      world_guid: forked.world_guid,
+      bootstrapped: forked.bootstrapped,
+      source_guid: srcGuid,
+      message:
+        `Forked into your namespace as ${forked.world_guid}. ` +
+        `Connect with world.connect { guid: "${forked.world_guid}", auto_launch: true }.`,
+    };
   }
 
   /** URL the user (or `world.launch`) opens in the browser to start a session. */

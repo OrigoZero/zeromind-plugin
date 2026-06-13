@@ -213,6 +213,30 @@ export const buildServer = (state: MockState): Server =>
         return json(res, 200, { world });
       }
 
+      // POST /v1/worlds/{guid}/fork — create a fork that inherits the
+      // source's visibility (GitHub-style). bootstrapped reflects whether
+      // the source had content; the mock has none, so it's false.
+      const forkMatch = path.match(/^\/v1\/worlds\/([^/]+)\/fork$/);
+      if (method === "POST" && forkMatch) {
+        const install = requireAuth(req, state);
+        if (!install || !install.linked) {
+          return json(res, 401, { error: "unauthorized" });
+        }
+        const srcGuid = forkMatch[1];
+        const src = state.worlds.get(srcGuid);
+        const body = (await readJson(req)) as { name?: string };
+        const guid = `wld_${randomBytes(8).toString("hex")}`;
+        const world: WorldRow = {
+          guid,
+          name: body.name ?? `${src ? src.name : srcGuid}-fork`,
+          is_public: src ? src.is_public : true, // inherit; default public
+          owner_user_id: install.user_id!,
+          created_by_install_id: install.install_id,
+        };
+        state.worlds.set(guid, world);
+        return json(res, 201, { world_guid: guid, bootstrapped: false });
+      }
+
       // ── ZeroMind: discovery (GET) ──────────────────────────────────────
       if (method === "GET" && path === "/v1/discover") {
         if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
