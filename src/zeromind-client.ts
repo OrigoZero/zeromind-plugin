@@ -134,6 +134,22 @@ export const createWorld = async (
   return body.world;
 };
 
+export const forkWorld = async (
+  cfg: { install_secret: string },
+  srcGuid: string,
+  params: { name?: string },
+): Promise<{ world_guid: string; bootstrapped: boolean }> => {
+  const reqBody: Record<string, unknown> = {};
+  if (params.name !== undefined) reqBody.name = params.name;
+  const res = await fetch(`${issuer()}/v1/worlds/${srcGuid}/fork`, {
+    method: "POST",
+    headers: { ...authed(cfg.install_secret), "content-type": "application/json" },
+    body: JSON.stringify(reqBody),
+  });
+  if (!res.ok) throw new Error(`world fork failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as { world_guid: string; bootstrapped: boolean };
+};
+
 // ── Generic ZeroMind REST helpers ──────────────────────────────────────────
 // The ZeroMind content surface (discovery + social) spans ~30 endpoints. Rather
 // than mint one client function per route — which would balloon this file and
