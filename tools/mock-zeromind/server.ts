@@ -254,12 +254,16 @@ export const buildServer = (state: MockState): Server =>
           total: 1,
           limit: Number(url.searchParams.get("limit") ?? 25),
           offset: Number(url.searchParams.get("offset") ?? 0),
+          received_lean: url.searchParams.get("lean") === "true",
           query_echo: { q: url.searchParams.get("q"), kind: url.searchParams.get("kind") },
         });
       }
       if (method === "GET" && path === "/v1/discover/worlds") {
         if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
-        return json(res, 200, { worlds: [{ world_guid: "wld_mock1", world_title: "Mock" }] });
+        return json(res, 200, {
+          worlds: [{ world_guid: "wld_mock1", world_title: "Mock" }],
+          received_lean: url.searchParams.get("lean") === "true",
+        });
       }
       if (method === "GET" && path === "/v1/search") {
         if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
