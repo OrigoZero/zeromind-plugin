@@ -127,6 +127,53 @@ export const upsertYamlListEntry = async (
   return existed && idx >= 0 ? "updated" : "written";
 };
 
+/** Set a single entry inside a YAML mapping at a top-level key, keyed by
+ *  name (e.g. `mcp_servers.zeromind = {...}`). This is the shape consumers
+ *  that iterate with `.items()` / `isinstance(dict)` expect — Hermes'
+ *  `mcp_servers` is one such map.
+ *
+ *  Creates the parent key as a mapping if missing, merges into a
+ *  pre-existing mapping, and self-heals a parent that an older build wrote
+ *  as a *list* of `{ name, ... }` entries by re-keying each item under its
+ *  own `name`. Idempotent: re-running upgrades the entry in place. */
+export const upsertYamlMapEntry = async (
+  path: string,
+  mapKey: string,
+  entryKey: string,
+  entry: Record<string, unknown>,
+): Promise<"written" | "updated"> => {
+  const YAML = await import("yaml");
+  ensureDir(path);
+  const existed = existsSync(path);
+  const text = existed ? readFileSync(path, "utf8") : "";
+  const doc = text.trim()
+    ? (YAML.parse(text) as Record<string, unknown>)
+    : {};
+  const raw = doc[mapKey];
+  // Normalize the parent to a mapping. An older build may have written it
+  // as a YAML list of `{ name, ... }` entries — re-key those under `name`
+  // (dropping the redundant `name` field) so the config is healed in place.
+  let map: Record<string, unknown>;
+  if (Array.isArray(raw)) {
+    map = {};
+    for (const item of raw as Array<Record<string, unknown>>) {
+      if (item && typeof item.name === "string") {
+        const { name, ...rest } = item;
+        map[name] = rest;
+      }
+    }
+  } else if (raw && typeof raw === "object") {
+    map = raw as Record<string, unknown>;
+  } else {
+    map = {};
+  }
+  const isUpdate = entryKey in map;
+  map[entryKey] = entry;
+  doc[mapKey] = map;
+  writeFileSync(path, YAML.stringify(doc));
+  return existed && isUpdate ? "updated" : "written";
+};
+
 /** Append a unique string value to a YAML list at a top-level key
  *  (used for Aider's `read: [...]`). */
 export const upsertYamlListString = async (

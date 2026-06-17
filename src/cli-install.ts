@@ -14,6 +14,7 @@ import {
   upsertTomlBlock,
   upsertYamlListEntry,
   upsertYamlListString,
+  upsertYamlMapEntry,
   writeOwnedFile,
 } from "./config-edit.js";
 
@@ -906,13 +907,15 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
     steps: [
       {
         // Hermes' canonical channel for an external MCP server is the
-        // mcp_servers.<name> block in ~/.hermes/config.yaml. Hermes'
-        // MCP client auto-discovers the tools — no Python wrapper needed.
+        // mcp_servers.<name> block in ~/.hermes/config.yaml. Hermes reads
+        // mcp_servers as a mapping keyed by server name (it iterates with
+        // .items()), so write a dict entry — NOT a list item — or the CLI
+        // crashes on startup. upsertYamlMapEntry also self-heals a config
+        // that an earlier build corrupted into the list shape.
         label: "MCP server in ~/.hermes/config.yaml",
         run: async () => {
           const path = expand("~/.hermes/config.yaml");
-          const status = await upsertYamlListEntry(path, "mcp_servers", {
-            name: "zeromind",
+          const status = await upsertYamlMapEntry(path, "mcp_servers", "zeromind", {
             command: SERVER_SPEC.command,
             args: SERVER_SPEC.args,
             env: { ZEROMIND_IDE_NAME: "hermes" },

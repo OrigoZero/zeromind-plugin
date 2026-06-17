@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { installHarness, listHarnesses, type Harness } from "../src/cli-install.js";
@@ -100,10 +100,19 @@ describe("cli-install: per-harness full native install", () => {
     const mcpStep = r.steps.find((s) => s.label.includes("config.yaml"))!;
     expect(mcpStep.status === "written" || mcpStep.status === "updated").toBe(true);
     expect(mcpStep.path).toBe(join(cwd, ".hermes/config.yaml"));
-    const cfg = readFileSync(mcpStep.path!, "utf8");
-    expect(cfg).toMatch(/mcp_servers:/);
-    expect(cfg).toMatch(/zeromind/);
-    expect(cfg).toMatch(/@origozero\/zeromind/);
+    // Hermes reads mcp_servers as a MAPPING keyed by server name (it
+    // iterates with `.items()`), so it must be a dict — never a YAML list,
+    // which crashes the CLI (issue #44).
+    const YAML = await import("yaml");
+    const cfg = YAML.parse(readFileSync(mcpStep.path!, "utf8")) as {
+      mcp_servers: Record<string, { command: string; args: string[]; env: unknown }>;
+    };
+    expect(Array.isArray(cfg.mcp_servers)).toBe(false);
+    expect(cfg.mcp_servers.zeromind.command).toBe("npx");
+    expect(cfg.mcp_servers.zeromind.args).toEqual(["-y", "@origozero/zeromind"]);
+    expect(cfg.mcp_servers.zeromind.env).toEqual({ ZEROMIND_IDE_NAME: "hermes" });
+    // The key carries the name — no redundant `name` field inside the entry.
+    expect("name" in cfg.mcp_servers.zeromind).toBe(false);
     // Optional plugin bundle with skills + slash command + context hook.
     const plugin = r.steps.find((s) => s.label.includes("Plugin bundle"))!;
     if (plugin.status === "written") {
@@ -115,6 +124,40 @@ describe("cli-install: per-harness full native install", () => {
         /def register\(ctx\)/,
       );
     }
+  });
+
+  it("Hermes install self-heals a config an older build corrupted into the list shape, preserving other servers", async () => {
+    const cwd = newTmp();
+    process.env.HOME = cwd;
+    const YAML = await import("yaml");
+    const cfgPath = join(cwd, ".hermes/config.yaml");
+    // Reproduce the 0.6.0 corruption: mcp_servers as a LIST, plus an
+    // unrelated server the user added that we must not drop.
+    mkdirSync(join(cwd, ".hermes"), { recursive: true });
+    writeFileSync(
+      cfgPath,
+      YAML.stringify({
+        mcp_servers: [
+          { name: "other", command: "other-cmd", args: ["x"] },
+          { name: "zeromind", command: "npx", args: ["-y", "stale"] },
+        ],
+      }),
+    );
+
+    const r = await installHarness({ harness: "hermes", cwd });
+    const mcpStep = r.steps.find((s) => s.label.includes("config.yaml"))!;
+    expect(mcpStep.status).toBe("updated");
+
+    const cfg = YAML.parse(readFileSync(cfgPath, "utf8")) as {
+      mcp_servers: Record<string, { command: string; args: string[] }>;
+    };
+    // Healed into a mapping…
+    expect(Array.isArray(cfg.mcp_servers)).toBe(false);
+    // …with the unrelated server re-keyed and preserved…
+    expect(cfg.mcp_servers.other.command).toBe("other-cmd");
+    expect("name" in cfg.mcp_servers.other).toBe(false);
+    // …and the zeromind entry upgraded to the canonical args.
+    expect(cfg.mcp_servers.zeromind.args).toEqual(["-y", "@origozero/zeromind"]);
   });
 
   it("Codex install copies the .codex-plugin bundle to the personal marketplace + writes config.toml fallback + AGENTS.md", async () => {
