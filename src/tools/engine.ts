@@ -40,6 +40,16 @@ export class EngineTools {
   ): Promise<unknown> {
     return call(this.bridge, this.world, "guides", params);
   }
+  search_tools(
+    params: {
+      query?: string;
+      category?: string;
+      tier?: string;
+      limit?: number;
+    } = {},
+  ): Promise<unknown> {
+    return call(this.bridge, this.world, "search_tools", params);
+  }
   capture(
     params: {
       pass?: string;

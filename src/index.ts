@@ -354,7 +354,7 @@ const toolDefs = [
   {
     name: "guides",
     description:
-      "Browse / search the engine guides. No args returns the README. Pass path for a specific guide, query for full-text search, or list:true to enumerate.",
+      "Browse / search the engine guides. No args returns the README. Pass path for a specific guide, query for SEMANTIC search (finds guides by what you're trying to do, not just exact words — e.g. \"render an outline\" finds the render-feature guide), or list:true to enumerate. Falls back to keyword matching for content not yet indexed.",
     inputSchema: {
       type: "object",
       properties: {
@@ -363,6 +363,20 @@ const toolDefs = [
         list: { type: "boolean" },
         limit: { type: "integer" },
         context_lines: { type: "integer" },
+      },
+    },
+  },
+  {
+    name: "search_tools",
+    description:
+      "Search the engine's Luau tool/API registry by what you want to do (SEMANTIC — finds tools whose purpose matches your intent, not just name/keyword matches). Optional category/tier filters; omit query to list all. Falls back to keyword matching when semantic search is unavailable.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        category: { type: "string" },
+        tier: { type: "string", enum: ["core", "content", "specialized"] },
+        limit: { type: "integer" },
       },
     },
   },
@@ -562,6 +576,8 @@ const dispatch = async (
       return (await ensureEngine()).e.execute(args as { code: string });
     case "guides":
       return (await ensureEngine()).e.guides(args);
+    case "search_tools":
+      return (await ensureEngine()).e.search_tools(args);
     case "capture":
       return (await ensureEngine()).e.capture(args);
     case "read_file":
