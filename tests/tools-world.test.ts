@@ -132,6 +132,12 @@ describe("world tools", () => {
       expect(at1).toBeDefined();
       expect(at2).toBe(at1);
 
+      // Re-delete BY NAME: the world is no longer in world.list, so the name
+      // resolver falls back to the trash list and re-deletes idempotently
+      // instead of failing with "no world found".
+      const byName = await tools.delete({ name: "twice" });
+      expect("guid" in byName && byName.guid).toBe(w.guid);
+
       await b.close();
     } finally {
       clearEnv();

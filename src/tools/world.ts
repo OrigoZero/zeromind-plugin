@@ -25,11 +25,13 @@ export type LaunchResult =
 const DEFAULT_CONNECT_TIMEOUT_MS = 60_000;
 const SESSION_OPEN_GRACE_MS = 250;
 
-/** Whole days until a trashed world is permanently purged (clamped ≥ 0). */
+/** Whole days until a trashed world is permanently purged (clamped ≥ 0).
+ *  Uses `floor` to match the web Trash tab's truncating `num_days()`, so the
+ *  agent and the website never report a different countdown for one world. */
 const purgesInDays = (deletedAt: string | undefined, retentionDays: number): number | undefined => {
   if (!deletedAt) return undefined;
   const purgeAt = new Date(deletedAt).getTime() + retentionDays * 86_400_000;
-  return Math.max(0, Math.ceil((purgeAt - Date.now()) / 86_400_000));
+  return Math.max(0, Math.floor((purgeAt - Date.now()) / 86_400_000));
 };
 
 export class WorldTools {
@@ -114,8 +116,16 @@ export class WorldTools {
     guid?: string;
     name_or_guid?: string;
   }): Promise<{ guid: string; name: string; deleted_at?: string; message: string } | { error: string }> {
-    const r = await this.resolveGuid(arg);
-    if (r.error) return { error: r.error };
+    let r = await this.resolveGuid(arg);
+    if (r.error) {
+      // Not in the live list — it may already be trashed. Re-deleting a
+      // trashed world is idempotent on the server (200, keeps deleted_at),
+      // so fall back to the trash list rather than failing a by-name
+      // re-delete with "no world found".
+      const t = await this.resolveTrashedGuid(arg);
+      if (t.error) return { error: r.error };
+      r = t;
+    }
     const w = await deleteWorld(this.cfg, r.guid!);
     return {
       guid: w.guid,
