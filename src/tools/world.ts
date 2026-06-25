@@ -2,7 +2,16 @@ import { spawn } from "node:child_process";
 import type { InstallConfig } from "../config.js";
 import type { Bridge } from "../bridge.js";
 import type { World, SessionOpened, SessionClosed } from "../types.js";
-import { listWorlds, createWorld, forkWorld, issuer } from "../zeromind-client.js";
+import {
+  listWorlds,
+  createWorld,
+  forkWorld,
+  deleteWorld,
+  restoreWorld,
+  listTrash,
+  issuer,
+  type TrashedWorld,
+} from "../zeromind-client.js";
 
 export type ConnectResult =
   | { ok: true; session_id: string }
@@ -15,6 +24,15 @@ export type LaunchResult =
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 60_000;
 const SESSION_OPEN_GRACE_MS = 250;
+
+/** Whole days until a trashed world is permanently purged (clamped ≥ 0).
+ *  Uses `floor` to match the web Trash tab's truncating `num_days()`, so the
+ *  agent and the website never report a different countdown for one world. */
+const purgesInDays = (deletedAt: string | undefined, retentionDays: number): number | undefined => {
+  if (!deletedAt) return undefined;
+  const purgeAt = new Date(deletedAt).getTime() + retentionDays * 86_400_000;
+  return Math.max(0, Math.floor((purgeAt - Date.now()) / 86_400_000));
+};
 
 export class WorldTools {
   private activeSessions = new Map<string, string>();
@@ -85,6 +103,107 @@ export class WorldTools {
         `Forked into your namespace as ${forked.world_guid}. ` +
         `Connect with world.connect { guid: "${forked.world_guid}", auto_launch: true }.`,
     };
+  }
+
+  /**
+   * Soft-delete (trash) a world the linked user owns. Reversible: the
+   * world is hidden everywhere but recoverable via `world.restore` for the
+   * server's retention window, after which it is permanently purged. Pass
+   * `name` (resolved against your own worlds) or `guid`.
+   */
+  async delete(arg: {
+    name?: string;
+    guid?: string;
+    name_or_guid?: string;
+  }): Promise<{ guid: string; name: string; deleted_at?: string; message: string } | { error: string }> {
+    let r = await this.resolveGuid(arg);
+    if (r.error) {
+      // Not in the live list — it may already be trashed. Re-deleting a
+      // trashed world is idempotent on the server (200, keeps deleted_at),
+      // so fall back to the trash list rather than failing a by-name
+      // re-delete with "no world found".
+      const t = await this.resolveTrashedGuid(arg);
+      if (t.error) return { error: r.error };
+      r = t;
+    }
+    const w = await deleteWorld(this.cfg, r.guid!);
+    return {
+      guid: w.guid,
+      name: w.name,
+      deleted_at: w.deleted_at,
+      message:
+        `Moved '${w.name}' to trash. It's hidden everywhere but recoverable — ` +
+        `call world.restore { guid: "${w.guid}" } (or world.trash to see all trashed worlds) ` +
+        `before the retention window elapses and it's permanently deleted.`,
+    };
+  }
+
+  /**
+   * Restore a soft-deleted world. Because a trashed world no longer shows
+   * in `world.list`, a `name` here is resolved against the TRASH list
+   * (`world.trash`); a `guid` is used directly.
+   */
+  async restore(arg: {
+    name?: string;
+    guid?: string;
+    name_or_guid?: string;
+  }): Promise<{ guid: string; name: string; message: string } | { error: string }> {
+    const r = await this.resolveTrashedGuid(arg);
+    if (r.error) return { error: r.error };
+    const w = await restoreWorld(this.cfg, r.guid!);
+    return {
+      guid: w.guid,
+      name: w.name,
+      message: `Restored '${w.name}' — it's back in world.list and visible everywhere again.`,
+    };
+  }
+
+  /**
+   * List the linked user's soft-deleted (trashed) worlds, with how many
+   * days each has left before it's permanently purged.
+   */
+  async trash(): Promise<{
+    retention_days: number;
+    worlds: Array<{ guid: string; name: string; title?: string; deleted_at?: string; purges_in_days?: number }>;
+  }> {
+    const t = await listTrash(this.cfg);
+    return {
+      retention_days: t.retention_days,
+      worlds: t.worlds.map((w) => ({
+        guid: w.guid,
+        name: w.name,
+        title: w.title,
+        deleted_at: w.deleted_at,
+        purges_in_days: purgesInDays(w.deleted_at, t.retention_days),
+      })),
+    };
+  }
+
+  /**
+   * Resolve a name/guid against the TRASH list (for `world.restore`),
+   * since a trashed world is absent from the active `world.list`.
+   */
+  private async resolveTrashedGuid(arg: {
+    name?: string;
+    guid?: string;
+    name_or_guid?: string;
+  }): Promise<{ guid?: string; error?: string }> {
+    const candidate = arg.guid ?? arg.name_or_guid ?? arg.name;
+    if (!candidate) return { error: "must pass `name` or `guid`" };
+    const looksLikeGuid = /^(wld_|[0-9a-f]{8}-[0-9a-f]{4}-)/i.test(candidate);
+    if (arg.guid || looksLikeGuid) return { guid: candidate };
+    const { worlds } = await listTrash(this.cfg);
+    const matches: TrashedWorld[] = worlds.filter((w) => w.name === candidate);
+    if (matches.length === 0) {
+      return {
+        error: `no trashed world named '${candidate}'. Call world.trash to see what can be restored, or pass an explicit guid.`,
+      };
+    }
+    if (matches.length > 1) {
+      const guids = matches.map((w) => w.guid).join(", ");
+      return { error: `multiple trashed worlds named '${candidate}' (guids: ${guids}). Pass an explicit guid.` };
+    }
+    return { guid: matches[0].guid };
   }
 
   /** URL the user (or `world.launch`) opens in the browser to start a session. */
