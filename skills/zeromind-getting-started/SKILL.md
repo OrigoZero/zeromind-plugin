@@ -201,6 +201,7 @@ Most user prompts will be one of these shapes — translate to the standard flow
 - **"make me a [game/scene/world] that does X"** → `zeromind.search({q: "X"})` first. Then `world.create`, `world.connect`, `zeromind.install` what fits, and `execute` to assemble + fill the gaps.
 - **"add a [feature/system/mechanic]"** → `zeromind.search({q: "[feature]", kind: "module"})` first — `zeromind.install` a module/component if one exists, then wire it in. Only hand-write it if nothing usable turns up.
 - **"open my [name]"** → `world.list` → find by name → `world.connect`.
+- **"delete my [name]"** → `world.delete({name})` — a reversible soft-delete (recoverable via `world.trash` → `world.restore` for ~30 days, then purged). Confirm with the user first unless they were explicit; you can't delete worlds you don't own.
 - **"add a [thing]"** to an open world → `execute` to spawn/configure, `capture` to verify, then `zm add . && zm commit -m '...' && zm push` once happy.
 - **"what does my world look like?"** → `capture()` and show them.
 - **"does it actually work?"** → `wld.play()` to flip into play mode, `capture` to see it run, `wld.edit()` to return.
