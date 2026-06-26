@@ -397,6 +397,47 @@ const toolDefs = [
     },
   },
   {
+    name: "search_tools",
+    description:
+      "Search registered Zero workflow tools by keyword — call this FIRST, before hand-writing a multi-step workflow, since an existing tool may already do the whole thing in one call. Omit query to list all tools with names and signatures. Once you've found one, RUN it with the `use_tool` tool — that's the direct executing sibling of this search.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        category: { type: "string" },
+        tier: { type: "string", enum: ["core", "content", "specialized"] },
+        limit: { type: "integer" },
+      },
+    },
+  },
+  {
+    name: "use_tool",
+    description:
+      "Run a registered Zero workflow tool by name — the executing sibling of search_tools. search_tools FINDS the tool (returns its toolbox, signature, example); use_tool RUNS it, so you don't hand-write a tools.<toolbox>.<tool>(...) snippet inside execute(). Pass `toolbox` + `tool` and POSITIONAL `args` in signature order (e.g. toolbox=\"sc\", tool=\"move\", args=[\"ent_5\",1,0,0]). Returns the tool's ZmToolResult envelope ({ ok, value | error, durationMs, tool }).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        toolbox: {
+          type: "string",
+          description:
+            "Toolbox namespace the tool lives in (the `category` field on a search_tools result, e.g. \"sc\"). May be omitted if `tool` is given in dotted \"toolbox.tool\" form.",
+        },
+        tool: {
+          type: "string",
+          description:
+            "Tool name within the toolbox (e.g. \"move\"). A dotted \"toolbox.tool\" form is also accepted when `toolbox` is omitted.",
+        },
+        args: {
+          type: "array",
+          description:
+            "POSITIONAL arguments in the tool's signature order. A table-valued parameter is passed as one array element: args: [{...}]. Omit for a no-argument tool.",
+          items: {},
+        },
+      },
+      required: ["tool"],
+    },
+  },
+  {
     name: "capture",
     description: "Take a screenshot of the engine viewport. Returns a base64 PNG.",
     inputSchema: {
@@ -602,6 +643,12 @@ const dispatch = async (
       return (await ensureEngine()).e.execute(args as { code: string });
     case "guides":
       return (await ensureEngine()).e.guides(args);
+    case "search_tools":
+      return (await ensureEngine()).e.search_tools(args);
+    case "use_tool":
+      return (await ensureEngine()).e.use_tool(
+        args as { toolbox?: string; tool: string; args?: unknown[] },
+      );
     case "capture":
       return (await ensureEngine()).e.capture(args);
     case "read_file":

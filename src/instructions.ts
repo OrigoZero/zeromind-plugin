@@ -130,6 +130,7 @@ const TOPIC_TOOLS = `# Tool reference
 - \`execute { code }\` — Luau snippet in the engine. Success responses are the envelope \`{ result, logs?, diagnostics?, state }\`; \`state\` = \`{ mode, paused, timeScale, activeLayer, activeScene, world }\` — read it instead of guessing engine mode/pause. Long scripts promote to \`{ status: "running", taskId, state }\`.
 - \`guides { path?, query?, list? }\` — engine docs. \`guides()\` (no args) first after every \`world.connect\`.
 - \`capture { pass?, layers?, width?, height?, format? }\` — screenshot, base64 PNG.
+- \`search_tools { query?, category?, tier? }\` → \`use_tool { toolbox, tool, args }\` — find a registered workflow tool, then RUN it. A pair: search FINDS it, use_tool RUNS it (POSITIONAL \`args\` in signature order), no \`execute()\` snippet needed. Reach for \`search_tools\` before hand-writing a multi-step workflow.
 - \`read_file\` / \`write_file\` / \`edit_file\` — engine VFS at \`/zero/...\`.
 - \`upload_file { local_path, vfs_path }\` — upload a local file/folder (image, model, audio, asset pack) into the engine VFS. Binary-safe; no base64 in the call.
 - \`bash { command }\` — engine scene-VFS bash.
