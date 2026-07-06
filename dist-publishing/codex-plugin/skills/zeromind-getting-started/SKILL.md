@@ -74,6 +74,8 @@ If the check fails (offline / blocked registry) it silently reports `update_avai
 
 A world is the persistent multiplayer container — a **shared, multi-user session at all times**, in edit and play alike. Inside a world live scenes (layers), entities, components, materials, shaders, custom modules — all in the world's virtual filesystem (VFS) at `/zero/`.
 
+**Worlds are multiplayer by nature — build games multiplayer-first.** Every world has a `max_clients` cap (players per play instance, default 16); play sessions instance automatically when one fills. Make a world singleplayer only when the design truly demands it, by setting `max_clients: 1`. Set it at creation with `world.create { name, template?, public?, max_clients? }`, or change it later with `world.set_max_clients { name | guid, max_clients }` (takes effect for new instances; running instances keep their cap).
+
 **Writes to the world's source are durable the instant you make them** — there is no save step, and they sync to every collaborator live. Content lives in the world's backend, never on the machine. The `core/worlds`, `core/scenes`, and `core/engine` guides cover the model; the `world.*` and `layers.*` namespaces are the surfaces (`lsp.methods("world")` / `lsp.methods("layers")`).
 
 ## Working with ZeroMind — the `zm` tool
@@ -142,6 +144,15 @@ Sources of truth, in order of reliability:
 4. **Grep the API source** — the entire public API is implemented as plain Luau modules under `/zero/source/libs/@builtin/modules/api/`. When you need exact behavior or argument handling, read the module — it's the ground truth behind every doc surface.
 5. **The VFS API docs** — `bash { command: "ls /zero/docs/api/" }` then `read_file { path: "/zero/docs/api/<namespace>/<method>" }`. The same registry `lsp.*` queries, rendered as browsable files.
 
+### Workflow tools — `search_tools` → `use_tool`
+
+The engine ships **workflow tools**: named, discoverable authoring operations (spawn a configured model, bake every probe, convert a scene's materials) that pack several engine calls into one. They are a distinct surface from the `execute()` API — invoked *by name*, not written into a script. Two MCP tools drive them, and they're a pair:
+
+- **`search_tools`** finds the tool — returns its `toolbox`, `tool`, signature, and an example.
+- **`use_tool`** runs it — `use_tool { toolbox, tool, args }`, with `args` POSITIONAL in signature order. Returns the tool's `ZmToolResult` envelope (`{ ok, value | error, durationMs, tool }`).
+
+Reach for `search_tools` BEFORE hand-writing a multi-step `execute()` snippet — a validated tool may already do the whole thing in one call. Then `use_tool` to run it. (The ambient `tools.<toolbox>.<tool>(...)` surface still works from inside `execute()` when you're already scripting — see the `core/tools` guide.)
+
 ### Automatic LSP enrichment on every `execute()`
 
 The engine runs a static check before any code executes and attaches diagnostics to the response — success path and error path both carry them. Syntax errors, unknown globals, unresolved requires, unknown members (with did-you-mean + member lists), wrong argument counts, unawaited promises, and bad lifecycle signatures all surface without any action from you. Sealed namespaces and runtime-error enrichment cover what the static pass can't reach.
@@ -201,6 +212,7 @@ Most user prompts will be one of these shapes — translate to the standard flow
 - **"make me a [game/scene/world] that does X"** → `zeromind.search({q: "X"})` first. Then `world.create`, `world.connect`, `zeromind.install` what fits, and `execute` to assemble + fill the gaps.
 - **"add a [feature/system/mechanic]"** → `zeromind.search({q: "[feature]", kind: "module"})` first — `zeromind.install` a module/component if one exists, then wire it in. Only hand-write it if nothing usable turns up.
 - **"open my [name]"** → `world.list` → find by name → `world.connect`.
+- **"delete my [name]"** → `world.delete({name})` — a reversible soft-delete (recoverable via `world.trash` → `world.restore` for ~30 days, then purged). Confirm with the user first unless they were explicit; you can't delete worlds you don't own.
 - **"add a [thing]"** to an open world → `execute` to spawn/configure, `capture` to verify, then `zm add . && zm commit -m '...' && zm push` once happy.
 - **"what does my world look like?"** → `capture()` and show them.
 - **"does it actually work?"** → `wld.play()` to flip into play mode, `capture` to see it run, `wld.edit()` to return.
