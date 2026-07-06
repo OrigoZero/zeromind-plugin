@@ -122,8 +122,10 @@ export const listWorlds = async (cfg: { install_secret: string }): Promise<World
 
 export const createWorld = async (
   cfg: { install_secret: string },
-  params: { name: string; template?: string; public?: boolean },
+  params: { name: string; template?: string; public?: boolean; max_clients?: number },
 ): Promise<World> => {
+  // `params` omits `max_clients` when the caller didn't set it, so
+  // JSON.stringify drops the key and the backend applies its own default.
   const res = await fetch(`${issuer()}/v1/worlds`, {
     method: "POST",
     headers: { ...authed(cfg.install_secret), "content-type": "application/json" },
@@ -133,6 +135,13 @@ export const createWorld = async (
   const body = (await res.json()) as { world: World };
   return body.world;
 };
+
+/** `PATCH /v1/worlds/{guid}` — update mutable world metadata (owner-only). */
+export const updateWorldMeta = async (
+  cfg: { install_secret: string },
+  guid: string,
+  patch: { max_clients?: number },
+): Promise<{ ok: true }> => zmPatch(cfg, `/v1/worlds/${guid}`, patch);
 
 export const forkWorld = async (
   cfg: { install_secret: string },

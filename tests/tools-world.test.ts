@@ -47,6 +47,52 @@ describe("world tools", () => {
     }
   });
 
+  it("create accepts max_clients and list surfaces it", async () => {
+    const tmp = withTmpConfigDir();
+    setEnv(server, tmp.dir);
+    try {
+      const cfg = await ensureRegistered({ ideName: "t" });
+      server.forceApprove(cfg.install_id, "usr_mc");
+      const b = new Bridge(cfg);
+      await b.connect();
+      const tools = new WorldTools(cfg, b);
+
+      const w = await tools.create({ name: "duo", max_clients: 2 });
+      expect(w.max_clients).toBe(2);
+      const defaulted = await tools.create({ name: "plain" });
+      expect(defaulted.max_clients).toBe(16);
+      const list = await tools.list();
+      expect(list.find((x) => x.guid === w.guid)?.max_clients).toBe(2);
+      await b.close();
+    } finally {
+      clearEnv();
+      tmp.cleanup();
+    }
+  });
+
+  it("create rejects max_clients 0 and setMaxClients updates", async () => {
+    const tmp = withTmpConfigDir();
+    setEnv(server, tmp.dir);
+    try {
+      const cfg = await ensureRegistered({ ideName: "t" });
+      server.forceApprove(cfg.install_id, "usr_mc2");
+      const b = new Bridge(cfg);
+      await b.connect();
+      const tools = new WorldTools(cfg, b);
+
+      await expect(tools.create({ name: "bad", max_clients: 0 })).rejects.toThrow(/>= 1/);
+      const w = await tools.create({ name: "tune" });
+      const r = await tools.setMaxClients({ guid: w.guid, max_clients: 1 });
+      expect(r).toEqual({ guid: w.guid, max_clients: 1 });
+      const list = await tools.list();
+      expect(list.find((x) => x.guid === w.guid)?.max_clients).toBe(1);
+      await b.close();
+    } finally {
+      clearEnv();
+      tmp.cleanup();
+    }
+  });
+
   it("fork creates a new world owned by the caller, inheriting visibility", async () => {
     const tmp = withTmpConfigDir();
     setEnv(server, tmp.dir);
