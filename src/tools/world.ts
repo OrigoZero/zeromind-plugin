@@ -70,8 +70,11 @@ export class WorldTools {
     public?: boolean;
     max_clients?: number;
   }): Promise<World> {
-    if (params.max_clients !== undefined && params.max_clients < 1) {
-      throw new Error("max_clients must be >= 1 (1 = singleplayer)");
+    if (
+      params.max_clients !== undefined &&
+      (!Number.isInteger(params.max_clients) || params.max_clients < 1)
+    ) {
+      throw new Error("max_clients must be an integer >= 1 (1 = singleplayer)");
     }
     return createWorld(this.cfg, params);
   }
@@ -87,8 +90,8 @@ export class WorldTools {
     name_or_guid?: string;
     max_clients: number;
   }): Promise<{ guid: string; max_clients: number } | { error: string }> {
-    if (arg.max_clients < 1) {
-      return { error: "max_clients must be >= 1 (1 = singleplayer)" };
+    if (!Number.isInteger(arg.max_clients) || arg.max_clients < 1) {
+      return { error: "max_clients must be an integer >= 1 (1 = singleplayer)" };
     }
     const r = await this.resolveGuid(arg);
     if (r.error) return { error: r.error };

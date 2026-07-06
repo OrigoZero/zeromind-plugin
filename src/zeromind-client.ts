@@ -136,12 +136,14 @@ export const createWorld = async (
   return body.world;
 };
 
-/** `PATCH /v1/worlds/{guid}` — update mutable world metadata (owner-only). */
+/** `PATCH /v1/worlds/{guid}` — update mutable world metadata (owner-only).
+ *  Resolves to the parsed response body (the backend replies 200 with the
+ *  updated world); callers that only care about success ignore the value. */
 export const updateWorldMeta = async (
   cfg: { install_secret: string },
   guid: string,
   patch: { max_clients?: number },
-): Promise<{ ok: true }> => zmPatch(cfg, `/v1/worlds/${guid}`, patch);
+): Promise<unknown> => zmPatch(cfg, `/v1/worlds/${guid}`, patch);
 
 export const forkWorld = async (
   cfg: { install_secret: string },

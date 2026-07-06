@@ -81,7 +81,12 @@ describe("world tools", () => {
       const tools = new WorldTools(cfg, b);
 
       await expect(tools.create({ name: "bad", max_clients: 0 })).rejects.toThrow(/>= 1/);
+      // Fractional (and NaN/Infinity) are rejected by the surface too, not just the backend.
+      await expect(tools.create({ name: "frac", max_clients: 1.5 })).rejects.toThrow(/integer/);
       const w = await tools.create({ name: "tune" });
+      expect(await tools.setMaxClients({ guid: w.guid, max_clients: 1.5 })).toEqual({
+        error: "max_clients must be an integer >= 1 (1 = singleplayer)",
+      });
       const r = await tools.setMaxClients({ guid: w.guid, max_clients: 1 });
       expect(r).toEqual({ guid: w.guid, max_clients: 1 });
       const list = await tools.list();
