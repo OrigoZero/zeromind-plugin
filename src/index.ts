@@ -271,15 +271,35 @@ const toolDefs = [
   },
   {
     name: "world.create",
-    description: "Create a new world owned by the linked user.",
+    description:
+      "Create a new world owned by the linked user. Worlds are multiplayer by nature — default max_clients is 16. Set max_clients: 1 only for a deliberately singleplayer design.",
     inputSchema: {
       type: "object",
       properties: {
         name: { type: "string" },
         template: { type: "string" },
         public: { type: "boolean" },
+        max_clients: {
+          type: "integer",
+          minimum: 1,
+          description: "Max players per play instance (default 16; 1 = singleplayer).",
+        },
       },
       required: ["name"],
+    },
+  },
+  {
+    name: "world.set_max_clients",
+    description:
+      "Set a world's max players per play instance. Takes effect for new instances; running instances keep their cap. 1 = singleplayer.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "World name (looked up via world.list)" },
+        guid: { type: "string", description: "Already-resolved world guid (skip lookup)" },
+        max_clients: { type: "integer", minimum: 1 },
+      },
+      required: ["max_clients"],
     },
   },
   {
@@ -603,7 +623,11 @@ const dispatch = async (
       return (await ensureWorld()).w.list();
     case "world.create":
       return (await ensureWorld()).w.create(
-        args as { name: string; template?: string; public?: boolean },
+        args as { name: string; template?: string; public?: boolean; max_clients?: number },
+      );
+    case "world.set_max_clients":
+      return (await ensureWorld()).w.setMaxClients(
+        args as { name?: string; guid?: string; name_or_guid?: string; max_clients: number },
       );
     case "world.fork":
       return (await ensureWorld()).w.fork(
