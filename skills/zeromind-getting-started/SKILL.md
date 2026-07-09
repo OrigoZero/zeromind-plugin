@@ -142,6 +142,10 @@ Sources of truth, in order of reliability:
 4. **Grep the API source** — the entire public API is implemented as plain Luau modules under `/zero/source/libs/@builtin/modules/api/`. When you need exact behavior or argument handling, read the module — it's the ground truth behind every doc surface.
 5. **The VFS API docs** — `bash { command: "ls /zero/docs/api/" }` then `read_file { path: "/zero/docs/api/<namespace>/<method>" }`. The same registry `lsp.*` queries, rendered as browsable files.
 
+### Tools first — look before you build
+
+Make it a habit: before you build something in the engine by hand, check whether a **tool** already does it. The operation you need is often already a validated, one-call tool — reaching for it saves you from reading a subsystem just to reconstruct what it already exposes. Look two ways, and use both: browse the toolboxes (`search_tools` with no arguments lists them and what each is for) to see where operations live, and keyword-search (`search_tools { query: "..." }`) to find a tool by what it *does* — the right one often lives in a toolbox you wouldn't guess (scene work mostly lives under `sc`, not a "scenes" box). Run one with `use_tool { toolbox, tool, args }`. Only when nothing covers what you need do you drop to `execute`/`bash` and the raw API. The `core/tools` guide has the full picture, including calling tools from Luau.
+
 ### Automatic LSP enrichment on every `execute()`
 
 The engine runs a static check before any code executes and attaches diagnostics to the response — success path and error path both carry them. Syntax errors, unknown globals, unresolved requires, unknown members (with did-you-mean + member lists), wrong argument counts, unawaited promises, and bad lifecycle signatures all surface without any action from you. Sealed namespaces and runtime-error enrichment cover what the static pass can't reach.
