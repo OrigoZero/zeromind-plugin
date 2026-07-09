@@ -384,7 +384,7 @@ const toolDefs = [
   {
     name: "guides",
     description:
-      "Browse / search the engine guides. No args returns the README. Pass path for a specific guide, query for full-text search, or list:true to enumerate.",
+      "Browse / search the engine guides. No args returns the README. Pass path for a specific guide, query for SEMANTIC search (finds guides by what you're trying to do, not just exact words — e.g. \"render an outline\" finds the render-feature guide), or list:true to enumerate. Falls back to keyword matching for content not yet indexed.",
     inputSchema: {
       type: "object",
       properties: {
@@ -399,13 +399,12 @@ const toolDefs = [
   {
     name: "search_tools",
     description:
-      "Search registered Zero workflow tools by keyword — call this FIRST, before hand-writing a multi-step workflow, since an existing tool may already do the whole thing in one call. Omit query to list all tools with names and signatures. Once you've found one, RUN it with the `use_tool` tool — that's the direct executing sibling of this search.",
+      "Search the engine's tool registry by what you want to do (SEMANTIC — finds tools whose purpose matches your intent, not just name/keyword matches); falls back to keyword matching when semantic search is unavailable. Call this FIRST before hand-writing a multi-step workflow — a tool may already do the whole thing in one call. Omit query to list the toolboxes (domains) with their purpose; pass `toolbox` to drill into one. Run a hit with the `use_tool` tool.",
     inputSchema: {
       type: "object",
       properties: {
         query: { type: "string" },
-        category: { type: "string" },
-        tier: { type: "string", enum: ["core", "content", "specialized"] },
+        toolbox: { type: "string" },
         limit: { type: "integer" },
       },
     },
@@ -413,14 +412,14 @@ const toolDefs = [
   {
     name: "use_tool",
     description:
-      "Run a registered Zero workflow tool by name — the executing sibling of search_tools. search_tools FINDS the tool (returns its toolbox, signature, example); use_tool RUNS it, so you don't hand-write a tools.<toolbox>.<tool>(...) snippet inside execute(). Pass `toolbox` + `tool` and POSITIONAL `args` in signature order (e.g. toolbox=\"sc\", tool=\"move\", args=[\"ent_5\",1,0,0]). Returns the tool's ZmToolResult envelope ({ ok, value | error, durationMs, tool }).",
+      "Run a registered Zero workflow tool by name — the executing sibling of search_tools. search_tools FINDS the tool (returns its toolbox, signature, example); use_tool RUNS it. Pass `toolbox` + `tool` and POSITIONAL `args` in signature order (e.g. toolbox=\"sc\", tool=\"move\", args=[\"ent_5\",1,0,0]). Returns the tool's ZmToolResult envelope ({ ok, value | error, durationMs, tool }).",
     inputSchema: {
       type: "object",
       properties: {
         toolbox: {
           type: "string",
           description:
-            "Toolbox namespace the tool lives in (the `category` field on a search_tools result, e.g. \"sc\"). May be omitted if `tool` is given in dotted \"toolbox.tool\" form.",
+            "Toolbox namespace the tool lives in (the `toolbox` field on a search_tools result, e.g. \"sc\"). May be omitted if `tool` is given in dotted \"toolbox.tool\" form.",
         },
         tool: {
           type: "string",

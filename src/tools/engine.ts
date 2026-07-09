@@ -43,8 +43,7 @@ export class EngineTools {
   search_tools(
     params: {
       query?: string;
-      category?: string;
-      tier?: string;
+      toolbox?: string;
       limit?: number;
     } = {},
   ): Promise<unknown> {
