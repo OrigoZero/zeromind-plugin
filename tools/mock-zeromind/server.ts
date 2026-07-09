@@ -22,7 +22,13 @@ export type WorldRow = {
   is_public: boolean;
   owner_user_id: string;
   created_by_install_id: string;
+  /** Soft-delete tombstone (RFC3339). Absent = live; set = trashed. */
+  deleted_at?: string;
 };
+
+/** Days a soft-deleted world stays recoverable in the mock (mirrors the
+ *  server's WORLD_PURGE_RETENTION_DAYS default). */
+const MOCK_RETENTION_DAYS = 30;
 
 export type ProfileRow = {
   id: string;
@@ -184,10 +190,22 @@ export const buildServer = (state: MockState): Server =>
         if (!install || !install.linked) {
           return json(res, 401, { error: "unauthorized" });
         }
+        // Soft-deleted worlds are excluded from the active listing.
         const worlds = [...state.worlds.values()].filter(
-          (w) => w.owner_user_id === install.user_id,
+          (w) => w.owner_user_id === install.user_id && !w.deleted_at,
         );
         return json(res, 200, { worlds });
+      }
+
+      if (method === "GET" && path === "/v1/me/worlds/trash") {
+        const install = requireAuth(req, state);
+        if (!install || !install.linked) {
+          return json(res, 401, { error: "unauthorized" });
+        }
+        const worlds = [...state.worlds.values()].filter(
+          (w) => w.owner_user_id === install.user_id && !!w.deleted_at,
+        );
+        return json(res, 200, { retention_days: MOCK_RETENTION_DAYS, worlds });
       }
 
       if (method === "POST" && path === "/v1/worlds") {
@@ -235,6 +253,36 @@ export const buildServer = (state: MockState): Server =>
         };
         state.worlds.set(guid, world);
         return json(res, 201, { world_guid: guid, bootstrapped: false });
+      }
+
+      // DELETE /v1/worlds/{guid} — soft-delete (owner-only; 404 otherwise,
+      // mirroring the API's no-existence-leak). Idempotent: a re-delete
+      // keeps the original deleted_at.
+      const worldDeleteMatch = path.match(/^\/v1\/worlds\/([^/]+)$/);
+      if (method === "DELETE" && worldDeleteMatch) {
+        const install = requireAuth(req, state);
+        if (!install || !install.linked) return json(res, 401, { error: "unauthorized" });
+        const world = state.worlds.get(worldDeleteMatch[1]);
+        if (!world || world.owner_user_id !== install.user_id) {
+          return json(res, 404, { error: "not_found" });
+        }
+        world.deleted_at = world.deleted_at ?? new Date().toISOString();
+        state.worlds.set(world.guid, world);
+        return json(res, 200, world);
+      }
+
+      // POST /v1/worlds/{guid}/restore — clear the tombstone (owner-only).
+      const restoreMatch = path.match(/^\/v1\/worlds\/([^/]+)\/restore$/);
+      if (method === "POST" && restoreMatch) {
+        const install = requireAuth(req, state);
+        if (!install || !install.linked) return json(res, 401, { error: "unauthorized" });
+        const world = state.worlds.get(restoreMatch[1]);
+        if (!world || world.owner_user_id !== install.user_id) {
+          return json(res, 404, { error: "not_found" });
+        }
+        delete world.deleted_at;
+        state.worlds.set(world.guid, world);
+        return json(res, 200, world);
       }
 
       // ── ZeroMind: discovery (GET) ──────────────────────────────────────

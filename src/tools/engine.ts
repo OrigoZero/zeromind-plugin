@@ -43,12 +43,22 @@ export class EngineTools {
   search_tools(
     params: {
       query?: string;
-      category?: string;
-      tier?: string;
+      toolbox?: string;
       limit?: number;
     } = {},
   ): Promise<unknown> {
     return call(this.bridge, this.world, "search_tools", params);
+  }
+  // The executing sibling of search_tools: search finds the workflow tool,
+  // use_tool runs it. `args` is POSITIONAL (the tool's signature order).
+  // Returns the tool's ZmToolResult envelope { ok, value | error, durationMs,
+  // tool }.
+  use_tool(params: {
+    toolbox?: string;
+    tool: string;
+    args?: unknown[];
+  }): Promise<unknown> {
+    return call(this.bridge, this.world, "use_tool", params);
   }
   capture(
     params: {

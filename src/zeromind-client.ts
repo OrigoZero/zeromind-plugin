@@ -150,6 +150,57 @@ export const forkWorld = async (
   return (await res.json()) as { world_guid: string; bootstrapped: boolean };
 };
 
+/**
+ * A soft-deleted world as it appears in `GET /v1/me/worlds/trash`. The
+ * server returns the full `World` record; the plugin only needs these
+ * fields to resolve a name → guid and render the purge countdown.
+ */
+export type TrashedWorld = {
+  guid: string;
+  name: string;
+  title?: string;
+  /** RFC3339 instant the world was soft-deleted. */
+  deleted_at?: string;
+};
+
+export type TrashListing = { retention_days: number; worlds: TrashedWorld[] };
+
+/** `DELETE /v1/worlds/{guid}` — soft-delete (trash) a world. Owner-only. */
+export const deleteWorld = async (
+  cfg: { install_secret: string },
+  guid: string,
+): Promise<TrashedWorld> => {
+  const res = await fetch(`${issuer()}/v1/worlds/${guid}`, {
+    method: "DELETE",
+    headers: authed(cfg.install_secret),
+  });
+  if (!res.ok) throw new Error(`world delete failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as TrashedWorld;
+};
+
+/** `POST /v1/worlds/{guid}/restore` — recover a soft-deleted world. Owner-only. */
+export const restoreWorld = async (
+  cfg: { install_secret: string },
+  guid: string,
+): Promise<TrashedWorld> => {
+  const res = await fetch(`${issuer()}/v1/worlds/${guid}/restore`, {
+    method: "POST",
+    headers: { ...authed(cfg.install_secret), "content-type": "application/json" },
+    body: "{}",
+  });
+  if (!res.ok) throw new Error(`world restore failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as TrashedWorld;
+};
+
+/** `GET /v1/me/worlds/trash` — the linked user's soft-deleted worlds. */
+export const listTrash = async (cfg: { install_secret: string }): Promise<TrashListing> => {
+  const res = await fetch(`${issuer()}/v1/me/worlds/trash`, {
+    headers: authed(cfg.install_secret),
+  });
+  if (!res.ok) throw new Error(`trash list failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as TrashListing;
+};
+
 // ── Generic ZeroMind REST helpers ──────────────────────────────────────────
 // The ZeroMind content surface (discovery + social) spans ~30 endpoints. Rather
 // than mint one client function per route — which would balloon this file and

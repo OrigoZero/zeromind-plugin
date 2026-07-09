@@ -300,6 +300,36 @@ const toolDefs = [
     },
   },
   {
+    name: "world.delete",
+    description:
+      "Soft-delete (move to trash) a world the linked user owns. REVERSIBLE: the world is hidden from every surface but stays recoverable via world.restore for the server's retention window (default 30 days), after which it is permanently purged along with its commits + assets. Pass `name` (resolved against your own worlds) or `guid`. Owner-only — fails if you don't own the world. Prefer asking the user before deleting a world you didn't just create.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "World name (looked up via world.list)" },
+        guid: { type: "string", description: "Already-resolved world guid (skip lookup)" },
+      },
+    },
+  },
+  {
+    name: "world.restore",
+    description:
+      "Recover a soft-deleted world before it's permanently purged. Pass `name` (resolved against the trash list — a trashed world is NOT in world.list) or `guid` (e.g. from world.trash). Owner-only. 404s if the world was already purged.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Trashed world name (looked up via world.trash)" },
+        guid: { type: "string", description: "Already-resolved world guid (skip lookup)" },
+      },
+    },
+  },
+  {
+    name: "world.trash",
+    description:
+      "List the linked user's soft-deleted (trashed) worlds and how many days each has left before it's permanently purged. The recovery surface for world.restore.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
     name: "world.open_in_browser",
     description:
       "Return the URL to open a world in the user's browser. Useful when you want to relay the URL to the user manually. For the seamless flow, prefer world.launch (opens it for them) or world.connect with auto_launch:true (opens + waits). Pass `name` (preferred — looked up via world.list) or `guid` (already-resolved).",
@@ -369,15 +399,41 @@ const toolDefs = [
   {
     name: "search_tools",
     description:
-      "Search the engine's Luau tool/API registry by what you want to do (SEMANTIC — finds tools whose purpose matches your intent, not just name/keyword matches). Optional category/tier filters; omit query to list all. Falls back to keyword matching when semantic search is unavailable.",
+      "Search the engine's tool registry by what you want to do (SEMANTIC — finds tools whose purpose matches your intent, not just name/keyword matches); falls back to keyword matching when semantic search is unavailable. Call this FIRST before hand-writing a multi-step workflow — a tool may already do the whole thing in one call. Omit query to list the toolboxes (domains) with their purpose; pass `toolbox` to drill into one. Run a hit with the `use_tool` tool.",
     inputSchema: {
       type: "object",
       properties: {
         query: { type: "string" },
-        category: { type: "string" },
-        tier: { type: "string", enum: ["core", "content", "specialized"] },
+        toolbox: { type: "string" },
         limit: { type: "integer" },
       },
+    },
+  },
+  {
+    name: "use_tool",
+    description:
+      "Run a registered Zero workflow tool by name — the executing sibling of search_tools. search_tools FINDS the tool (returns its toolbox, signature, example); use_tool RUNS it. Pass `toolbox` + `tool` and POSITIONAL `args` in signature order (e.g. toolbox=\"sc\", tool=\"move\", args=[\"ent_5\",1,0,0]). Returns the tool's ZmToolResult envelope ({ ok, value | error, durationMs, tool }).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        toolbox: {
+          type: "string",
+          description:
+            "Toolbox namespace the tool lives in (the `toolbox` field on a search_tools result, e.g. \"sc\"). May be omitted if `tool` is given in dotted \"toolbox.tool\" form.",
+        },
+        tool: {
+          type: "string",
+          description:
+            "Tool name within the toolbox (e.g. \"move\"). A dotted \"toolbox.tool\" form is also accepted when `toolbox` is omitted.",
+        },
+        args: {
+          type: "array",
+          description:
+            "POSITIONAL arguments in the tool's signature order. A table-valued parameter is passed as one array element: args: [{...}]. Omit for a no-argument tool.",
+          items: {},
+        },
+      },
+      required: ["tool"],
     },
   },
   {
@@ -552,6 +608,16 @@ const dispatch = async (
       return (await ensureWorld()).w.fork(
         args as { source?: string; world?: string; guid?: string; name_or_guid?: string; name?: string },
       );
+    case "world.delete":
+      return (await ensureWorld()).w.delete(
+        args as { name?: string; guid?: string; name_or_guid?: string },
+      );
+    case "world.restore":
+      return (await ensureWorld()).w.restore(
+        args as { name?: string; guid?: string; name_or_guid?: string },
+      );
+    case "world.trash":
+      return (await ensureWorld()).w.trash();
     case "world.open_in_browser":
       return (await ensureWorld()).w.openInBrowser(
         args as { name?: string; guid?: string; name_or_guid?: string },
@@ -578,6 +644,10 @@ const dispatch = async (
       return (await ensureEngine()).e.guides(args);
     case "search_tools":
       return (await ensureEngine()).e.search_tools(args);
+    case "use_tool":
+      return (await ensureEngine()).e.use_tool(
+        args as { toolbox?: string; tool: string; args?: unknown[] },
+      );
     case "capture":
       return (await ensureEngine()).e.capture(args);
     case "read_file":
