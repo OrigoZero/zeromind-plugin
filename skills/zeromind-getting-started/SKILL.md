@@ -142,14 +142,9 @@ Sources of truth, in order of reliability:
 4. **Grep the API source** — the entire public API is implemented as plain Luau modules under `/zero/source/libs/@builtin/modules/api/`. When you need exact behavior or argument handling, read the module — it's the ground truth behind every doc surface.
 5. **The VFS API docs** — `bash { command: "ls /zero/docs/api/" }` then `read_file { path: "/zero/docs/api/<namespace>/<method>" }`. The same registry `lsp.*` queries, rendered as browsable files.
 
-### Workflow tools — `search_tools` → `use_tool`
+### Tools first — look before you build
 
-The engine ships **workflow tools**: named, discoverable authoring operations (spawn a configured model, bake every probe, convert a scene's materials) that pack several engine calls into one. They are a distinct surface from the `execute()` API — invoked *by name*, not written into a script. Two MCP tools drive them, and they're a pair:
-
-- **`search_tools`** finds the tool — returns its `toolbox`, `tool`, signature, and an example.
-- **`use_tool`** runs it — `use_tool { toolbox, tool, args }`, with `args` POSITIONAL in signature order. Returns the tool's `ZmToolResult` envelope (`{ ok, value | error, durationMs, tool }`).
-
-Reach for `search_tools` BEFORE hand-writing a multi-step `execute()` snippet — a validated tool may already do the whole thing in one call. Then `use_tool` to run it. (The ambient `tools.<toolbox>.<tool>(...)` surface still works from inside `execute()` when you're already scripting — see the `core/tools` guide.)
+Run the same loop every time you set out to do something in the engine: **check whether a tool already does it — then act.** Found one → use it (`use_tool { toolbox, tool, args }`). Nothing fits → *then* drop to `execute`/`bash` and work against the raw API. The check is cheap and usually pays off: the operation you need is often already a validated, one-call tool, and reaching for it saves you from reading a subsystem just to reconstruct what it already exposes. Look two ways — browse the toolboxes (`search_tools` with no arguments lists them and what each is for) and keyword-search (`search_tools { query: "..." }`) — because the right tool often lives in a toolbox you wouldn't guess (scene work mostly lives under `sc`, not a "scenes" box). The `core/tools` guide has the full picture, including calling tools from Luau.
 
 ### Automatic LSP enrichment on every `execute()`
 
