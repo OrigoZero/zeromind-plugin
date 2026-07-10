@@ -5,6 +5,7 @@ import type { World, SessionOpened, SessionClosed } from "../types.js";
 import {
   listWorlds,
   createWorld,
+  updateWorldMeta,
   forkWorld,
   deleteWorld,
   restoreWorld,
@@ -67,8 +68,35 @@ export class WorldTools {
     name: string;
     template?: string;
     public?: boolean;
+    max_clients?: number;
   }): Promise<World> {
+    if (
+      params.max_clients !== undefined &&
+      (!Number.isInteger(params.max_clients) || params.max_clients < 1)
+    ) {
+      throw new Error("max_clients must be an integer >= 1 (1 = singleplayer)");
+    }
     return createWorld(this.cfg, params);
+  }
+
+  /**
+   * Set the maximum number of players per play instance for a world.
+   * Worlds are multiplayer by nature; 1 = singleplayer. Pass `name`
+   * (resolved against your own worlds) or `guid`.
+   */
+  async setMaxClients(arg: {
+    name?: string;
+    guid?: string;
+    name_or_guid?: string;
+    max_clients: number;
+  }): Promise<{ guid: string; max_clients: number } | { error: string }> {
+    if (!Number.isInteger(arg.max_clients) || arg.max_clients < 1) {
+      return { error: "max_clients must be an integer >= 1 (1 = singleplayer)" };
+    }
+    const r = await this.resolveGuid(arg);
+    if (r.error) return { error: r.error };
+    await updateWorldMeta(this.cfg, r.guid!, { max_clients: arg.max_clients });
+    return { guid: r.guid!, max_clients: arg.max_clients };
   }
 
   /**

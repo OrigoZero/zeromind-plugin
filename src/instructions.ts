@@ -119,8 +119,10 @@ const TOPIC_TOOLS = `# Tool reference
 - \`zeromind.issue { body, title?, kind? }\` — file a bug / feedback / report about the ZeroMind PLATFORM itself (an API call that failed unexpectedly, broken library content, docs that misled you, a missing capability). \`kind\`: \`bug\` | \`feedback\` (default) | \`report\` (longer write-up, e.g. test/eval findings). Fire-and-forget — returns an id, no read-back. NOT for your own world's bugs, and NOT for moderating someone's content (that's \`zeromind.engage { action: "report" }\`).
 
 ## Worlds
+Worlds are multiplayer by nature — build games multiplayer-first. Every world has \`max_clients\` (players per play instance, default 16); play sessions instance automatically when full. Make a world singleplayer only when the design truly demands it, by setting \`max_clients: 1\`.
 - \`world.list\` — the linked user's worlds.
-- \`world.create { name, template?, public? }\` — make a new one.
+- \`world.create { name, template?, public?, max_clients? }\` — make a new one (default \`max_clients\` 16; pass 1 for a singleplayer design).
+- \`world.set_max_clients { name | guid, max_clients }\` — change a world's player cap; takes effect for new instances (running instances keep their cap).
 - \`world.open_in_browser { name | guid }\` — return the URL (relay to the user manually).
 - \`world.launch { name | guid }\` — spawn the OS \`open\`/\`xdg-open\`/\`start\` to open it.
 - \`world.connect { name | guid, auto_launch?, timeout_ms? }\` — attach to a session. \`auto_launch: true\` combines launch+connect.

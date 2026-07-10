@@ -74,6 +74,8 @@ If the check fails (offline / blocked registry) it silently reports `update_avai
 
 A world is the persistent multiplayer container — a **shared, multi-user session at all times**, in edit and play alike. Inside a world live scenes (layers), entities, components, materials, shaders, custom modules — all in the world's virtual filesystem (VFS) at `/zero/`.
 
+**Worlds are multiplayer by nature — build games multiplayer-first.** Every world has a `max_clients` cap (players per play instance, default 16); play sessions instance automatically when one fills. Make a world singleplayer only when the design truly demands it, by setting `max_clients: 1`. Set it at creation with `world.create { name, template?, public?, max_clients? }`, or change it later with `world.set_max_clients { name | guid, max_clients }` (takes effect for new instances; running instances keep their cap).
+
 **Writes to the world's source are durable the instant you make them** — there is no save step, and they sync to every collaborator live. Content lives in the world's backend, never on the machine. The `core/worlds`, `core/scenes`, and `core/engine` guides cover the model; the `world.*` and `layers.*` namespaces are the surfaces (`lsp.methods("world")` / `lsp.methods("layers")`).
 
 ## Working with ZeroMind — the `zm` tool
