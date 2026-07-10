@@ -125,12 +125,12 @@ zeromind.install { "world": "wld_…", "as": "combat" } # mount under @combat
 zeromind.install { "world": "wld_…", "ref": "v1.2.0" }# pin to a tag/branch/commit
 
 # Install one ASSET's content (you pass an asset guid).
-zeromind.install { "guid": "ast_…" }                  # lands at /source/<display_name>
-zeromind.install { "guid": "ast_…", "at": "/source/terrain" }  # choose the path
+zeromind.install { "guid": "ast_…" }                  # installs into /source/ → /source/<display_name>
+zeromind.install { "guid": "ast_…", "at": "/source/terrain" }  # installs into /source/terrain/ → /source/terrain/<display_name>
 ```
 
 - **Library** (`world`) — for a reusable dependency you'll *reference* (outcomes A/B). Writes a single import marker; the engine subscribes to the imported world and registers `@<name>::<dotted>` resolver entries. Nothing is copied locally, so it stays light and updatable. Use `as` to name the mount, `ref`/`commit` to pin.
-- **Asset** (`guid`) — for content you want *materialized*, e.g. a base you'll modify in place (outcome C). The engine pulls the asset's closure and lays the files down at `at` (default `/source/<display_name>`), foreign deps under `/source/deps/…`. Then edit them with `edit_file` / `execute` like any other source.
+- **Asset** (`guid`) — for content you want *materialized*, e.g. a base you'll modify in place (outcome C). The engine pulls the asset's closure and lays the files down. `at` is the destination **directory** to install into, not a rename: the asset keeps its own name and category suffix, so `at = "/source/terrain"` lands a `sea.material` at `/source/terrain/sea.material` (defaults to `/source`); foreign deps under `/source/deps/…`. Then edit them with `edit_file` / `execute` like any other source.
 
 Adoption (the pull/import signal that powers ranking) is recorded by the engine as part of the install — you don't need a separate step for it.
 
