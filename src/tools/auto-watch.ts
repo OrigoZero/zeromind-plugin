@@ -8,22 +8,25 @@
 // re-promotion doesn't spawn a second watcher. The plugin's Luau status surface
 // is `tasks.status` / `tasks.result` (plural).
 
-import { unwrapEngineValue, type WatchTools } from "./watch.js";
+import type { WatchTools } from "./watch.js";
 
-export type Promotion = { taskId: number; location?: string };
+export type Promotion = { taskId: number; location: string };
 
-/** Detect a promotion in a raw engine result. Returns null unless the (possibly
- *  enveloped) value is an object with status:"running" and a numeric taskId. */
+/** Detect a promotion in a raw engine result. A genuine promotion is the
+ *  TOP-LEVEL result object with status/taskId/location directly — never nested
+ *  under an execute envelope's `result`. So check the object directly (NOT via
+ *  unwrapEngineValue): a normal inline completion whose return value happens to
+ *  be {status:"running",taskId} (which the engine wraps as {result:{...},state})
+ *  must not be misread as a promotion and its real result clobbered. */
 export const detectPromotion = (result: unknown): Promotion | null => {
-  const v = unwrapEngineValue(result);
-  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
-  const o = v as Record<string, unknown>;
+  if (!result || typeof result !== "object" || Array.isArray(result)) return null;
+  const o = result as Record<string, unknown>;
   if (o.status !== "running") return null;
   if (typeof o.taskId !== "number") return null;
-  return {
-    taskId: o.taskId,
-    location: typeof o.location === "string" ? o.location : undefined,
-  };
+  // Real promotions always carry the task location; require it so an arbitrary
+  // object with a status/taskId shape can't trip detection.
+  if (typeof o.location !== "string" || o.location.length === 0) return null;
+  return { taskId: o.taskId, location: o.location };
 };
 
 /** The Luau expr the promotion's watcher polls — resolves to the terminal

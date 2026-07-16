@@ -20,6 +20,17 @@ describe("detectPromotion", () => {
   it("ignores a success envelope", () => {
     expect(detectPromotion({ result: "finished", state: { mode: "edit" } })).toBeNull();
   });
+  it("ignores an enveloped script return of the promotion shape", () => {
+    // A normal inline completion whose RETURN VALUE is literally the promotion
+    // shape, wrapped in the execute envelope. Must NOT be misdetected — else
+    // the agent's real result gets clobbered.
+    expect(
+      detectPromotion({ result: { status: "running", taskId: 5 }, state: { mode: "edit" } }),
+    ).toBeNull();
+  });
+  it("ignores a promotion without location", () => {
+    expect(detectPromotion({ status: "running", taskId: 7 })).toBeNull();
+  });
   it("ignores bare values", () => {
     expect(detectPromotion(42)).toBeNull();
     expect(detectPromotion(null)).toBeNull();
@@ -86,7 +97,7 @@ describe("applyAutoWatch", () => {
   it("registers once and reuses on re-promotion", () => {
     const idx = new AutoWatchIndex();
     const wt = fakeWt();
-    const promo = { status: "running", taskId: 99 };
+    const promo = { status: "running", taskId: 99, location: "/runtime/tasks/active/99" };
     const first = applyAutoWatch(promo, wt, idx) as any;
     expect(first._meta.watcher_id).toBe("wat_z");
     expect(first.handoff).toContain("wat_z.json");
