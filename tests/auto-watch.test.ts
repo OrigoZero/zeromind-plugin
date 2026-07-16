@@ -4,6 +4,7 @@ import {
   terminalStatusExpr,
   rewritePromotion,
   AutoWatchIndex,
+  applyAutoWatch,
 } from "../src/tools/auto-watch.js";
 
 describe("detectPromotion", () => {
@@ -57,5 +58,45 @@ describe("AutoWatchIndex", () => {
     expect(idx.claim(43, "wat_c")).toBe(true);
     idx.release(42);
     expect(idx.existing(42)).toBeUndefined();
+  });
+});
+
+// A fake WatchTools with just the two methods applyAutoWatch uses.
+const fakeWt = () => {
+  const calls: unknown[] = [];
+  return {
+    calls,
+    registerRaw(args: unknown) {
+      calls.push(args);
+      return {
+        watcher_id: "wat_z",
+        fire_path: "/tmp/.zeromind/watch/wat_z.json",
+        wake_instructions: "",
+      };
+    },
+    fireFilePath: (id: string) => `/tmp/.zeromind/watch/${id}.json`,
+  } as any;
+};
+
+describe("applyAutoWatch", () => {
+  it("registers once and reuses on re-promotion", () => {
+    const idx = new AutoWatchIndex();
+    const wt = fakeWt();
+    const promo = { status: "running", taskId: 99 };
+    const first = applyAutoWatch(promo, wt, idx) as any;
+    expect(first._meta.watcher_id).toBe("wat_z");
+    expect(first.handoff).toContain("wat_z.json");
+    expect(wt.calls.length).toBe(1);
+    // Re-promotion of the same task registers nothing new.
+    const second = applyAutoWatch(promo, wt, idx) as any;
+    expect(second._meta.watcher_id).toBe("wat_z");
+    expect(wt.calls.length).toBe(1);
+  });
+  it("passes non-promotions through untouched", () => {
+    const idx = new AutoWatchIndex();
+    const wt = fakeWt();
+    const val = { result: 5, state: {} };
+    expect(applyAutoWatch(val, wt, idx)).toBe(val);
+    expect(wt.calls.length).toBe(0);
   });
 });

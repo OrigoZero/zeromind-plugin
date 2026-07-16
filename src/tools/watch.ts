@@ -162,6 +162,17 @@ export class WatchTools {
     };
   }
 
+  /** Register a watcher directly (used by auto-watch on promotion). Returns the
+   *  same shape as watch() but takes explicit WatchArgs. */
+  registerRaw(args: WatchArgs): WatchRegisterResult {
+    return this.watch(args);
+  }
+
+  /** Absolute fire-file path for a watcher id (auto-watch reuse path). */
+  fireFilePath(watcherId: string): string {
+    return fireFilePathFor(watcherId, this.fireDir);
+  }
+
   unwatch(args: { id?: string; watcher_id?: string }): { ok: true; cancelled: boolean } {
     const id = args.id ?? args.watcher_id;
     if (typeof id !== "string" || id.length === 0) {

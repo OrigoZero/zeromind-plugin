@@ -8,7 +8,7 @@
 // re-promotion doesn't spawn a second watcher. The plugin's Luau status surface
 // is `tasks.status` / `tasks.result` (plural).
 
-import { unwrapEngineValue } from "./watch.js";
+import { unwrapEngineValue, type WatchTools } from "./watch.js";
 
 export type Promotion = { taskId: number; location?: string };
 
@@ -72,3 +72,36 @@ export class AutoWatchIndex {
     this.map.clear();
   }
 }
+
+/** If `result` is a promotion, register (or reuse) its watcher and return the
+ *  rewritten handoff object; otherwise return `result` unchanged. */
+export const applyAutoWatch = (
+  result: unknown,
+  wt: WatchTools,
+  index: AutoWatchIndex,
+): unknown => {
+  const promo = detectPromotion(result);
+  if (!promo) return result;
+  let watcherId = index.existing(promo.taskId);
+  let firePath: string;
+  if (watcherId) {
+    firePath = wt.fireFilePath(watcherId);
+  } else {
+    const reg = wt.registerRaw({
+      expr: terminalStatusExpr(promo.taskId),
+      matcher: { non_nil: true },
+      label: `auto:task:${promo.taskId}`,
+    });
+    watcherId = reg.watcher_id;
+    firePath = reg.fire_path;
+    index.claim(promo.taskId, watcherId);
+  }
+  const rw = rewritePromotion(promo.taskId, firePath, watcherId);
+  return {
+    status: "running",
+    taskId: promo.taskId,
+    location: promo.location,
+    handoff: rw.text,
+    _meta: rw._meta,
+  };
+};
