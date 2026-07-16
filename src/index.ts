@@ -789,6 +789,11 @@ const main = async (): Promise<void> => {
     worldTools = undefined;
     engineTools = undefined;
     contentTools = undefined;
+    // Cancel every watcher's poll/deadline timers and remove its fire files
+    // before dropping the reference — auto-watch now registers a watcher per
+    // background promotion, so a re-link/unlink with pending watchers would
+    // otherwise leak timers polling the closed bridge until each deadline.
+    watchTools?.shutdown();
     watchTools = undefined;
     autoWatchIndex.clear();
     bridgeConnectError = undefined;

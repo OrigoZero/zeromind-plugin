@@ -47,12 +47,15 @@ export const rewritePromotion = (
   watcherId: string,
 ): PromotionRewrite => ({
   text:
-    `Task ${taskId} promoted to a background task and is now being tracked for you at ` +
-    `${firePath} on the host filesystem. That file currently reads state:"watching"; it flips ` +
-    `to state:"fired" with value = "finished" | "failed" | "cancelled" when the task resolves ` +
-    `(or state:"timeout" if it runs long). Watch that file with your own tooling and continue ` +
-    `when it resolves, then read tasks.result(${taskId}) for the value. You do NOT need to call ` +
-    `watch — the watcher is already registered.`,
+    `Task ${taskId} is now running in the background. It has NOT finished, and you will NOT be ` +
+    `notified when it does — a promotion is not a completion signal. To get the result you must ` +
+    `watch for completion YOURSELF. Its status is kept current for you at ${firePath}: it reads ` +
+    `state:"watching" now and is rewritten to state:"fired" with value "finished" / "failed" / ` +
+    `"cancelled" (or state:"timeout") the instant the task ends. Watch that file yourself — e.g. a ` +
+    `bash loop that waits until its state is no longer "watching" — and continue only once it ` +
+    `resolves; then read tasks.result(${taskId}) for the value. Do not end your turn assuming ` +
+    `something will wake you when the task finishes; nothing will. You don't need the watch tool — ` +
+    `the file is already being maintained for you.`,
   _meta: { taskId, watcher_id: watcherId, fire_path: firePath, state: "watching" },
 });
 

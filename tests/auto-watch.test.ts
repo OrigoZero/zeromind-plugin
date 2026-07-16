@@ -55,6 +55,11 @@ describe("rewritePromotion", () => {
     expect(out.text).toContain("failed");
     expect(out.text).toContain("cancelled");
     expect(out.text).toContain("tasks.result(42)");
+    // Intent: the agent must watch the file itself and will NOT be notified.
+    const lower = out.text.toLowerCase();
+    expect(lower).toContain("yourself");
+    expect(lower).toContain("not be");
+    expect(lower).toContain("notified");
     expect(out._meta).toEqual({
       taskId: 42,
       watcher_id: "wat_x",
