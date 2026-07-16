@@ -680,9 +680,9 @@ const dispatch = async (
       return (await ensureEngine()).e.luau_test(args);
     case "instance_health":
       return (await ensureEngine()).e.instance_health();
-    case "watch":
+    case "track":
       return (await ensureWatch()).wt.watch(args as unknown as WatchArgs);
-    case "unwatch":
+    case "untrack":
       return (await ensureWatch()).wt.unwatch(
         args as { id?: string; watcher_id?: string },
       );

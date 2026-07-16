@@ -217,13 +217,13 @@ describe("watch e2e (stdio MCP)", () => {
     tmp.cleanup();
   });
 
-  it("exposes watch and unwatch in the tool list", async () => {
+  it("exposes track and untrack in the tool list", async () => {
     const result = (await driver.send("tools/list", {}, 2)) as {
       tools: { name: string }[];
     };
     const names = result.tools.map((t) => t.name);
-    expect(names).toContain("watch");
-    expect(names).toContain("unwatch");
+    expect(names).toContain("track");
+    expect(names).toContain("untrack");
   });
 
   it(
@@ -248,7 +248,7 @@ describe("watch e2e (stdio MCP)", () => {
       const watchT0 = Date.now();
       const watchRes = (await callTool(
         driver,
-        "watch",
+        "track",
         {
           status_field: "tasks.status(42)",
           matcher: { equals: "finished" },
@@ -325,7 +325,7 @@ describe("watch e2e (stdio MCP)", () => {
       // Turn N: watch.
       const watchRes = (await callTool(
         driver,
-        "watch",
+        "track",
         {
           status_field: "tasks.status(99)",
           matcher: { equals: "finished" },
@@ -344,7 +344,7 @@ describe("watch e2e (stdio MCP)", () => {
       // watch call, free to issue unwatch.
       const cancelRes = (await callTool(
         driver,
-        "unwatch",
+        "untrack",
         { id: watchRes.watcher_id },
         nextId + 1,
       )) as { ok: boolean; cancelled: boolean };
@@ -364,7 +364,7 @@ describe("watch e2e (stdio MCP)", () => {
       // A second unwatch of the same id is a no-op (cancelled=false).
       const noop = (await callTool(
         driver,
-        "unwatch",
+        "untrack",
         { id: watchRes.watcher_id },
         nextId + 2,
       )) as { ok: boolean; cancelled: boolean };
@@ -391,7 +391,7 @@ describe("watch e2e (stdio MCP)", () => {
 
       const watchRes = (await callTool(
         driver,
-        "watch",
+        "track",
         {
           expr: "return tasks.status(7)",
           matcher: { equals: "finished" },
