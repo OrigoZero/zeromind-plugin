@@ -361,8 +361,9 @@ export const WATCH_TOOL_DEF = {
     "`{state: \"timeout\", last_value | last_error, ...}`. Both states also carry source, " +
     "matcher, timestamps, and poll_count. Read the file any time to check status. " +
     "Engine task logs / intermediate state are fetched separately via execute() / read_file. " +
-    "Typical use: kick a long execute() task, take its { taskId }, then call " +
-    "watch({ expr: 'return tasks.status(' .. taskId .. ')', matcher: { equals: 'finished' } }). " +
+    "A promoting execute()/bash/use_tool call auto-registers this watcher for you and returns " +
+    "the fire-file path — you do not call watch for that case. Use watch directly when you want " +
+    "to poll an arbitrary Luau expression (e.g. 'return tasks.status(42)') or a VFS file yourself. " +
     "Sources: expr (a Luau snippet whose return value is matched), vfs_path (a VFS file's " +
     "existence/content), or status_field (sugar for 'return <field>'). " +
     "Matchers (exactly one): equals (deep-equality on the polled value), non_nil (value present), " +
