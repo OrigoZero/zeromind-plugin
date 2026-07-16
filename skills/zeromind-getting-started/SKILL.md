@@ -158,7 +158,7 @@ The engine runs a static check before any code executes and attaches diagnostics
 execute { "code": "..." }
 ```
 
-Long-running code promotes to a task handle instead of blocking; register the non-blocking `watch` tool on the returned `taskId` and end your turn (the blocking `wait` tool covers tasks expected to finish within a hop or two). The tool schemas document the contract.
+Long-running code promotes to a task handle instead of blocking; register the non-blocking `track` tool on the returned `taskId` and end your turn (the blocking `wait` tool covers tasks expected to finish within a hop or two). The tool schemas document the contract.
 
 For the engine's Luau global surface — what namespaces exist and what they do — read the README (`guides {}`) and use the discovery surfaces above. The engine evolves; the live registry is always current.
 

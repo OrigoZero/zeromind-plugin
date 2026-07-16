@@ -15,7 +15,8 @@ import { authStatus, zmLink, zmLinkPoll, zmUnlink } from "./tools/auth.js";
 import { WorldTools } from "./tools/world.js";
 import { EngineTools } from "./tools/engine.js";
 import { ContentTools, buildInstallLuau, type InstallArgs } from "./tools/content.js";
-import { WatchTools } from "./tools/watch.js";
+import { WatchTools, sweepStaleFireFiles, defaultWatchDir } from "./tools/watch.js";
+import { AutoWatchIndex, applyAutoWatch } from "./tools/auto-watch.js";
 import {
   WATCH_TOOL_DEF,
   UNWATCH_TOOL_DEF,
@@ -526,6 +527,7 @@ const dispatch = async (
   ensureContent: () => ContentTools,
   ensureWatch: () => Promise<WatchCtx>,
   resetClients: () => Promise<void>,
+  autoWatchIndex: AutoWatchIndex,
 ): Promise<unknown> => {
   switch (name) {
     case "auth_status":
@@ -638,16 +640,20 @@ const dispatch = async (
       );
     case "world.disconnect":
       return (await ensureWorld()).w.disconnect();
-    case "execute":
-      return (await ensureEngine()).e.execute(args as { code: string });
+    case "execute": {
+      const r = await (await ensureEngine()).e.execute(args as { code: string });
+      return applyAutoWatch(r, (await ensureWatch()).wt, autoWatchIndex);
+    }
     case "guides":
       return (await ensureEngine()).e.guides(args);
     case "search_tools":
       return (await ensureEngine()).e.search_tools(args);
-    case "use_tool":
-      return (await ensureEngine()).e.use_tool(
+    case "use_tool": {
+      const r = await (await ensureEngine()).e.use_tool(
         args as { toolbox?: string; tool: string; args?: unknown[] },
       );
+      return applyAutoWatch(r, (await ensureWatch()).wt, autoWatchIndex);
+    }
     case "capture":
       return (await ensureEngine()).e.capture(args);
     case "read_file":
@@ -666,15 +672,17 @@ const dispatch = async (
       return (await ensureEngine()).e.edit_file(
         args as { path: string; old_string: string; new_string: string; replace_all?: boolean },
       );
-    case "bash":
-      return (await ensureEngine()).e.bash(args as { command: string });
+    case "bash": {
+      const r = await (await ensureEngine()).e.bash(args as { command: string });
+      return applyAutoWatch(r, (await ensureWatch()).wt, autoWatchIndex);
+    }
     case "luau_test":
       return (await ensureEngine()).e.luau_test(args);
     case "instance_health":
       return (await ensureEngine()).e.instance_health();
-    case "watch":
+    case "track":
       return (await ensureWatch()).wt.watch(args as unknown as WatchArgs);
-    case "unwatch":
+    case "untrack":
       return (await ensureWatch()).wt.unwatch(
         args as { id?: string; watcher_id?: string },
       );
@@ -718,11 +726,17 @@ const main = async (): Promise<void> => {
     },
   );
 
+  // Clear the backlog of terminal watchers whose fire files were never reaped
+  // (auto-watch registers one per promotion; a crash or an unread handoff can
+  // leave the file behind). Best-effort, non-blocking.
+  sweepStaleFireFiles(defaultWatchDir(), 24 * 60 * 60 * 1000);
+
   let bridge: Bridge | undefined;
   let worldTools: WorldTools | undefined;
   let engineTools: EngineTools | undefined;
   let contentTools: ContentTools | undefined;
   let watchTools: WatchTools | undefined;
+  const autoWatchIndex = new AutoWatchIndex();
   let bridgeConnectError: Error | undefined;
   let initPromise: Promise<void> | undefined;
 
@@ -775,7 +789,13 @@ const main = async (): Promise<void> => {
     worldTools = undefined;
     engineTools = undefined;
     contentTools = undefined;
+    // Cancel every watcher's poll/deadline timers and remove its fire files
+    // before dropping the reference — auto-watch now registers a watcher per
+    // background promotion, so a re-link/unlink with pending watchers would
+    // otherwise leak timers polling the closed bridge until each deadline.
+    watchTools?.shutdown();
     watchTools = undefined;
+    autoWatchIndex.clear();
     bridgeConnectError = undefined;
     if (staleBridge) {
       try {
@@ -874,6 +894,7 @@ const main = async (): Promise<void> => {
             ensureContent,
             ensureWatch,
             resetClients,
+            autoWatchIndex,
           ),
         ),
         timeoutBudget(name, args),

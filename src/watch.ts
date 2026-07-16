@@ -352,7 +352,7 @@ export class WatchRegistry {
 // Canonical MCP tool schemas — the shared piece owns the contract so every
 // host wrapper exposes the identical surface to the agent.
 export const WATCH_TOOL_DEF = {
-  name: "watch",
+  name: "track",
   description:
     "Register a non-blocking watcher on engine state. The plugin polls the chosen source on a " +
     "background timer and maintains a state file on the host's local filesystem (path returned " +
@@ -361,13 +361,14 @@ export const WATCH_TOOL_DEF = {
     "`{state: \"timeout\", last_value | last_error, ...}`. Both states also carry source, " +
     "matcher, timestamps, and poll_count. Read the file any time to check status. " +
     "Engine task logs / intermediate state are fetched separately via execute() / read_file. " +
-    "Typical use: kick a long execute() task, take its { taskId }, then call " +
-    "watch({ expr: 'return tasks.status(' .. taskId .. ')', matcher: { equals: 'finished' } }). " +
+    "A promoting execute()/bash/use_tool call auto-registers this watcher for you and returns " +
+    "the fire-file path — you do not call track for that case. Use track directly when you want " +
+    "to poll an arbitrary Luau expression (e.g. 'return tasks.status(42)') or a VFS file yourself. " +
     "Sources: expr (a Luau snippet whose return value is matched), vfs_path (a VFS file's " +
     "existence/content), or status_field (sugar for 'return <field>'). " +
     "Matchers (exactly one): equals (deep-equality on the polled value), non_nil (value present), " +
     "gte (numeric ≥ threshold), exists (vfs_path only — file present). " +
-    "Returns { watcher_id, fire_path, wake_instructions } immediately. Cancel with unwatch.",
+    "Returns { watcher_id, fire_path, wake_instructions } immediately. Cancel with untrack.",
   inputSchema: {
     type: "object",
     properties: {
@@ -414,15 +415,15 @@ export const WATCH_TOOL_DEF = {
 } as const;
 
 export const UNWATCH_TOOL_DEF = {
-  name: "unwatch",
+  name: "untrack",
   description:
-    "Cancel a watcher previously registered with watch. Returns { ok: true, cancelled: <bool> } " +
+    "Cancel a poll previously registered with track. Returns { ok: true, cancelled: <bool> } " +
     "(cancelled is false if the id wasn't found — already fired, already cancelled, or never " +
     "registered). Also removes the fire file if one was already written.",
   inputSchema: {
     type: "object",
     properties: {
-      id: { type: "string", description: "The watcher_id returned by watch." },
+      id: { type: "string", description: "The watcher_id returned by track." },
     },
     required: ["id"],
   },
