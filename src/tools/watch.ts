@@ -17,7 +17,15 @@
 // Agents know their own runtimes — Monitor, ScheduleWakeup, a background
 // shell, a file watcher, or just reading it next time they run.
 
-import { writeFileSync, renameSync, unlinkSync, existsSync, mkdirSync } from "node:fs";
+import {
+  writeFileSync,
+  renameSync,
+  unlinkSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 
@@ -70,6 +78,27 @@ export const defaultWatchDir = (): string => join(homedir(), ".zeromind", "watch
 
 export const fireFilePathFor = (watcherId: string, baseDir?: string): string =>
   join(baseDir ?? defaultWatchDir(), `${watcherId}.json`);
+
+/** Delete fire files older than `maxAgeMs` from `dir`. Run at plugin startup to
+ *  clear the backlog of terminal watchers that were never reaped. */
+export const sweepStaleFireFiles = (dir: string, maxAgeMs: number): void => {
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return; // dir absent → nothing to sweep
+  }
+  const now = Date.now();
+  for (const name of entries) {
+    if (!name.endsWith(".json")) continue;
+    const path = join(dir, name);
+    try {
+      if (now - statSync(path).mtimeMs > maxAgeMs) unlinkSync(path);
+    } catch {
+      // best-effort
+    }
+  }
+};
 
 const writeFireFile = (path: string, payload: WatchEvent): void => {
   const dir = dirname(path);

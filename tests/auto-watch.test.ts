@@ -1,4 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { mkdtempSync, writeFileSync, existsSync, utimesSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   detectPromotion,
   terminalStatusExpr,
@@ -6,6 +9,7 @@ import {
   AutoWatchIndex,
   applyAutoWatch,
 } from "../src/tools/auto-watch.js";
+import { sweepStaleFireFiles } from "../src/tools/watch.js";
 
 describe("detectPromotion", () => {
   it("detects the running envelope", () => {
@@ -98,5 +102,20 @@ describe("applyAutoWatch", () => {
     const val = { result: 5, state: {} };
     expect(applyAutoWatch(val, wt, idx)).toBe(val);
     expect(wt.calls.length).toBe(0);
+  });
+});
+
+describe("sweepStaleFireFiles", () => {
+  it("removes old fire files, keeps fresh", () => {
+    const dir = mkdtempSync(join(tmpdir(), "zsweep-"));
+    const old = join(dir, "wat_old.json");
+    const fresh = join(dir, "wat_fresh.json");
+    writeFileSync(old, "{}");
+    writeFileSync(fresh, "{}");
+    const longAgo = Date.now() / 1000 - 60 * 60 * 48;
+    utimesSync(old, longAgo, longAgo);
+    sweepStaleFireFiles(dir, 60 * 60 * 24 * 1000);
+    expect(existsSync(old)).toBe(false);
+    expect(existsSync(fresh)).toBe(true);
   });
 });

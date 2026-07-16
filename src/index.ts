@@ -15,7 +15,7 @@ import { authStatus, zmLink, zmLinkPoll, zmUnlink } from "./tools/auth.js";
 import { WorldTools } from "./tools/world.js";
 import { EngineTools } from "./tools/engine.js";
 import { ContentTools, buildInstallLuau, type InstallArgs } from "./tools/content.js";
-import { WatchTools } from "./tools/watch.js";
+import { WatchTools, sweepStaleFireFiles, defaultWatchDir } from "./tools/watch.js";
 import { AutoWatchIndex, applyAutoWatch } from "./tools/auto-watch.js";
 import {
   WATCH_TOOL_DEF,
@@ -725,6 +725,11 @@ const main = async (): Promise<void> => {
       instructions: INSTRUCTIONS,
     },
   );
+
+  // Clear the backlog of terminal watchers whose fire files were never reaped
+  // (auto-watch registers one per promotion; a crash or an unread handoff can
+  // leave the file behind). Best-effort, non-blocking.
+  sweepStaleFireFiles(defaultWatchDir(), 24 * 60 * 60 * 1000);
 
   let bridge: Bridge | undefined;
   let worldTools: WorldTools | undefined;
