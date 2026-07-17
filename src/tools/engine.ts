@@ -81,6 +81,7 @@ export class EngineTools {
     path: string;
     content?: string;
     content_b64?: string;
+    quiet?: boolean;
   }): Promise<{ ok: true }> {
     return call(this.bridge, this.world, "write_file", params);
   }
@@ -89,6 +90,7 @@ export class EngineTools {
     old_string: string;
     new_string: string;
     replace_all?: boolean;
+    quiet?: boolean;
   }): Promise<{ ok: true }> {
     return call(this.bridge, this.world, "edit_file", params);
   }

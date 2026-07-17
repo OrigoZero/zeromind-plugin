@@ -51,7 +51,7 @@ export const UPLOAD_TOOL_DEF = {
     "Upload a file or folder from the LOCAL machine (where this MCP server runs — the user's computer) into the connected world's engine VFS, preserving binary content exactly. Reads `local_path` off disk and writes it under `vfs_path` inside the engine.\n\n" +
     "- If `local_path` is a regular file, its bytes are written verbatim to `vfs_path` (the destination file path, e.g. /source/textures/wall.png).\n" +
     "- If `local_path` is a directory, the whole tree is walked recursively and every regular file is uploaded; the layout is mirrored under `vfs_path` (local foo/bar/baz.png lands at <vfs_path>/foo/bar/baz.png). Symlinks and empty subdirectories are skipped.\n\n" +
-    "Use this for assets that already exist on disk — images (PNG/JPG/…), 3D models (GLB/GLTF/OBJ), audio, fonts, binary blobs, whole asset packs. It avoids inlining base64 into the tool call (which would blow up the agent's context) and avoids one call per file for a folder. For short text files the agent is authoring itself, `write_file` is still simpler. Requires a connected world (world.connect first). Always overwrites existing destinations. A leading `~` in local_path expands to the home directory.",
+    "Use this for assets that already exist on disk — images (PNG/JPG/…), 3D models (GLB/GLTF/OBJ), audio, fonts, binary blobs, whole asset packs. It avoids inlining base64 into the tool call (which would blow up the agent's context) and avoids one call per file for a folder. For short text files the agent is authoring itself, `write_file` is still simpler. Requires a connected world (world.connect first). Always overwrites existing destinations. A leading `~` in local_path expands to the home directory. Set `quiet` to true to write without firing engine write side effects (importer dispatch, assetType onChange, vfs.watch) — so a bulk asset upload doesn't kick off that many simultaneous imports; import them afterwards with the engine's `importers` run tool.",
   inputSchema: {
     type: "object",
     properties: {
@@ -59,6 +59,12 @@ export const UPLOAD_TOOL_DEF = {
         type: "string",
         description:
           "Path on the local machine to read from — a file or a directory. Absolute paths are used as-is; a leading `~/` expands to the home directory; relative paths resolve against the plugin process's working directory.",
+      },
+      quiet: {
+        type: "boolean",
+        default: false,
+        description:
+          "When true, write every uploaded file without firing engine write side effects (importer dispatch, assetType onChange, vfs.watch). Use for bulk asset packs, then import deterministically with the `importers` run tool.",
       },
       vfs_path: {
         type: "string",
@@ -85,6 +91,7 @@ export interface UploadArgs {
   vfs_path: string;
   max_bytes?: number;
   max_files?: number;
+  quiet?: boolean;
 }
 
 export interface UploadResult {
@@ -155,9 +162,10 @@ const uploadOne = async (
   engine: EngineTools,
   abs: string,
   vfsPath: string,
+  quiet: boolean,
 ): Promise<number> => {
   const bytes = await fs.readFile(abs);
-  await engine.write_file({ path: vfsPath, content_b64: bytes.toString("base64") });
+  await engine.write_file({ path: vfsPath, content_b64: bytes.toString("base64"), quiet });
   return bytes.length;
 };
 
@@ -177,6 +185,7 @@ export const uploadFile = async (
   }
   const maxBytes = args.max_bytes && args.max_bytes > 0 ? args.max_bytes : DEFAULT_MAX_BYTES;
   const maxFiles = args.max_files && args.max_files > 0 ? args.max_files : DEFAULT_MAX_FILES;
+  const quiet = args.quiet === true;
 
   const localPath = path.resolve(expandHome(args.local_path));
 
@@ -194,7 +203,7 @@ export const uploadFile = async (
         `upload_file: '${localPath}' is ${stat.size} bytes, exceeds max_bytes=${maxBytes} (raise max_bytes to override)`,
       );
     }
-    const bytes = await uploadOne(engine, localPath, args.vfs_path);
+    const bytes = await uploadOne(engine, localPath, args.vfs_path, quiet);
     return {
       ok: true,
       uploaded: 1,
@@ -240,7 +249,7 @@ export const uploadFile = async (
     const abs = path.join(localPath, rel);
     const dest = joinVfs(args.vfs_path, rel);
     try {
-      bytesSent += await uploadOne(engine, abs, dest);
+      bytesSent += await uploadOne(engine, abs, dest, quiet);
     } catch (e) {
       throw new Error(
         `upload_file: failed on '${abs}' → '${dest}' after ${sent} file(s)/${bytesSent} bytes: ${(e as Error).message}`,
