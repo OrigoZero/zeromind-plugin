@@ -4,6 +4,8 @@ export type World = {
   is_public: boolean;
   owner_user_id: string;
   created_by_install_id?: string;
+  /** Max players per play instance. Worlds are multiplayer by nature; 1 = singleplayer. */
+  max_clients: number;
 };
 
 export type Session = {

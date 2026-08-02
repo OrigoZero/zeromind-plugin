@@ -72,9 +72,10 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
                 "- `zeromind.install` — install content INTO the connected world (a world as a library, or an asset's files at a path). The engine fetches the bytes; you only pass an id. Requires world.connect.\n" +
                 "- `zeromind.engage` — give back: vote, comment, review, bookmark, follow, report.\n" +
                 "- `zeromind.issue` — file a bug/feedback/report about the ZeroMind platform itself (not your own code, not someone's content).\n\n" +
-                "**Worlds:**\n" +
+                "**Worlds:** Worlds are multiplayer by nature — build games multiplayer-first. Every world has `max_clients` (players per play instance, default 16); play sessions instance automatically when full. Make a world singleplayer only when the design truly demands it, by setting `max_clients: 1`.\n" +
                 "- `world.list` — the user's worlds.\n" +
-                "- `world.create({name, template?, public?})` — make a new world.\n" +
+                "- `world.create({name, template?, public?, max_clients?})` — make a new world (default max_clients 16; 1 = singleplayer).\n" +
+                "- `world.set_max_clients({name | guid, max_clients})` — change a world's player cap (new instances).\n" +
                 "- `world.open_in_browser({guid})` — returns a URL the user has to click to actually open the world's runtime.\n" +
                 "- `world.connect({guid})` — attach to the user's currently-open browser tab for that world. Subsequent engine tools default to this session.\n" +
                 "- `world.disconnect` — detach.\n\n" +

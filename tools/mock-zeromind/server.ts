@@ -22,9 +22,14 @@ export type WorldRow = {
   is_public: boolean;
   owner_user_id: string;
   created_by_install_id: string;
+  /** Max players per play instance; mirrors the API default of 16. */
+  max_clients: number;
   /** Soft-delete tombstone (RFC3339). Absent = live; set = trashed. */
   deleted_at?: string;
 };
+
+/** API default max_clients when a create request omits the field. */
+const MOCK_DEFAULT_MAX_CLIENTS = 16;
 
 /** Days a soft-deleted world stays recoverable in the mock (mirrors the
  *  server's WORLD_PURGE_RETENTION_DAYS default). */
@@ -217,6 +222,7 @@ export const buildServer = (state: MockState): Server =>
           name?: string;
           template?: string;
           public?: boolean;
+          max_clients?: number;
         };
         if (!body.name) return json(res, 400, { error: "missing_name" });
         const guid = `wld_${randomBytes(8).toString("hex")}`;
@@ -226,6 +232,7 @@ export const buildServer = (state: MockState): Server =>
           is_public: !!body.public,
           owner_user_id: install.user_id!,
           created_by_install_id: install.install_id,
+          max_clients: body.max_clients ?? MOCK_DEFAULT_MAX_CLIENTS,
         };
         state.worlds.set(guid, world);
         return json(res, 200, { world });
@@ -250,6 +257,7 @@ export const buildServer = (state: MockState): Server =>
           is_public: src ? src.is_public : true, // inherit; default public
           owner_user_id: install.user_id!,
           created_by_install_id: install.install_id,
+          max_clients: src ? src.max_clients : MOCK_DEFAULT_MAX_CLIENTS,
         };
         state.worlds.set(guid, world);
         return json(res, 201, { world_guid: guid, bootstrapped: false });
@@ -269,6 +277,21 @@ export const buildServer = (state: MockState): Server =>
         world.deleted_at = world.deleted_at ?? new Date().toISOString();
         state.worlds.set(world.guid, world);
         return json(res, 200, world);
+      }
+
+      // PATCH /v1/worlds/{guid} — update mutable metadata (owner-only).
+      const worldPatchMatch = path.match(/^\/v1\/worlds\/([^/]+)$/);
+      if (method === "PATCH" && worldPatchMatch) {
+        const install = requireAuth(req, state);
+        if (!install || !install.linked) return json(res, 401, { error: "unauthorized" });
+        const world = state.worlds.get(worldPatchMatch[1]);
+        if (!world || world.owner_user_id !== install.user_id) {
+          return json(res, 404, { error: "not_found" });
+        }
+        const body = (await readJson(req)) as { max_clients?: number };
+        if (body.max_clients !== undefined) world.max_clients = body.max_clients;
+        state.worlds.set(world.guid, world);
+        return json(res, 200, { world });
       }
 
       // POST /v1/worlds/{guid}/restore — clear the tombstone (owner-only).
