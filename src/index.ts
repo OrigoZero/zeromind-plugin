@@ -413,19 +413,19 @@ const toolDefs = [
   {
     name: "use_tool",
     description:
-      "Run a registered Zero workflow tool by name — the executing sibling of search_tools. search_tools FINDS the tool (returns its toolbox, signature, example); use_tool RUNS it. Pass `toolbox` + `tool` and POSITIONAL `args` in signature order (e.g. toolbox=\"sc\", tool=\"move\", args=[\"ent_5\",1,0,0]). Returns the tool's ZmToolResult envelope ({ ok, value | error, durationMs, tool }).",
+      "Run a registered Zero workflow tool by name — the executing sibling of search_tools. search_tools FINDS the tool (returns its toolbox, signature, example); use_tool RUNS it. Pass `toolbox` + `tool` and POSITIONAL `args` in signature order (e.g. toolbox=\"sc\", tool=\"move\", args=[\"ent_5\",1,0,0]). Returns the tool's ZmToolResult envelope ({ ok, value | error, durationMs, tool }). To run several tools in ONE request, pass `calls` (an array of { toolbox, tool, args }) instead of the single-call fields, with `mode` \"sequential\" (default — stop at the first failure) or \"parallel\" (run all, collect every result); the reply is one batch envelope { batch, mode, ok, ran, total, results }.",
     inputSchema: {
       type: "object",
       properties: {
         toolbox: {
           type: "string",
           description:
-            "Toolbox namespace the tool lives in (the `toolbox` field on a search_tools result, e.g. \"sc\"). May be omitted if `tool` is given in dotted \"toolbox.tool\" form.",
+            "Toolbox namespace the tool lives in (the `toolbox` field on a search_tools result, e.g. \"sc\"). May be omitted if `tool` is given in dotted \"toolbox.tool\" form. Single-call form — mutually exclusive with `calls`.",
         },
         tool: {
           type: "string",
           description:
-            "Tool name within the toolbox (e.g. \"move\"). A dotted \"toolbox.tool\" form is also accepted when `toolbox` is omitted.",
+            "Tool name within the toolbox (e.g. \"move\"). A dotted \"toolbox.tool\" form is also accepted when `toolbox` is omitted. Single-call form — mutually exclusive with `calls`.",
         },
         args: {
           type: "array",
@@ -433,8 +433,40 @@ const toolDefs = [
             "POSITIONAL arguments in the tool's signature order. A table-valued parameter is passed as one array element: args: [{...}]. Omit for a no-argument tool.",
           items: {},
         },
+        calls: {
+          type: "array",
+          description:
+            "BATCH form — run several tools in one request. Each element is a call { toolbox, tool, args } with the same shape and rules as the single-call fields. Mutually exclusive with `tool`/`toolbox`/`args`. Returns one batch envelope { batch, mode, ok, ran, total, results }.",
+          items: {
+            type: "object",
+            properties: {
+              toolbox: {
+                type: "string",
+                description:
+                  "Toolbox namespace, e.g. \"sc\". May be omitted if `tool` is dotted \"toolbox.tool\".",
+              },
+              tool: {
+                type: "string",
+                description:
+                  "Tool name, e.g. \"move\", or a dotted \"toolbox.tool\" when `toolbox` is omitted.",
+              },
+              args: {
+                type: "array",
+                description: "POSITIONAL args in signature order, same as the single-call `args`.",
+                items: {},
+              },
+            },
+            required: ["tool"],
+          },
+        },
+        mode: {
+          type: "string",
+          enum: ["sequential", "parallel"],
+          description:
+            "How a `calls` batch runs. \"sequential\" (default): in order, each awaited, STOP at the first failure. \"parallel\": start all, collect every result. Ignored without `calls`.",
+          default: "sequential",
+        },
       },
-      required: ["tool"],
     },
   },
   {
@@ -650,7 +682,13 @@ const dispatch = async (
       return (await ensureEngine()).e.search_tools(args);
     case "use_tool": {
       const r = await (await ensureEngine()).e.use_tool(
-        args as { toolbox?: string; tool: string; args?: unknown[] },
+        args as {
+          toolbox?: string;
+          tool?: string;
+          args?: unknown[];
+          calls?: { toolbox?: string; tool: string; args?: unknown[] }[];
+          mode?: "sequential" | "parallel";
+        },
       );
       return applyAutoWatch(r, (await ensureWatch()).wt, autoWatchIndex);
     }
