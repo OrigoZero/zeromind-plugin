@@ -52,11 +52,15 @@ export class EngineTools {
   // The executing sibling of search_tools: search finds the workflow tool,
   // use_tool runs it. `args` is POSITIONAL (the tool's signature order).
   // Returns the tool's ZmToolResult envelope { ok, value | error, durationMs,
-  // tool }.
+  // tool }. Pass `calls` (with an optional `mode`) instead of the single-call
+  // fields to run a batch in one request; the reply is one batch envelope
+  // { batch, mode, ok, ran, total, results }.
   use_tool(params: {
     toolbox?: string;
-    tool: string;
+    tool?: string;
     args?: unknown[];
+    calls?: { toolbox?: string; tool: string; args?: unknown[] }[];
+    mode?: "sequential" | "parallel";
   }): Promise<unknown> {
     return call(this.bridge, this.world, "use_tool", params);
   }
