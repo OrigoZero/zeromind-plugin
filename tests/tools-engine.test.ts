@@ -122,6 +122,70 @@ describe("engine tools", () => {
     }
   });
 
+  // Each of these forwards a distinct engine method, and a typo in any one of
+  // them is invisible until an agent calls it against a live world. Drive them
+  // all through one mock session, asserting the method name AND the params the
+  // engine actually receives (defaults included, absent fields omitted).
+  it("forwards every engine-served tool under its own method name", async () => {
+    const tmp = withTmpConfigDir();
+    setEnv(server, tmp.dir);
+    try {
+      const { b, worldTools, browser } = await setupConnectedSession(server, "usr_e_fwd");
+      const seen: { method: string; params: unknown }[] = [];
+      browser.on("message", (raw) => {
+        const f = JSON.parse(raw.toString()) as {
+          id?: string;
+          method?: string;
+          params?: unknown;
+        };
+        if (!f.method || f.method === "connect") return;
+        seen.push({ method: f.method, params: f.params });
+        browser.send(
+          JSON.stringify({ type: "rpc.response", id: f.id, result: { ok: true } }),
+        );
+      });
+      const engine = new EngineTools(b, worldTools);
+
+      await engine.describe_tool({ toolbox: "sc", tool: "move" });
+      await engine.wait({ taskId: 42 });
+      await engine.play();
+      await engine.edit();
+      await engine.pause({ paused: false });
+      await engine.preview({ asset: "ast_1", width: 256 });
+      await engine.zeromind_preview({ guid: "ast_2", at: "/source/combat" });
+      await engine.edit_world_metadata({ title: "T", visibility: "public" });
+      await engine.set_world_cover({ source: "viewport" });
+
+      expect(seen.map((s) => s.method)).toEqual([
+        "describe_tool",
+        "wait",
+        "play",
+        "edit",
+        "pause",
+        "preview",
+        "zeromind_preview",
+        "edit_world_metadata",
+        "set_world_cover",
+      ]);
+      expect(seen[0].params).toEqual({ toolbox: "sc", tool: "move" });
+      expect(seen[1].params).toEqual({ taskId: 42 });
+      // play/edit take no arguments and must still send an object, not null.
+      expect(seen[2].params).toEqual({});
+      expect(seen[3].params).toEqual({});
+      expect(seen[4].params).toEqual({ paused: false });
+      expect(seen[5].params).toEqual({ asset: "ast_1", width: 256 });
+      expect(seen[6].params).toEqual({ guid: "ast_2", at: "/source/combat" });
+      expect(seen[7].params).toEqual({ title: "T", visibility: "public" });
+      expect(seen[8].params).toEqual({ source: "viewport" });
+
+      await b.close();
+      browser.close();
+    } finally {
+      clearEnv();
+      tmp.cleanup();
+    }
+  });
+
   it("execute throws NotConnectedError when no session is active", async () => {
     const tmp = withTmpConfigDir();
     setEnv(server, tmp.dir);

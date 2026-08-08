@@ -93,6 +93,18 @@ describe("e2e stdio MCP", () => {
     expect(names).toContain("auth_status");
     expect(names).toContain("execute");
     expect(names).toContain("agent_skill");
+    // Every engine-served tool the plugin forwards must be advertised here; a
+    // tool missing from this list is invisible no matter that the bridge and
+    // the engine both support it.
+    expect(names).toContain("describe_tool");
+    expect(names).toContain("preview");
+    expect(names).toContain("play");
+    expect(names).toContain("edit");
+    expect(names).toContain("pause");
+    expect(names).toContain("wait");
+    expect(names).toContain("edit_world_metadata");
+    expect(names).toContain("set_world_cover");
+    expect(names).toContain("zeromind.preview");
     expect(names).toContain("upload_file");
     expect(names).toContain("world.create");
     expect(names).toContain("zm_link");

@@ -56,7 +56,7 @@ export const MANUAL: string =
 export const INSTRUCTIONS = MANUAL;
 
 const TOPIC_FALLBACK_GETTING_STARTED = MANUAL;
-const TOPIC_FALLBACK_LIBRARY = `See \`zeromind.search\` / \`zeromind.inspect\` / \`zeromind.install\` / \`zeromind.engage\` tool descriptions. The full library guide ships in the npm package under \`skills/zeromind-library/SKILL.md\`.`;
+const TOPIC_FALLBACK_LIBRARY = `See \`zeromind.search\` / \`zeromind.inspect\` / \`zeromind.preview\` / \`zeromind.install\` / \`zeromind.engage\` tool descriptions. The full library guide ships in the npm package under \`skills/zeromind-library/SKILL.md\`.`;
 
 const TOPIC_LINKING = `# Linking this IDE to a ZeroMind account
 
@@ -84,6 +84,7 @@ User: "build me a destructible voxel terrain"
 3. zeromind.inspect { target: "asset", guid: "ast_top_hit" }
                                         # overview: schema, capabilities, review, comments, dependents
 4. world.connect { name: "<world>", auto_launch: true }
+   zeromind.preview { guid: "ast_top_hit" }   # what would this WRITE? files, deps, footprint — writes nothing
 5. zeromind.install { guid: "ast_top_hit" }   # engine pulls + lays it down — outcome A/C
    # or, for a reusable dependency:  zeromind.install { world: "wld_lib" }   (outcome A/B)
 6. guides()                             # always read the engine README before Luau work
@@ -132,6 +133,10 @@ const TOPIC_TOOLS = `# Tool reference
 - \`capture { pass?, layers?, width?, height?, format? }\` — screenshot, base64 PNG.
 - \`agent_skill { name?, scope?, release? }\` — engine SKILLS: packaged procedures for whole jobs, living in the connected world. No args lists them; \`name\` opens one (and HOLDS it open, riding your tool responses) — \`release\` closes it. Reach for this before working a multi-step engine job out from first principles.
 - \`search_tools { query?, category?, tier? }\` → \`use_tool { toolbox, tool, args }\` — find a registered workflow tool, then RUN it. A pair: search FINDS it, use_tool RUNS it (POSITIONAL \`args\` in signature order), no \`execute()\` snippet needed. Reach for \`search_tools\` before hand-writing a multi-step workflow.
+- \`describe_tool { toolbox?, tool }\` — one tool's FULL schema (signature, args, returns, examples). The detail sibling of the pair above: use it when you know the name and need the exact arguments.
+- \`play\` / \`edit\` / \`pause { paused? }\` — run-state control, each returning \`{ mode, paused }\`. \`play\` runs the simulation (refused while /zero/source has error-severity LSP diagnostics), \`edit\` returns to authoring, \`pause\` freezes without leaving the mode. play → capture → edit is the loop for verifying behaviour, not just layout.
+- \`wait { taskId, timeout_secs?, logs? }\` — BLOCKING wait on a promoted task (caps at 20s, then re-promotes). For longer work prefer non-blocking \`track\` and end your turn.
+- \`preview { asset, width?, height? }\` — render ONE asset through its type's preview() hook, inline PNG. Look at a mesh/material/scene without spawning it. (\`capture\` is for the world.)
 - \`read_file\` / \`write_file\` / \`edit_file\` — engine VFS at \`/zero/...\`.
 - \`upload_file { local_path, vfs_path }\` — upload a local file/folder (image, model, audio, asset pack) into the engine VFS. Binary-safe; no base64 in the call.
 - \`bash { command }\` — engine scene-VFS bash.
