@@ -22,16 +22,17 @@ Only when search genuinely turns up nothing usable do you build from scratch —
 
 Writing everything yourself when a drop-in existed is the single biggest waste of the user's time. Treat "did I check ZeroMind?" as a hard gate before any from-scratch work.
 
-## The four tools
+## The five tools
 
 | Tool | What it's for |
 |---|---|
 | `zeromind.search` | Find content. The mandatory first step. |
 | `zeromind.inspect` | Drill into one world/asset before committing to it. |
+| `zeromind.preview` | See exactly what an install would write — every file and dependency, with paths and sizes — while writing nothing. |
 | `zeromind.install` | Install content into the connected world — add a world as a library, or install an asset's content at a path. |
 | `zeromind.engage` | Contribute back: vote, comment, review, bookmark, follow, report. |
 
-`search`, `inspect`, and `engage` are pure REST against the ZeroMind backend — **you do NOT need an open browser world or a `world.connect` for them.** You can scout ZeroMind before you ever open the engine. **`install` is the exception**: it acts on the live engine, so it requires a connected world (`world.connect` first). All four authenticate with the linked install (run `auth_status` / `zm_link` first if unlinked).
+`search`, `inspect`, and `engage` are pure REST against the ZeroMind backend — **you do NOT need an open browser world or a `world.connect` for them.** You can scout ZeroMind before you ever open the engine. **`preview` and `install` are the exceptions**: both act on the live engine, so they require a connected world (`world.connect` first). All five authenticate with the linked install (run `auth_status` / `zm_link` first if unlinked).
 
 **You never download content to this client.** Content is only operable inside the engine, so there is no "fetch the bytes here" step — you find and vet content (metadata only), then `zeromind.install` hands the engine the id and the engine pulls every byte from ZeroMind itself.
 
@@ -110,7 +111,13 @@ zeromind.inspect { "target": "world", "guid": "wld_…", "view": "contents" }
 2. **`zeromind.install`** it into the connected world (asset mode lands the files at `/source/<display_name>`; library mode mounts it under `@<name>`).
 3. **Read it in the engine** with the engine VFS tools — `read_file { path: "/source/<name>/…" }`, or `bash { command: "ls /source/<name>" }` / `cat`, and `lsp.*` / `guides` to introspect its API. The engine is where source lives; that's where you read and edit it.
 
-So: inspect for the decision, install to get the code into the engine, then inspect *in the engine* if you need to study or adapt the source.
+So: inspect for the decision, preview for the footprint, install to get the code into the engine, then inspect *in the engine* if you need to study or adapt the source.
+
+## `zeromind.preview` — what would this actually write?
+
+`zeromind.preview { guid }` resolves the full closure an install would lay down and **writes nothing**. Each node comes back with its `dest_path`, byte size, content hash, and the reason it's included (`root` / `requires` / `depends_on` / `conforms_to` / `tree_child`), plus rollup totals and a `truncated` flag. `at` sets the destination directory the paths are computed against; `ref` previews a specific commit.
+
+Reach for it when a hit could pull in more than it looks like — a small-sounding asset that drags a dependency tree, or an install into a path where a collision would matter. `inspect` tells you whether the content is *right*; `preview` tells you what it *costs* and where it *lands*.
 
 ## `zeromind.install` — bring it into your world
 

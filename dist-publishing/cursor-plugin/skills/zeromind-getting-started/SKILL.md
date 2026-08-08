@@ -26,7 +26,7 @@ Only build from scratch when search genuinely turns up nothing usable — and th
 zeromind.search { "q": "<what the user asked for>", "kind": "<module|component|shader|scene|…>" }
 ```
 
-The ZeroMind tools — `zeromind.search` (find), `zeromind.inspect` (vet), `zeromind.install` (bring into the world), `zeromind.engage` (vote/comment/review/give back). `search`, `inspect`, and `engage` are pure REST and need **no open world** — you can scout before you ever open the engine; `zeromind.install` is the one that brings content into the connected world (the engine fetches the bytes — you never download content or hand-write guids into `execute()`). **The dedicated `zeromind-library` skill is the full reference for this — read it whenever a request might be served by existing content (i.e. almost always).** Treat "did I check ZeroMind?" as a hard gate before any from-scratch work.
+The ZeroMind tools — `zeromind.search` (find), `zeromind.inspect` (vet), `zeromind.preview` (see the exact tree an install would write — every file and dependency with its destination path, size and reason — writing nothing), `zeromind.install` (bring into the world), `zeromind.engage` (vote/comment/review/give back). `search`, `inspect`, and `engage` are pure REST and need **no open world** — you can scout before you ever open the engine; `zeromind.preview` and `zeromind.install` act on the connected world (the engine fetches the bytes — you never download content or hand-write guids into `execute()`). Reach for `preview` before `install` when a hit might pull in more than you expect. **The dedicated `zeromind-library` skill is the full reference for this — read it whenever a request might be served by existing content (i.e. almost always).** Treat "did I check ZeroMind?" as a hard gate before any from-scratch work.
 
 `zeromind.help` orients you across the whole toolset, and `zeromind.issue` files a bug or piece of feedback about ZeroMind itself — reach for it when the platform misbehaves rather than working around it silently.
 
@@ -42,7 +42,7 @@ The ZeroMind tools — `zeromind.search` (find), `zeromind.inspect` (vet), `zero
 
   **Three surfaces reach the same registry — use whichever you already hold:**
   - **`bash`** ships `zero`: `zero` lists every toolbox, `zero <toolbox>` its tools, `zero <toolbox> <tool> --help` one tool's arguments and types, `zero <toolbox> <tool> [args]` runs it, `zero --search <query>` (short: `-k`) keyword-searches. **`--help` answers at every level** (`zero --help`, `zero <toolbox> --help`, `zero <toolbox> <tool> --help`), so you go from "what exists" to a correct call without leaving the shell. Arguments are named (`--fov 60`) or positional; a value that reads as JSON is passed as JSON.
-  - **MCP**: `search_tools` (no args lists the toolboxes; `query` searches across them) → `use_tool { toolbox, tool, args }`.
+  - **MCP**: `search_tools` (no args lists the toolboxes; `query` searches across them) → `use_tool { toolbox, tool, args }`, with `describe_tool` for one tool's full schema when you know the name and need the exact arguments.
   - **Luau**: `tools.use("<toolbox>", "<tool>", ...)` from inside `execute`.
 
   **If your harness defers MCP tool schemas, load `search_tools` and `use_tool` before you start** — otherwise you'll hold `execute` and nothing else, and rebuild by hand what a tool already does. `zero` inside `bash` needs no extra schema load, so it is the cheapest way in when only `bash` is loaded.
@@ -80,7 +80,7 @@ If the check fails (offline / blocked registry) it silently reports `update_avai
    - On timeout → `{ok: false, error: 'no_active_session', url}`. Relay the URL.
 5. **`guides {}`** (no args) — returns the **guide index** (the README is listed first); then **read the README** with `guides { path: "readme" }`. **Do this every time after `world.connect`.** The README is the highest-signal orientation for the live engine: the core ideas, the survey-first working rhythm, and the index of core-system and topic guides. It opens with the one rule that breaks the most builds — **the world is ALWAYS multiplayer:** give players their body/camera/input through the scene's PlayerPrototype, never a hand-rolled player rig (which passes single-peer testing, then breaks the instant a second player joins).
 6. **Iterate** with `execute` / `read_file` / `write_file` / `edit_file` / `capture` / `bash`. When you installed a base from ZeroMind (outcome C, via `zeromind.install`), read + adapt the installed files here (`read_file` / `edit_file` under `/source/<name>`).
-7. **Publish** when ready: `bash({command: "zm add . && zm commit -m 'describe the change' && zm push"})` — add stages, commit checkpoints, push publishes. Then `zeromind.engage` to vote/comment on content you used.
+7. **Publish** when ready: `bash({command: "zm add . && zm commit -m 'describe the change' && zm push"})` — add stages, commit checkpoints, push publishes. Then give the world a face with `edit_world_metadata` (title, description, README body, tags, visibility) and `set_world_cover` (captures the current viewport by default) — a published world nobody can recognise or search for is barely published. Finally `zeromind.engage` to vote/comment on content you used.
 
 ## Worlds, scenes & persistence
 
@@ -94,22 +94,21 @@ A world is the persistent multiplayer container — a **shared, multi-user sessi
 
 ## Edit mode vs play mode — testing what you built
 
-The engine you're driving always boots in **edit** mode (authoring surface, gameplay paused — agent tool calls require it). To test what you built actually runs, flip into **play** mode and back. `wld` is a **tool toolbox** (not a Luau global) — drive it with `use_tool` over MCP, or `tools.use(...)` from inside `execute`:
+The engine you're driving always boots in **edit** mode (authoring surface, gameplay paused — agent tool calls require it). To test what you built actually runs, flip into **play** mode and back. There are dedicated tools for this:
 
 ```
-use_tool { toolbox = "wld", tool = "play" }   -- flip to play: gameplay runs, scripts tick, physics simulates
-use_tool { toolbox = "wld", tool = "edit" }   -- flip back to edit: pause + return to authoring
-use_tool { toolbox = "wld", tool = "mode" }   -- query current mode: "edit" | "play"
+play                       -- gameplay runs: scripts tick, physics simulates, /zero writes lock
+edit                       -- back to authoring: gameplay pauses, /zero writes unlock
+pause { paused: false }    -- freeze/resume WITHOUT leaving the current mode
 ```
 
-```luau
--- the same three from inside execute()
-tools.use("wld", "play")
-tools.use("wld", "edit")        -- refuses while play-mode changes are unaccepted; settle them via the sceneAuthoring toolbox
-tools.use("wld", "mode")
-```
+All three return the resulting run-state `{ mode, paused }`. `execute`'s own response carries `state.mode` / `state.paused` too, so you can read the mode instead of asking for it.
 
-Mode flips are cheap and reversible — there's no rebuild step. After flipping to play, take a `capture` to see your world animating; flip back to edit to make changes; repeat. This is the inner loop for verifying behavior beyond static layout.
+**`play` is refused while user content under `/zero/source` has error-severity LSP diagnostics**, and the refusal names them — fix them rather than working around it.
+
+Mode flips are cheap and reversible; there's no rebuild step. Play → `capture` → `edit` → change → repeat is the inner loop for verifying behavior beyond static layout, and `pause` is how you hold a moving scene still for a clean screenshot.
+
+`wld` is also a **tool toolbox** (never a Luau global) covering the same ground from Luau — `tools.use("wld", "play")` — which is what you want inside a longer `execute` script.
 
 ## `guides` — the canonical reference for everything in-engine
 
@@ -187,13 +186,19 @@ execute { "code": "..." }
 
 `execute` returns a structured envelope — `{ result, logs, diagnostics, state }` — where `result` is your return value and `state` snapshots the engine (mode, paused, timeScale, active layer/scene, bound world). The `logs` field is **error-only by default**; pass `logs: "warn" | "info" | "debug"` to surface more (script errors, panics, and diagnostics always surface regardless).
 
-Long-running code promotes to a task handle (`{ status: "running", taskId, ... }`) instead of blocking. A promoting call **auto-registers a watcher for you** and returns its `fire_path` — read that file to check status. Use `track` yourself only to poll an arbitrary Luau expression or VFS file, and `untrack` to cancel one. The tool schemas document the contract.
+Long-running code promotes to a task handle (`{ status: "running", taskId, ... }`) instead of blocking. Three ways to follow it up:
+
+- The promoting call **auto-registers a watcher** and returns its `fire_path` — read that file any time to check status. Nothing to set up.
+- `wait { taskId }` blocks inline, capped at 20s; past that it hands the handle back and you call it again. Right for work finishing within a hop or two.
+- `track` registers a watcher yourself on an arbitrary Luau expression or VFS file (`untrack` cancels). For anything long, register and **end your turn** rather than busy-polling `wait`.
 
 For the engine's Luau global surface — what namespaces exist and what they do — read the README (`guides {}`) and use the discovery surfaces above. The engine evolves; the live registry is always current.
 
 ### Capturing screenshots
 
 Three axes: **WHERE** (`source`: `main` = the scene/gameplay camera and the default, `editor` = the editor fly-camera, `screen` = the literal on-screen image, `camera` = a specific camera ref, plus `entity` / `position` / `ui_window`), **WHAT** (`pass`: final or a diagnostic buffer), and which **LAYERS**. `mode: "collage"` samples over a duration and is **required for anything that moves, rotates, or animates**. The `capture` tool's own schema documents every parameter and the full pass enum; `man capture/oneshot` covers the Luau primitive behind it.
+
+**`capture` is for the world; `preview` is for one asset.** `preview { asset }` renders a single asset through its type's own `preview()` hook and returns an inline PNG — that's how you look at a mesh, material, texture or scene **without spawning it into the world**. A type with no preview hook answers `available: false` with a reason instead of failing.
 
 **Screenshots are NEVER same-frame.** Multiple seconds pass between an `execute` and a `capture`. If something should have appeared/disappeared and didn't, the test failed. Never blame "deferred mutations" or "next frame" — the screenshot is taken many frames later. If it's not there, it's broken.
 
@@ -237,7 +242,7 @@ Most user prompts will be one of these shapes — translate to the standard flow
 - **"delete my [name]"** → `world.delete({name})` — a reversible soft-delete (recoverable via `world.trash` → `world.restore` for ~30 days, then purged). Confirm with the user first unless they were explicit; you can't delete worlds you don't own.
 - **"add a [thing]"** to an open world → `execute` to spawn/configure, `capture` to verify, then `zm add . && zm commit -m '...' && zm push` once happy.
 - **"what does my world look like?"** → `capture()` and show them.
-- **"does it actually work?"** → `use_tool { toolbox = "wld", tool = "play" }` to flip into play mode, `capture` to see it run, `use_tool { toolbox = "wld", tool = "edit" }` to return.
+- **"does it actually work?"** → `play` to start the simulation, `capture` to see it run, `edit` to return.
 - **"save my work"** → `bash({command: "zm add . && zm commit -m '...' && zm push"})`.
 - **"the [thing] isn't working"** → `capture` with a diagnostic pass to localize, then `read_file` the relevant component/material, then fix via `edit_file` and re-`execute` / `capture`.
 

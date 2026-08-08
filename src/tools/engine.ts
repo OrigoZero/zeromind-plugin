@@ -78,6 +78,75 @@ export class EngineTools {
   }): Promise<unknown> {
     return call(this.bridge, this.world, "use_tool", params);
   }
+  // The detail sibling of search_tools/use_tool: search LISTS tools compactly,
+  // describe_tool returns ONE tool's full assembled schema. Same data as
+  // `zero <toolbox> <tool> --help` in the engine shell.
+  describe_tool(params: { toolbox?: string; tool: string }): Promise<unknown> {
+    return call(this.bridge, this.world, "describe_tool", params);
+  }
+  // BLOCKING counterpart to the non-blocking `track` watcher: waits inline on a
+  // promoted task. The engine caps the block at 20s to stay under the MCP
+  // transport timeout and re-promotes past it, so a still-running task comes
+  // back as `{ status: "running", taskId }` and you call wait again.
+  wait(params: {
+    taskId: number;
+    timeout_secs?: number;
+    logs?: "error" | "warn" | "info" | "debug";
+  }): Promise<unknown> {
+    return call(this.bridge, this.world, "wait", params);
+  }
+  // Run-state control. All three return `{ mode, paused }`. `play` is refused
+  // while user content under /zero/source has error-severity LSP diagnostics;
+  // `pause` freezes without leaving the current mode.
+  play(): Promise<{ mode: string; paused: boolean }> {
+    return call(this.bridge, this.world, "play", {});
+  }
+  edit(): Promise<{ mode: string; paused: boolean }> {
+    return call(this.bridge, this.world, "edit", {});
+  }
+  pause(params: { paused?: boolean } = {}): Promise<{ mode: string; paused: boolean }> {
+    return call(this.bridge, this.world, "pause", params);
+  }
+  // Renders an asset through its type's preview() hook. Asset types without one
+  // answer `available: false` with a reason rather than failing.
+  preview(params: {
+    asset: string;
+    width?: number;
+    height?: number;
+  }): Promise<unknown> {
+    return call(this.bridge, this.world, "preview", params);
+  }
+  // Resolves the full closure an install would write — every file and
+  // dependency with dest_path, size, hash and why it is included — and writes
+  // nothing. The vetting step before zeromind.install.
+  zeromind_preview(params: { guid: string; at?: string; ref?: string }): Promise<unknown> {
+    return call(this.bridge, this.world, "zeromind_preview", params);
+  }
+  // World publishing metadata, through the engine's trusted ZeroMind bridge.
+  // Both require maintainer access; omitted fields are left unchanged.
+  edit_world_metadata(params: {
+    world_guid?: string;
+    title?: string;
+    description?: string;
+    body?: string;
+    tags?: string[];
+    topics?: string[];
+    visibility?: "public" | "unlisted" | "private";
+    category?: string;
+  }): Promise<unknown> {
+    return call(this.bridge, this.world, "edit_world_metadata", params);
+  }
+  set_world_cover(
+    params: {
+      world_guid?: string;
+      source?: "viewport" | "vfs_path" | "blob_sha256";
+      vfs_path?: string;
+      blob_sha256?: string;
+      content_type?: string;
+    } = {},
+  ): Promise<unknown> {
+    return call(this.bridge, this.world, "set_world_cover", params);
+  }
   capture(
     params: {
       pass?: string;

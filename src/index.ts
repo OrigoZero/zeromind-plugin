@@ -184,6 +184,31 @@ const toolDefs = [
     },
   },
   {
+    name: "zeromind.preview",
+    description:
+      "Preview exactly what `zeromind.install` WOULD write, without writing anything. Returns the resolved closure tree — every file and dependency with its local dest_path, byte size, content hash, and why it is included (root / requires / depends_on / conforms_to / tree_child) — plus rollup totals and a `truncated` flag. Use it to vet a package's real contents and footprint before committing to an install, especially when a hit pulls in dependencies you did not expect. Requires a connected world.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        guid: {
+          type: "string",
+          description:
+            "The root asset guid to preview (from a zeromind.search / zeromind.inspect hit).",
+        },
+        at: {
+          type: "string",
+          description:
+            "Destination DIRECTORY the install would use (the asset keeps its own name), used to compute each node's dest_path. e.g. at=/source/combat → /source/combat/<name>. Defaults to /source.",
+        },
+        ref: {
+          type: "string",
+          description: "Preview a specific commit id. Defaults to the latest finalized commit.",
+        },
+      },
+      required: ["guid"],
+    },
+  },
+  {
     name: "zeromind.engage",
     description:
       "Contribute back to ZeroMind. `action`: 'vote' (value 1 up / -1 down / 0 clear; target world|asset|comment), 'comment' (target world|asset, body, optional parent for replies), 'review' (structured agent quality review on an asset — compat_tier compatible|shim|incompatible + usability/code_quality/performance 0–100 + optional verdict; requires an agent or admin account), 'bookmark' (target world|asset, on), 'follow' (target world|user, on), 'report' (target world|asset, reason), 'record_pull' (mark that consumer world_guid adopted asset_guid — raises its adoption signal). Vote on and comment about content you used; review it once you've judged its quality.",
@@ -424,6 +449,27 @@ const toolDefs = [
     },
   },
   {
+    name: "describe_tool",
+    description:
+      'Return one registered Zero tool\'s full schema by name — its signature, description, args, returns, and examples. Pass `toolbox` + `tool`, or a dotted "toolbox.tool" in `tool`. The detail sibling of search_tools (which lists tools compactly) and use_tool (which runs one): reach for it when you know a tool\'s name and need its exact arguments, instead of re-running a broad search or dropping into execute() to call tools.get by hand.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        toolbox: {
+          type: "string",
+          description:
+            'Toolbox namespace the tool lives in (e.g. "entityOps", "scene"). May be omitted if `tool` is a dotted "toolbox.tool".',
+        },
+        tool: {
+          type: "string",
+          description:
+            'Tool name within the toolbox (e.g. "modify"), or a dotted "toolbox.tool" when `toolbox` is omitted.',
+        },
+      },
+      required: ["tool"],
+    },
+  },
+  {
     name: "search_tools",
     description:
       "Search the engine's tool registry by what you want to do (SEMANTIC — finds tools whose purpose matches your intent, not just name/keyword matches); falls back to keyword matching when semantic search is unavailable. Call this FIRST before hand-writing a multi-step workflow — a tool may already do the whole thing in one call. Omit query to list the toolboxes (domains) with their purpose; pass `toolbox` to drill into one. Run a hit with the `use_tool` tool.",
@@ -506,6 +552,142 @@ const toolDefs = [
         width: { type: "integer" },
         height: { type: "integer" },
         format: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "preview",
+    description:
+      "Render a preview image of ONE asset by reference, returned as an inline PNG. Dispatches to the asset type's preview() hook, so a mesh, material, texture or scene each render the way that type presents itself — this is how you look at an asset without spawning it into the world. Types with no preview hook answer `available: false` with a reason rather than failing. For a picture of the world itself, use `capture`.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        asset: { type: "string", description: "Asset reference to preview (guid or path)." },
+        width: {
+          type: "integer",
+          description: "Preview image width in pixels (default 768, 16–4096).",
+        },
+        height: {
+          type: "integer",
+          description: "Preview image height in pixels (default 768, 16–4096).",
+        },
+      },
+      required: ["asset"],
+    },
+  },
+  {
+    name: "play",
+    description:
+      "Enter play mode: start the gameplay simulation running — physics, scripting lifecycle, and per-frame callbacks tick, like pressing the editor's Play button. Unpauses gameplay and locks /zero VFS writes while the simulation runs. Takes no arguments; returns the resulting run-state { mode, paused }. Entering play is REFUSED — with the offending diagnostics — while user content under /zero/source has error-severity LSP errors; fix them rather than working around the refusal. This is the inner loop for verifying behaviour beyond static layout: play, capture, edit, repeat.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "edit",
+    description:
+      "Enter edit mode: stop the gameplay simulation and return to authoring, like pressing the editor's Stop/Edit button. Pauses gameplay and unlocks /zero VFS writes so you can author. Takes no arguments; returns the resulting run-state { mode, paused }.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "pause",
+    description:
+      "Freeze or resume the gameplay simulation — physics, scripting lifecycle, and per-frame callbacks — while STAYING in the current mode; sync, rendering, and the VFS keep running. Call with no argument (or paused:true) to freeze; pass paused:false to resume. Returns the resulting run-state { mode, paused }. Use this to hold a moving scene still for a screenshot; to fully stop and return to authoring, use `edit`.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        paused: {
+          type: "boolean",
+          description: "Target pause state: true (default) freezes gameplay, false resumes it.",
+        },
+      },
+    },
+  },
+  {
+    name: "wait",
+    description:
+      'BLOCKING wait for a task that execute()/bash promoted to async; returns its result. Pass the `taskId` from a `{ status: "running", taskId }` response. Blocks up to `timeout_secs` (default and cap 20s): returns the task\'s result/error inline if it finishes, or `{ status: "running", taskId }` again if it is still going. Best for tasks expected to finish within a hop or two — for anything longer prefer the non-blocking `track` tool and end your turn instead of busy-polling `wait`.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        taskId: {
+          type: "integer",
+          description:
+            'The task handle to wait on — the `taskId` field from a promoted execute()/bash response (`{ status: "running", taskId, location }`).',
+        },
+        timeout_secs: {
+          type: "number",
+          description:
+            "Max seconds to block inline before re-promoting. Capped at 20s to stay under the MCP transport timeout.",
+        },
+        logs: {
+          type: "string",
+          enum: ["error", "warn", "info", "debug"],
+          description:
+            "Minimum log level surfaced in the response (default: error). Script errors always surface regardless.",
+        },
+      },
+      required: ["taskId"],
+    },
+  },
+  {
+    name: "edit_world_metadata",
+    description:
+      "Edit the connected world's ZeroMind metadata — title, description, long-form README body, tags, topics, visibility, category. Omitted fields are left unchanged. Requires maintainer access to the world. This is what makes a published world findable and legible to other people; use set_world_cover for its image.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        world_guid: {
+          type: "string",
+          description: "World to edit. Defaults to the engine's currently-bound world.",
+        },
+        title: { type: "string", description: "Display title." },
+        description: {
+          type: "string",
+          description: "Short description shown on the world card.",
+        },
+        body: { type: "string", description: "Long-form markdown README for the world page." },
+        tags: { type: "array", items: { type: "string" }, description: "Free-form tags." },
+        topics: { type: "array", items: { type: "string" }, description: "Free-form topics." },
+        visibility: {
+          type: "string",
+          enum: ["public", "unlisted", "private"],
+          description: "Who can see the world.",
+        },
+        category: { type: "string", description: "Curated category slug." },
+      },
+    },
+  },
+  {
+    name: "set_world_cover",
+    description:
+      "Set the connected world's ZeroMind cover image. By default it captures the current viewport and uploads it; or point it at an image already in the VFS (vfs_path) or an uploaded blob (blob_sha256). Requires maintainer access. A great way to give a world a representative thumbnail once a scene looks right.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        world_guid: {
+          type: "string",
+          description: "World to set the cover on. Defaults to the bound world.",
+        },
+        source: {
+          type: "string",
+          enum: ["viewport", "vfs_path", "blob_sha256"],
+          description:
+            "viewport (default): render and upload the current viewport. vfs_path: upload an image at `vfs_path`. blob_sha256: stamp an already-uploaded blob.",
+        },
+        vfs_path: {
+          type: "string",
+          description:
+            "Path to an image in the engine VFS (PNG/JPEG/WebP). Used when source=vfs_path.",
+        },
+        blob_sha256: {
+          type: "string",
+          description:
+            "Hex sha256 of an already-uploaded image blob. Used when source=blob_sha256.",
+        },
+        content_type: {
+          type: "string",
+          description:
+            "Override the image MIME type (otherwise inferred from the path extension).",
+        },
       },
     },
   },
@@ -710,6 +892,36 @@ const dispatch = async (
       );
     case "search_tools":
       return (await ensureEngine()).e.search_tools(args);
+    case "describe_tool":
+      return (await ensureEngine()).e.describe_tool(
+        args as unknown as { toolbox?: string; tool: string },
+      );
+    case "preview":
+      return (await ensureEngine()).e.preview(
+        args as unknown as { asset: string; width?: number; height?: number },
+      );
+    case "play":
+      return (await ensureEngine()).e.play();
+    case "edit":
+      return (await ensureEngine()).e.edit();
+    case "pause":
+      return (await ensureEngine()).e.pause(args as { paused?: boolean });
+    case "wait":
+      return (await ensureEngine()).e.wait(
+        args as unknown as {
+          taskId: number;
+          timeout_secs?: number;
+          logs?: "error" | "warn" | "info" | "debug";
+        },
+      );
+    case "zeromind.preview":
+      return (await ensureEngine()).e.zeromind_preview(
+        args as unknown as { guid: string; at?: string; ref?: string },
+      );
+    case "edit_world_metadata":
+      return (await ensureEngine()).e.edit_world_metadata(args);
+    case "set_world_cover":
+      return (await ensureEngine()).e.set_world_cover(args);
     case "use_tool": {
       const r = await (await ensureEngine()).e.use_tool(
         args as {
