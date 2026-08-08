@@ -74,6 +74,54 @@ describe("engine tools", () => {
     }
   });
 
+  // An engine skill is only reachable through the world, so a missing
+  // agent_skill on this surface means the packaged procedures are invisible to
+  // every plugin agent. Pin the forwarding and the no-arg (list) shape.
+  it("agent_skill forwards to the bridge, including the no-arg list form", async () => {
+    const tmp = withTmpConfigDir();
+    setEnv(server, tmp.dir);
+    try {
+      const { b, worldTools, browser } = await setupConnectedSession(server, "usr_e_skill");
+      const seen: unknown[] = [];
+      browser.on("message", (raw) => {
+        const f = JSON.parse(raw.toString()) as {
+          id?: string;
+          method?: string;
+          params?: unknown;
+        };
+        if (f.method === "agent_skill") {
+          seen.push(f.params);
+          browser.send(
+            JSON.stringify({
+              type: "rpc.response",
+              id: f.id,
+              result: { skills: [{ name: "scenes", description: "build a scene" }] },
+            }),
+          );
+        }
+      });
+      const engine = new EngineTools(b, worldTools);
+
+      const listed = await engine.agent_skill();
+      expect(listed).toEqual({
+        skills: [{ name: "scenes", description: "build a scene" }],
+      });
+      expect(seen[0]).toEqual({});
+
+      await engine.agent_skill({ name: "scenes/player-setup" });
+      expect(seen[1]).toEqual({ name: "scenes/player-setup" });
+
+      await engine.agent_skill({ release: "*" });
+      expect(seen[2]).toEqual({ release: "*" });
+
+      await b.close();
+      browser.close();
+    } finally {
+      clearEnv();
+      tmp.cleanup();
+    }
+  });
+
   it("execute throws NotConnectedError when no session is active", async () => {
     const tmp = withTmpConfigDir();
     setEnv(server, tmp.dir);

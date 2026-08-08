@@ -28,12 +28,24 @@ zeromind.search { "q": "<what the user asked for>", "kind": "<module|component|s
 
 The ZeroMind tools — `zeromind.search` (find), `zeromind.inspect` (vet), `zeromind.install` (bring into the world), `zeromind.engage` (vote/comment/review/give back). `search`, `inspect`, and `engage` are pure REST and need **no open world** — you can scout before you ever open the engine; `zeromind.install` is the one that brings content into the connected world (the engine fetches the bytes — you never download content or hand-write guids into `execute()`). **The dedicated `zeromind-library` skill is the full reference for this — read it whenever a request might be served by existing content (i.e. almost always).** Treat "did I check ZeroMind?" as a hard gate before any from-scratch work.
 
+`zeromind.help` orients you across the whole toolset, and `zeromind.issue` files a bug or piece of feedback about ZeroMind itself — reach for it when the platform misbehaves rather than working around it silently.
+
 ## Core principles
 
 - **`guides` is the canonical reference for everything in-engine.** Whenever you need to know how an engine API works, what assets exist, how content composes, what a system or topic guide says — call `guides`. The content in this skill is a thin orientation layer; the engine's own docs are the source of truth and stay current as the engine evolves. **When this skill and `guides` disagree, `guides` wins.**
 - **Verify everything twice — once with data, once visually.** Code that returns the right value is not done. Code whose effect you have screenshotted and re-queried is done.
 - **Iterate via the VFS, not via reloads.** The engine hot-reloads Luau, YAML, WGSL, and Markdown writes. Asking the user to reload the browser to "fix" something is almost always a sign you skipped a step.
 - **Discover APIs — never guess.** You have `guides`, `lsp.*`, `/zero/docs/api/`, live `_G` introspection — and the public API's source itself, plain Luau you can grep at `/zero/source/libs/@builtin/modules/api/`. Hallucinated function names waste time and break the user's trust. If you don't know whether a function exists, look it up before calling it.
+- **A whole job usually already has a skill — open it before improvising a method.** `agent_skill` (no arguments lists the roster; `name` opens one) reaches the **engine's own** skills: packaged procedures for one job, carrying the instructions plus the assets, guides and tools that job runs through. They live in the connected world, not in your host environment, so this tool is the only way to reach one. A skill you open **stays open** and rides your tool responses — address a subskill as `parent/sub`, and `release` it (or `"*"`) when the job is done. This answers a different question from the surfaces below: `agent_skill` is *what job is this*, `guides` is *how does this system work*, a tool is *what operation can I call*.
+- **New to a system? Read its guide first.** The guides cover how to approach each part of the engine and route you to the exact reference when you need signatures. Reach for the relevant `guides` before writing raw-API Luau against an unfamiliar area.
+- **A tool is a prepackaged `execute()` operation — reach for one before hand-writing it.** Everything you do in the engine runs as Luau; a *tool* is that Luau already written and named, so you don't comb the API by trial and error to redo it. Nothing packaged fits → do it in `execute()`, and if it isn't a one-off, package it as a `.tool` so next time it's one call. `execute` is for complex one-offs; tools are for anything you'll run more than once.
+
+  **Three surfaces reach the same registry — use whichever you already hold:**
+  - **`bash`** ships `zero`: `zero` lists every toolbox, `zero <toolbox>` its tools, `zero <toolbox> <tool> --help` one tool's arguments and types, `zero <toolbox> <tool> [args]` runs it, `zero --search <query>` (short: `-k`) keyword-searches. **`--help` answers at every level** (`zero --help`, `zero <toolbox> --help`, `zero <toolbox> <tool> --help`), so you go from "what exists" to a correct call without leaving the shell. Arguments are named (`--fov 60`) or positional; a value that reads as JSON is passed as JSON.
+  - **MCP**: `search_tools` (no args lists the toolboxes; `query` searches across them) → `use_tool { toolbox, tool, args }`.
+  - **Luau**: `tools.use("<toolbox>", "<tool>", ...)` from inside `execute`.
+
+  **If your harness defers MCP tool schemas, load `search_tools` and `use_tool` before you start** — otherwise you'll hold `execute` and nothing else, and rebuild by hand what a tool already does. `zero` inside `bash` needs no extra schema load, so it is the cheapest way in when only `bash` is loaded.
 - **Generic over specific.** When you build content, ask whether the underlying capability is generic. Don't accumulate one-off features.
 
 ## First-time link (one-time per IDE install)
@@ -66,7 +78,7 @@ If the check fails (offline / blocked registry) it silently reports `update_avai
    - Already-open browser tab → returns immediately.
    - Otherwise opens `https://origozero.ai/edit/<guid>` in the user's default browser and long-polls up to 60s for the WASM engine to boot + connect.
    - On timeout → `{ok: false, error: 'no_active_session', url}`. Relay the URL.
-5. **`guides()`** (no args) — read the engine README. **Do this every time after `world.connect`** in unfamiliar territory. The README is the highest-signal orientation for the live engine: the core ideas, the survey-first working rhythm, and the index of core-system and topic guides.
+5. **`guides {}`** (no args) — returns the **guide index** (the README is listed first); then **read the README** with `guides { path: "readme" }`. **Do this every time after `world.connect`.** The README is the highest-signal orientation for the live engine: the core ideas, the survey-first working rhythm, and the index of core-system and topic guides. It opens with the one rule that breaks the most builds — **the world is ALWAYS multiplayer:** give players their body/camera/input through the scene's PlayerPrototype, never a hand-rolled player rig (which passes single-peer testing, then breaks the instant a second player joins).
 6. **Iterate** with `execute` / `read_file` / `write_file` / `edit_file` / `capture` / `bash`. When you installed a base from ZeroMind (outcome C, via `zeromind.install`), read + adapt the installed files here (`read_file` / `edit_file` under `/source/<name>`).
 7. **Publish** when ready: `bash({command: "zm add . && zm commit -m 'describe the change' && zm push"})` — add stages, commit checkpoints, push publishes. Then `zeromind.engage` to vote/comment on content you used.
 
@@ -82,22 +94,30 @@ A world is the persistent multiplayer container — a **shared, multi-user sessi
 
 ## Edit mode vs play mode — testing what you built
 
-The engine you're driving always boots in **edit** mode (authoring surface, gameplay paused — agent tool calls require it). To test what you built actually runs, flip into **play** mode and back:
+The engine you're driving always boots in **edit** mode (authoring surface, gameplay paused — agent tool calls require it). To test what you built actually runs, flip into **play** mode and back. `wld` is a **tool toolbox** (not a Luau global) — drive it with `use_tool` over MCP, or `tools.use(...)` from inside `execute`:
 
-```luau
-wld.play()                            -- flip to play mode: gameplay runs, scripts tick, physics simulates
-wld.edit()                            -- flip back to edit mode: pause + return to authoring
-wld.mode()                            -- query current mode: "edit" | "play"
+```
+use_tool { toolbox = "wld", tool = "play" }   -- flip to play: gameplay runs, scripts tick, physics simulates
+use_tool { toolbox = "wld", tool = "edit" }   -- flip back to edit: pause + return to authoring
+use_tool { toolbox = "wld", tool = "mode" }   -- query current mode: "edit" | "play"
 ```
 
-Mode flips are cheap and reversible — there's no rebuild step. After `wld.play()`, take a `capture` to see your world animating; flip back with `wld.edit()` to make changes; repeat. This is the inner loop for verifying behavior beyond static layout.
+```luau
+-- the same three from inside execute()
+tools.use("wld", "play")
+tools.use("wld", "edit")        -- refuses while play-mode changes are unaccepted; settle them via the sceneAuthoring toolbox
+tools.use("wld", "mode")
+```
+
+Mode flips are cheap and reversible — there's no rebuild step. After flipping to play, take a `capture` to see your world animating; flip back to edit to make changes; repeat. This is the inner loop for verifying behavior beyond static layout.
 
 ## `guides` — the canonical reference for everything in-engine
 
 `guides` is the in-engine documentation surface. Use it for **anything** you need to know about the engine that isn't already in this skill:
 
-- **Core-system guides** (`core/<name>`): getting-started, asset-system, components, entities, scenes, engine, worlds, development, multiplayer, tools, scripting-and-tasks, performance, modules-and-services, vfs, discovering
-- **Topic guides** (`topics/<name>`): physics, ui, audio, animation, shaders, materials, rendering, render-textures, input, compute
+- **Core-system guides** (`core/<name>`): getting-started, asset-system, resource-model, components, entities, ecs, scenes, scenes-as-code, engine, worlds, development, multiplayer, tools, scripting-and-tasks, generating-assets-and-content, requiring-modules, performance, runtime-data, troubleshooting, vfs, discovering
+- **Topic guides** (`topics/<name>`): physics, ui, audio, animation, rendering, render-textures, raytracing, input, ik, cutscenes, editor, building-a-game
+- **Asset-type references** (`types/<name>`): the canonical reference for each authored asset kind — `types/shader`, `types/material`, `types/component`, `types/module`, `types/scene`, `types/sceneModule`, `types/package`, `types/computeShader`, `types/mesh`, `types/texture`, and the rest. **This is where a thing's property contract lives** — reach for `types/<kind>` before reading source to learn what fields something accepts.
 - Via `man`, also: every API namespace, every registered component, every tool, library modules, and the live VFS
 
 `guides { list: true }` enumerates the current catalog — the lists above are a snapshot.
@@ -107,6 +127,7 @@ Mode flips are cheap and reversible — there's no rebuild step. After `wld.play
 ```
 guides {}                                    -- no args: returns the engine README (mental model + index)
 guides { "path": "core/getting-started" }    -- a specific guide (core/<name> or topics/<name>)
+guides { "path": "types/shader" }            -- an asset type's own reference (its property contract)
 guides { "query": "raycast" }                -- ranked full-text search across README + every guide
 guides { "list": true }                      -- enumerate every available guide path
 ```
@@ -122,7 +143,7 @@ bash { "command": "man -k <pattern>" }       -- apropos: list topics whose name 
 bash { "command": "man -l" }                 -- list every available manual entry
 ```
 
-For namespace-shaped sections (`man -s api world` lists `world/commit`, `world/push`, ...), `man` falls back to a directory listing when the topic has no leaf — drill from `world` to `world/push` without guessing the path. Same fallback for bare VFS directories: `man /zero/source/` lists everything under it.
+For namespace-shaped sections (`man -s api world` lists `world/name`, `world/guid`, `world/participants`, ...), `man` falls back to a directory listing when the topic has no leaf — drill from `world` to `world/participants` without guessing the path. Same fallback for bare VFS directories: `man /zero/source/` lists everything under it.
 
 **When you don't know the right topic name:** `guides({query: "..."})` first, then `bash { "command": "man -k <pattern>" }` to find it, then drill in. `guides { list: true }` enumerates what actually exists.
 
@@ -131,6 +152,8 @@ Hand-authored guides may contain occasional stale references. **`lsp.*` + live `
 ## The execute → capture loop
 
 Every interaction with the engine follows the same loop: discover what you need, run code with `execute`, screenshot with `capture`, verify both data and visual.
+
+Before that loop, three questions have cheaper answers than code — **what job is this** (`agent_skill`), **what operation can I call** (a tool), **how does this system work** (`guides`). Reaching for `execute` before asking all three is how an agent rebuilds something the engine already ships.
 
 ### Discovering APIs (do this BEFORE calling)
 
@@ -144,7 +167,11 @@ Sources of truth, in order of reliability:
 
 ### Tools first — look before you build
 
-Run the same loop every time you set out to do something in the engine: **check whether a tool already does it — then act.** Found one → use it (`use_tool { toolbox, tool, args }`). Nothing fits → *then* drop to `execute`/`bash` and work against the raw API. The check is cheap and usually pays off: the operation you need is often already a validated, one-call tool, and reaching for it saves you from reading a subsystem just to reconstruct what it already exposes. Look two ways — browse the toolboxes (`search_tools` with no arguments lists them and what each is for) and keyword-search (`search_tools { query: "..." }`) — because the right tool often lives in a toolbox you wouldn't guess (scene work mostly lives under `sc`, not a "scenes" box). The `core/tools` guide has the full picture, including calling tools from Luau.
+Run the same loop every time you set out to do something in the engine: **check whether a tool already does it — then act.** Found one → run it. Nothing fits → *then* drop to `execute`/`bash` and work against the raw API. The three surfaces that reach the registry are in **Core principles** above; the check is cheap and usually pays off, because the operation you need is often already a validated, one-call tool and reaching for it saves you from reading a subsystem just to reconstruct what it already exposes.
+
+Look two ways — browse the toolboxes (`zero`, or `search_tools` with no arguments, lists them and what each is for) and keyword-search (`zero --search "..."` / `search_tools { query: "..." }`) — because the right tool often lives in a toolbox you wouldn't guess (scene work mostly lives under `sc`, not a "scenes" box). The `core/tools` guide has the full picture, including calling tools from Luau.
+
+**A system's vocabulary is not in the tool registry.** A system's ops, node types and templates live in that system's own registry, reached through its toolbox or its guide — `procgen ops` searches the procedural op registry, and nothing in `search_tools` will surface those ops. So "no tool matched" is not evidence the capability is missing; it usually means the system has not been found yet. Ask the system's `guides` and its own toolbox before concluding you have to build it.
 
 ### Automatic LSP enrichment on every `execute()`
 
@@ -158,13 +185,15 @@ The engine runs a static check before any code executes and attaches diagnostics
 execute { "code": "..." }
 ```
 
-Long-running code promotes to a task handle instead of blocking; register the non-blocking `track` tool on the returned `taskId` and end your turn (the blocking `wait` tool covers tasks expected to finish within a hop or two). The tool schemas document the contract.
+`execute` returns a structured envelope — `{ result, logs, diagnostics, state }` — where `result` is your return value and `state` snapshots the engine (mode, paused, timeScale, active layer/scene, bound world). The `logs` field is **error-only by default**; pass `logs: "warn" | "info" | "debug"` to surface more (script errors, panics, and diagnostics always surface regardless).
+
+Long-running code promotes to a task handle (`{ status: "running", taskId, ... }`) instead of blocking. A promoting call **auto-registers a watcher for you** and returns its `fire_path` — read that file to check status. Use `track` yourself only to poll an arbitrary Luau expression or VFS file, and `untrack` to cancel one. The tool schemas document the contract.
 
 For the engine's Luau global surface — what namespaces exist and what they do — read the README (`guides {}`) and use the discovery surfaces above. The engine evolves; the live registry is always current.
 
 ### Capturing screenshots
 
-Three axes: **WHERE** (`source`: viewport / entity / position / ui_window), **WHAT** (`pass`: final or a diagnostic buffer), and which **LAYERS**. `mode: "collage"` samples over a duration and is **required for anything that moves, rotates, or animates**. The `capture` tool's own schema documents every parameter and the full pass enum; `man capture/oneshot` covers the Luau primitive behind it.
+Three axes: **WHERE** (`source`: `main` = the scene/gameplay camera and the default, `editor` = the editor fly-camera, `screen` = the literal on-screen image, `camera` = a specific camera ref, plus `entity` / `position` / `ui_window`), **WHAT** (`pass`: final or a diagnostic buffer), and which **LAYERS**. `mode: "collage"` samples over a duration and is **required for anything that moves, rotates, or animates**. The `capture` tool's own schema documents every parameter and the full pass enum; `man capture/oneshot` covers the Luau primitive behind it.
 
 **Screenshots are NEVER same-frame.** Multiple seconds pass between an `execute` and a `capture`. If something should have appeared/disappeared and didn't, the test failed. Never blame "deferred mutations" or "next frame" — the screenshot is taken many frames later. If it's not there, it's broken.
 
@@ -174,7 +203,7 @@ Three axes: **WHERE** (`source`: viewport / entity / position / ui_window), **WH
 
 The engine exposes its **entire state** through a virtual filesystem at `/zero/` — a real codebase you `ls`/`rg`/`cat` over with `bash`. Authored content lives under `/zero/source/`, live state under `/zero/runtime/`, generated docs under `/zero/docs/`; the `core/vfs` guide has the model. Registered resource discovery goes through the API (`asset.list` / `asset.inspect` / `tools.list`), not a filesystem projection.
 
-VFS access from tools: `bash`, plus `read_file` / `write_file` / `edit_file` for content.
+VFS access from tools: `bash`, `read_file` / `write_file` / `edit_file` for content, and `upload_file` for binary-safe host→VFS transfers (single files or whole folders — bytes stay out of the tool call).
 
 ## Building content
 
@@ -208,7 +237,7 @@ Most user prompts will be one of these shapes — translate to the standard flow
 - **"delete my [name]"** → `world.delete({name})` — a reversible soft-delete (recoverable via `world.trash` → `world.restore` for ~30 days, then purged). Confirm with the user first unless they were explicit; you can't delete worlds you don't own.
 - **"add a [thing]"** to an open world → `execute` to spawn/configure, `capture` to verify, then `zm add . && zm commit -m '...' && zm push` once happy.
 - **"what does my world look like?"** → `capture()` and show them.
-- **"does it actually work?"** → `wld.play()` to flip into play mode, `capture` to see it run, `wld.edit()` to return.
+- **"does it actually work?"** → `use_tool { toolbox = "wld", tool = "play" }` to flip into play mode, `capture` to see it run, `use_tool { toolbox = "wld", tool = "edit" }` to return.
 - **"save my work"** → `bash({command: "zm add . && zm commit -m '...' && zm push"})`.
 - **"the [thing] isn't working"** → `capture` with a diagnostic pass to localize, then `read_file` the relevant component/material, then fix via `edit_file` and re-`execute` / `capture`.
 
@@ -225,6 +254,12 @@ Most user prompts will be one of these shapes — translate to the standard flow
 
 | Anti-pattern | Why it's wrong |
 |---|---|
+| Hand-writing an operation in `execute`/`bash` without checking the tool registry first (`zero`, or `search_tools`) | It may already be a packaged tool — one call instead of reconstructing (and debugging) the Luau yourself. |
+| Concluding a capability does not exist because no TOOL matched | A system's ops, node types and templates live in that system's own registry, not the tool registry. Ask `agent_skill`, its `guides`, and its own toolbox before deciding you have to build it. |
+| Working a multi-step engine job out from first principles without listing `agent_skill` | A skill is the already-correct path for a whole job, and it carries the assets/guides/tools that job runs through. Listing costs one call. |
+| Working from `execute` alone because it was the only tool schema your harness loaded | Load `search_tools`/`use_tool`, or reach the same registry through `zero` in `bash`. Holding one tool is not evidence that one tool is the surface. |
+| Calling a toolbox as if it were a Luau global (`wld.play()`, `sc.spawn()`) | Toolboxes are not globals. Use `use_tool { toolbox, tool, args }` over MCP, `tools.use("<toolbox>", "<tool>", ...)` in Luau, or `zero <toolbox> <tool>` in `bash`. |
+| Reading a shader's or component's source to learn what fields it accepts | The property contract is documented — `guides { path: "types/<kind>" }` for the asset kind, `man <component>` for a component. Read source only when the doc and the runtime disagree. |
 | Guessing function names instead of reading the README / `lsp.*` / `man` / the API source when the area is unfamiliar | Hallucinated APIs waste time and break user trust. The README + `lsp.*` are the highest-signal index. |
 | Same-frame screenshot reasoning | Multiple seconds pass between `execute` and `capture`. "Deferred mutation" / "next frame" excuses are wrong. |
 | Using `pass = "final"` for concrete debugging | Lit captures blend material + lighting + tonemap. Pick the diagnostic pass matching your question. |

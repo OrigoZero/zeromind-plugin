@@ -398,6 +398,32 @@ const toolDefs = [
     },
   },
   {
+    name: "agent_skill",
+    description:
+      "Open an ENGINE skill — a packaged procedure for one job in this world, carrying the instructions plus the assets, guides, and tools that job runs through. These live in the connected world, not in your host environment, and this tool is the only way to open one. Call with NO arguments to list every skill this world knows (name + one-line description, and which you already have open); pass `name` to open one and get its full instructions, its dependencies marked present or missing here, the exact tool names to call, and any subskills under it (addressed \"parent/sub\"). A skill you open STAYS OPEN: it and its subskills ride your tool responses, each subskill marked as you open it, so a job spanning many calls keeps its remaining passes in view — pass `release` when the whole job is done (\"*\" closes all). Reach for this BEFORE working out a multi-step engine job from first principles — a skill is the already-correct path, and skills also advertise themselves on your tool responses.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description:
+            'Skill to open, e.g. "scenes". Address a subskill through its parent: "scenes/player-setup". OMIT to list every available skill with its one-line description.',
+        },
+        scope: {
+          type: "string",
+          enum: ["builtin", "world", "library"],
+          description:
+            "When listing, show only skills from this scope: 'builtin' (shipped with the engine), 'world' (authored in the bound world), 'library' (installed). Omit for all of them. Ignored when `name` is given.",
+        },
+        release: {
+          type: "string",
+          description:
+            'Close a skill you have open, e.g. "scenes" — it stops riding your tool responses. Releasing a parent releases the subskills opened under it. Pass "*" to close every skill you have open. Takes precedence over `name`.',
+        },
+      },
+    },
+  },
+  {
     name: "search_tools",
     description:
       "Search the engine's tool registry by what you want to do (SEMANTIC — finds tools whose purpose matches your intent, not just name/keyword matches); falls back to keyword matching when semantic search is unavailable. Call this FIRST before hand-writing a multi-step workflow — a tool may already do the whole thing in one call. Omit query to list the toolboxes (domains) with their purpose; pass `toolbox` to drill into one. Run a hit with the `use_tool` tool.",
@@ -678,6 +704,10 @@ const dispatch = async (
     }
     case "guides":
       return (await ensureEngine()).e.guides(args);
+    case "agent_skill":
+      return (await ensureEngine()).e.agent_skill(
+        args as { name?: string; scope?: "builtin" | "world" | "library"; release?: string },
+      );
     case "search_tools":
       return (await ensureEngine()).e.search_tools(args);
     case "use_tool": {
