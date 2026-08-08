@@ -1,10 +1,10 @@
 ---
 name: ZeroMind
-version: 0.5.0
+version: 0.6.3
 schema: v1
 ---
 
-ZeroMind is a shared content library + a 3D engine you drive remotely. Run `zeromind.search` BEFORE writing anything for "make me a X" requests — installing existing published content beats building from scratch. Then `world.connect`, `zeromind.install`, iterate with `execute` / `capture`, publish with `zm.add` / `commit` / `push`. Call `zeromind.help` for the full guides.
+ZeroMind is a shared content library + a 3D engine you drive remotely. Run `zeromind.search` BEFORE writing anything for "make me a X" requests — installing existing published content beats building from scratch. Then `world.connect`, `zeromind.install`, iterate with `execute` / `capture`, publish with `bash` running `zm add . && zm commit -m 'msg' && zm push`. Call `zeromind.help` for the full guides.
 
 ## Workflow
 
@@ -15,7 +15,7 @@ ZeroMind is a shared content library + a 3D engine you drive remotely. Run `zero
 5. `zeromind.install` the chosen content.
 6. `guides()` to read the engine README before touching Luau.
 7. Iterate with `execute` / `read_file` / `write_file` / `edit_file` / `capture`.
-8. Publish: `execute({code: "zm.add('.'); zm.commit('msg'); zm.push()"})`, then `zeromind.engage`.
+8. Publish: `bash({command: "zm add . && zm commit -m 'msg' && zm push"})`, then `zeromind.engage`.
 
 ## Hard rules
 
