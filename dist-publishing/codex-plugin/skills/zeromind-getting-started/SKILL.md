@@ -36,6 +36,7 @@ The ZeroMind tools — `zeromind.search` (find), `zeromind.inspect` (vet), `zero
 - **Verify everything twice — once with data, once visually.** Code that returns the right value is not done. Code whose effect you have screenshotted and re-queried is done.
 - **Iterate via the VFS, not via reloads.** The engine hot-reloads Luau, YAML, WGSL, and Markdown writes. Asking the user to reload the browser to "fix" something is almost always a sign you skipped a step.
 - **Discover APIs — never guess.** You have `guides`, `lsp.*`, `/zero/docs/api/`, live `_G` introspection — and the public API's source itself, plain Luau you can grep at `/zero/source/libs/@builtin/modules/api/`. Hallucinated function names waste time and break the user's trust. If you don't know whether a function exists, look it up before calling it.
+- **A whole job usually already has a skill — open it before improvising a method.** `agent_skill` (no arguments lists the roster; `name` opens one) reaches the **engine's own** skills: packaged procedures for one job, carrying the instructions plus the assets, guides and tools that job runs through. They live in the connected world, not in your host environment, so this tool is the only way to reach one. A skill you open **stays open** and rides your tool responses — address a subskill as `parent/sub`, and `release` it (or `"*"`) when the job is done. This answers a different question from the surfaces below: `agent_skill` is *what job is this*, `guides` is *how does this system work*, a tool is *what operation can I call*.
 - **New to a system? Read its guide first.** The guides cover how to approach each part of the engine and route you to the exact reference when you need signatures. Reach for the relevant `guides` before writing raw-API Luau against an unfamiliar area.
 - **A tool is a prepackaged `execute()` operation — reach for one before hand-writing it.** Everything you do in the engine runs as Luau; a *tool* is that Luau already written and named, so you don't comb the API by trial and error to redo it. Nothing packaged fits → do it in `execute()`, and if it isn't a one-off, package it as a `.tool` so next time it's one call. `execute` is for complex one-offs; tools are for anything you'll run more than once.
 
@@ -152,6 +153,8 @@ Hand-authored guides may contain occasional stale references. **`lsp.*` + live `
 
 Every interaction with the engine follows the same loop: discover what you need, run code with `execute`, screenshot with `capture`, verify both data and visual.
 
+Before that loop, three questions have cheaper answers than code — **what job is this** (`agent_skill`), **what operation can I call** (a tool), **how does this system work** (`guides`). Reaching for `execute` before asking all three is how an agent rebuilds something the engine already ships.
+
 ### Discovering APIs (do this BEFORE calling)
 
 Sources of truth, in order of reliability:
@@ -184,7 +187,7 @@ execute { "code": "..." }
 
 `execute` returns a structured envelope — `{ result, logs, diagnostics, state }` — where `result` is your return value and `state` snapshots the engine (mode, paused, timeScale, active layer/scene, bound world). The `logs` field is **error-only by default**; pass `logs: "warn" | "info" | "debug"` to surface more (script errors, panics, and diagnostics always surface regardless).
 
-Long-running code promotes to a task handle (`{ status: "running", taskId, ... }`) instead of blocking; register the non-blocking `watch` tool on the returned `taskId` and end your turn. The tool schemas document the contract.
+Long-running code promotes to a task handle (`{ status: "running", taskId, ... }`) instead of blocking. A promoting call **auto-registers a watcher for you** and returns its `fire_path` — read that file to check status. Use `track` yourself only to poll an arbitrary Luau expression or VFS file, and `untrack` to cancel one. The tool schemas document the contract.
 
 For the engine's Luau global surface — what namespaces exist and what they do — read the README (`guides {}`) and use the discovery surfaces above. The engine evolves; the live registry is always current.
 
@@ -252,7 +255,8 @@ Most user prompts will be one of these shapes — translate to the standard flow
 | Anti-pattern | Why it's wrong |
 |---|---|
 | Hand-writing an operation in `execute`/`bash` without checking the tool registry first (`zero`, or `search_tools`) | It may already be a packaged tool — one call instead of reconstructing (and debugging) the Luau yourself. |
-| Concluding a capability does not exist because no TOOL matched | A system's ops, node types and templates live in that system's own registry, not the tool registry. Ask its `guides` and its own toolbox before deciding you have to build it. |
+| Concluding a capability does not exist because no TOOL matched | A system's ops, node types and templates live in that system's own registry, not the tool registry. Ask `agent_skill`, its `guides`, and its own toolbox before deciding you have to build it. |
+| Working a multi-step engine job out from first principles without listing `agent_skill` | A skill is the already-correct path for a whole job, and it carries the assets/guides/tools that job runs through. Listing costs one call. |
 | Working from `execute` alone because it was the only tool schema your harness loaded | Load `search_tools`/`use_tool`, or reach the same registry through `zero` in `bash`. Holding one tool is not evidence that one tool is the surface. |
 | Calling a toolbox as if it were a Luau global (`wld.play()`, `sc.spawn()`) | Toolboxes are not globals. Use `use_tool { toolbox, tool, args }` over MCP, `tools.use("<toolbox>", "<tool>", ...)` in Luau, or `zero <toolbox> <tool>` in `bash`. |
 | Reading a shader's or component's source to learn what fields it accepts | The property contract is documented — `guides { path: "types/<kind>" }` for the asset kind, `man <component>` for a component. Read source only when the doc and the runtime disagree. |

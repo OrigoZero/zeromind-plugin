@@ -40,6 +40,20 @@ export class EngineTools {
   ): Promise<unknown> {
     return call(this.bridge, this.world, "guides", params);
   }
+  // Engine skills live in the world, not in the host environment, so this is
+  // the only way to reach one. No `name` lists the roster; a `name` opens that
+  // skill and HOLDS it open (it rides subsequent tool responses) until
+  // `release`. The engine dispatches it through the `skills` toolbox, so this
+  // surface and `tools.use("skills", ...)` never disagree.
+  agent_skill(
+    params: {
+      name?: string;
+      scope?: "builtin" | "world" | "library";
+      release?: string;
+    } = {},
+  ): Promise<unknown> {
+    return call(this.bridge, this.world, "agent_skill", params);
+  }
   search_tools(
     params: {
       query?: string;
