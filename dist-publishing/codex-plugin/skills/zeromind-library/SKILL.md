@@ -58,7 +58,7 @@ zeromind.search { "scope": "feed", "sort": "top", "window": "month" }
 zeromind.search { "scope": "similar", "asset_guid": "ast_…" }
 ```
 
-Filters AND-combine: `kind`, `lang`, `capability`, `tag`, `license`, `conforms_to`, `provides_schema`. Sort with `sort` (`hot|top|popular|new|similar`). Page with `limit` + `offset`.
+Filters AND-combine: `kind` (case-insensitive; comma-separate for a family like `tool,toolbox` on `assets`/`worlds`), `conforms_to`, `provides_schema`. There are no keyword tag/lang/license filters: describe what you want in `q` and let the embedding match it. Sort with `sort` (`hot|top|popular|new|similar`). Page with `limit` + `offset`.
 
 **Semantic search.** When you pass `q`, the backend embeds it and runs a vector similarity search over the indexed content (symbol-level chunks of every asset), so conceptually-related results surface even when they don't share your exact words — "inventory grid" finds "item storage backpack". The response's `ranking.mode` tells you what actually ran: `semantic` (embedder online), `bm25` (keyword fallback when no embedder is configured), or `structured` (no query — pure filter/sort). `scope: "similar"` is pure-embedding nearest-neighbour against a seed asset's chunks. Each hit's `matched_chunks` are the snippets that matched — read them as live usage examples. Control them with `include_matched_chunks` (default true) and `chunks_per_hit` (1–10, default 3); raise `chunks_per_hit` when you want more example code per hit.
 

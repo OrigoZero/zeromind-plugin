@@ -28,10 +28,6 @@ export type SearchArgs = {
   sort?: string;
   limit?: number;
   offset?: number;
-  lang?: string;
-  capability?: string;
-  tag?: string;
-  license?: string;
   conforms_to?: string;
   provides_schema?: string;
   asset_guid?: string;
@@ -199,10 +195,6 @@ export class ContentTools {
         return zmGet(this.cfg, "/v1/discover", {
           q: a.q,
           kind: a.kind,
-          lang: a.lang,
-          capability: a.capability,
-          tag: a.tag,
-          license: a.license,
           conforms_to: a.conforms_to,
           provides_schema: a.provides_schema,
           sort: a.sort,
@@ -218,9 +210,6 @@ export class ContentTools {
         return zmGet(this.cfg, "/v1/discover/worlds", {
           q: a.q,
           kind: a.kind,
-          lang: a.lang,
-          capability: a.capability,
-          tag: a.tag,
           conforms_to: a.conforms_to,
           sort: a.sort,
           limit: a.limit,
