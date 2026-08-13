@@ -93,7 +93,7 @@ const toolDefs = [
   {
     name: "zeromind.search",
     description:
-      "FIRST STEP for any build request — search ZeroMind for content others already published before writing anything yourself. When you pass `q`, the backend embeds it for SEMANTIC vector search (falling back to keyword/BM25 when no embedder is configured); the response's `ranking.mode` reports which fired ('semantic'|'bm25'|'structured') and each hit's `matched_chunks` are the symbol-level snippets that matched (your usage examples). Returns ranked hits with `import_hint` (`@world@commit/name`), `asset_guid`, `compat_tier`, `agent_score`, capabilities/tags/readme so you can (A) drop a solution in directly, (B) reuse parts, or (C) pull a base to modify. `scope`: 'assets' (default — find the exact module/component/shader), 'worlds' (find a whole project), 'both' (quick combined), 'feed' (browse hot/new/top with no query), 'similar' (pure-embedding neighbors of an asset_guid), 'top_by_kind' (best of one kind), 'kinds'/'capabilities'/'schemas' (browse the taxonomy). Filter with kind/lang/capability/tag/license/conforms_to; page with limit/offset.",
+      "FIRST STEP for any build request — search ZeroMind for content others already published before writing anything yourself. When you pass `q`, the backend embeds it for SEMANTIC vector search (falling back to keyword/BM25 when no embedder is configured); the response's `ranking.mode` reports which fired ('semantic'|'bm25'|'structured') and each hit's `matched_chunks` are the symbol-level snippets that matched (your usage examples). Returns ranked hits with `import_hint` (`@world@commit/name`), `asset_guid`, `compat_tier`, `agent_score`, capabilities/tags/readme so you can (A) drop a solution in directly, (B) reuse parts, or (C) pull a base to modify. `scope`: 'assets' (default — find the exact module/component/shader), 'worlds' (find a whole project), 'both' (quick combined), 'feed' (browse hot/new/top with no query), 'similar' (pure-embedding neighbors of an asset_guid), 'top_by_kind' (best of one kind), 'kinds'/'capabilities'/'schemas' (browse the taxonomy). Filter with kind (or conforms_to); page with limit/offset. Descriptive matching is the embedding's job: there are no keyword tag filters, so put what you want in `q` rather than trying to filter for it.",
     inputSchema: {
       type: "object",
       properties: {
@@ -116,15 +116,11 @@ const toolDefs = [
         kind: {
           type: "string",
           description:
-            "Asset kind filter (module, component, tool, bundle, scene, material, shader, preset, package, …). Required for scope=top_by_kind.",
+            "Asset kind filter, case-insensitive (module, component, tool, bundle, scene, material, shader, texture, mesh, soundclip, …). Comma-separate for a family ('tool,toolbox') on scope=assets or scope=worlds only. An unknown kind is an error naming the nearest match, never a silent empty result. Required for scope=top_by_kind.",
         },
         sort: { type: "string", description: "hot | top | popular | new | similar." },
         limit: { type: "integer" },
         offset: { type: "integer", description: "0-indexed page offset (scope=assets/worlds)." },
-        lang: { type: "string" },
-        capability: { type: "string" },
-        tag: { type: "string" },
-        license: { type: "string" },
         conforms_to: { type: "string", description: "Find assets conforming to this schema id." },
         provides_schema: { type: "string" },
         asset_guid: { type: "string", description: "Seed asset for scope=similar." },
