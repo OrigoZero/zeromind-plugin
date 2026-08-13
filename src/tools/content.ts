@@ -24,6 +24,15 @@ export type SearchScope =
 export type SearchArgs = {
   scope?: SearchScope;
   q?: string;
+  /**
+   * Which axis to match on: `works` (default) searches the text of what things
+   * do; `looks` searches the images themselves (previews, world covers),
+   * retrieved from a text description of an appearance; `any` runs both and
+   * merges them by rank. Backend-side the two live in SEPARATE vector pools —
+   * a text score and an image score are not comparable — so this is a routing
+   * decision, not a filter.
+   */
+  axis?: "works" | "looks" | "any";
   kind?: string;
   sort?: string;
   limit?: number;
@@ -194,6 +203,7 @@ export class ContentTools {
       case "assets":
         return zmGet(this.cfg, "/v1/discover", {
           q: a.q,
+          axis: a.axis,
           kind: a.kind,
           conforms_to: a.conforms_to,
           provides_schema: a.provides_schema,
@@ -209,6 +219,7 @@ export class ContentTools {
       case "worlds":
         return zmGet(this.cfg, "/v1/discover/worlds", {
           q: a.q,
+          axis: a.axis,
           kind: a.kind,
           conforms_to: a.conforms_to,
           sort: a.sort,
