@@ -93,7 +93,7 @@ const toolDefs = [
   {
     name: "zeromind.search",
     description:
-      "FIRST STEP for any build request — search ZeroMind for content others already published before writing anything yourself. When you pass `q`, the backend embeds it for SEMANTIC vector search (falling back to keyword/BM25 when no embedder is configured); the response's `ranking.mode` reports which fired ('semantic'|'bm25'|'structured') and each hit's `matched_chunks` are the symbol-level snippets that matched (your usage examples). Returns ranked hits with `import_hint` (`@world@commit/name`), `asset_guid`, `compat_tier`, `agent_score`, capabilities/tags/readme so you can (A) drop a solution in directly, (B) reuse parts, or (C) pull a base to modify. `scope`: 'assets' (default — find the exact module/component/shader), 'worlds' (find a whole project), 'both' (quick combined), 'feed' (browse hot/new/top with no query), 'similar' (pure-embedding neighbors of an asset_guid), 'top_by_kind' (best of one kind), 'kinds'/'capabilities'/'schemas' (browse the taxonomy). Filter with kind (or conforms_to); page with limit/offset. Descriptive matching is the embedding's job: there are no keyword tag filters, so put what you want in `q` rather than trying to filter for it.",
+      "FIRST STEP for any build request — search ZeroMind for content others already published before writing anything yourself. When you pass `q`, the backend embeds it for SEMANTIC vector search (falling back to keyword/BM25 when no embedder is configured); the response's `ranking.mode` reports which fired ('semantic'|'bm25'|'structured') and each hit's `matched_chunks` are the symbol-level snippets that matched (your usage examples). Returns ranked hits with `import_hint` (`@world@commit/name`), `asset_guid`, `compat_tier`, `agent_score`, capabilities/tags/readme so you can (A) drop a solution in directly, (B) reuse parts, or (C) pull a base to modify. `scope`: 'assets' (default — find the exact module/component/shader), 'worlds' (find a whole project), 'both' (quick combined), 'feed' (browse hot/new/top with no query), 'similar' (pure-embedding neighbors of an asset_guid), 'top_by_kind' (best of one kind), 'kinds'/'capabilities'/'schemas' (browse the taxonomy). Filter with kind (or conforms_to); page with limit/offset. Descriptive matching is the embedding's job: there are no keyword tag filters, so put what you want in `q` rather than trying to filter for it. `axis` picks WHAT is matched: 'works' (default) searches the text of what things do; 'looks' searches the images themselves — previews and world covers — so describe an appearance ('shiny red metal', 'rough wooden crate') and you get content that LOOKS like that whatever it is named; 'any' runs both and merges them by rank. Reach for 'looks' when the request is about how something should look and 'works' when it is about what it should do.",
     inputSchema: {
       type: "object",
       properties: {
@@ -113,6 +113,12 @@ const toolDefs = [
           description: "Which lens to search. Default 'assets'.",
         },
         q: { type: "string", description: "Free-text / semantic query (e.g. 'voxel terrain greedy mesher')." },
+        axis: {
+          type: "string",
+          enum: ["works", "looks", "any"],
+          description:
+            "What to match on: 'works' (default) = the text of what it does; 'looks' = the actual images, matched from your text description of an appearance; 'any' = both, merged by rank. scope=assets/worlds only.",
+        },
         kind: {
           type: "string",
           description:
