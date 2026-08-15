@@ -14,6 +14,8 @@
 // sent snake_case `{ ..., mime_type }`. Read both so the plugin works across
 // engine versions.
 
+import { spillLargeText } from "./spill.js";
+
 type ImageContent = { type: "image"; data: string; mimeType: string };
 type TextContent = { type: "text"; text: string };
 
@@ -47,12 +49,16 @@ function asImageResult(
  * results become an `image` content block (viewable); everything else becomes
  * a JSON text block — the shape every non-image tool already returned.
  */
-export function toToolContent(result: unknown): ToolContent {
+export function toToolContent(result: unknown, toolName = "tool"): ToolContent {
   const image = asImageResult(result);
   if (image) {
     return {
       content: [{ type: "image", data: image.data, mimeType: image.mimeType }],
     };
   }
-  return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  return {
+    content: [
+      { type: "text", text: spillLargeText(JSON.stringify(result), toolName) },
+    ],
+  };
 }
