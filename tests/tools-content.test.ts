@@ -36,19 +36,19 @@ describe("ZeroMind tools", () => {
 
   describe("search", () => {
     it("defaults to asset discovery and forwards the query", async () => {
-      const r = (await hm.search({ q: "voxel mesher", kind: "module" })) as {
+      const r = (await hm.search({ q: "voxel mesher", assetType: "module" })) as {
         hits: unknown[];
-        query_echo: { q: string; kind: string };
+        query_echo: { q: string; assetType: string };
       };
       expect(r.hits).toHaveLength(1);
-      expect(r.query_echo).toEqual({ q: "voxel mesher", kind: "module" });
+      expect(r.query_echo).toEqual({ q: "voxel mesher", assetType: "module" });
     });
 
-    it("routes scope=worlds, both, feed, kinds", async () => {
+    it("routes scope=worlds, both, feed, asset_types", async () => {
       expect((await hm.search({ scope: "worlds", q: "x" }) as { worlds: unknown[] }).worlds).toBeDefined();
       expect((await hm.search({ scope: "both", q: "x" }) as { assets: unknown[] }).assets).toBeDefined();
       expect((await hm.search({ scope: "feed", sort: "new" }) as { items: unknown[] }).items).toBeDefined();
-      expect((await hm.search({ scope: "kinds" }) as { kinds: unknown[] }).kinds).toBeDefined();
+      expect((await hm.search({ scope: "asset_types" }) as { assetTypes: unknown[] }).assetTypes).toBeDefined();
     });
 
     it("sends lean=true for assets and worlds scopes", async () => {
@@ -65,8 +65,8 @@ describe("ZeroMind tools", () => {
       expect(r.query_echo.seed_asset).toBe("ast_seed");
     });
 
-    it("requires kind for top_by_kind and asset_guid for similar", async () => {
-      await expect(hm.search({ scope: "top_by_kind" })).rejects.toThrow(/kind/);
+    it("requires assetType for top_by_type and asset_guid for similar", async () => {
+      await expect(hm.search({ scope: "top_by_type" })).rejects.toThrow(/assetType/);
       await expect(hm.search({ scope: "similar" })).rejects.toThrow(/asset_guid/);
     });
 

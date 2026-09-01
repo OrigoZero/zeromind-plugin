@@ -118,7 +118,7 @@ export const getPrompt = (name: string, args: Record<string, string>): GetPrompt
                 `Before building "${request}" from scratch, check whether it already exists in ZeroMind.\n\n` +
                 "1. `auth_status` — if unlinked, link first (link-this-ide prompt).\n" +
                 `2. \`zeromind.search { "q": "${request}" }\` — try the asset lens first. Add \`kind\` (module/component/shader/scene/…) to narrow. Try 2–3 phrasings; the index is semantic.\n` +
-                "   - Also worth a look: `scope: \"worlds\"` (a whole project like this), `scope: \"top_by_kind\"` (best of a kind).\n" +
+                "   - Also worth a look: `scope: \"worlds\"` (a whole project like this), `scope: \"top_by_type\"` (best of a type).\n" +
                 "3. Read each hit's `compat_tier`, `agent_score`, `pulled_into_count`, and capabilities. Prefer `compatible` + high adoption.\n" +
                 "4. Vet the best candidate: `zeromind.inspect { target: \"asset\", guid: \"…\" }` (overview = schema, capabilities, review, comments, who uses it). Inspect gives surface info — to read the actual source, install it then read it in the engine.\n" +
                 "5. Decide the outcome and bring it in with `zeromind.install` (connect a world first; the engine fetches the bytes — you never download content):\n" +

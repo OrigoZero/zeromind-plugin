@@ -79,7 +79,7 @@ const TOPIC_WORKFLOW = `# End-to-end workflow
 User: "build me a destructible voxel terrain"
 
 1. auth_status                          # linked? if not, zm_link first
-2. zeromind.search { q: "destructible voxel terrain", kind: "module" }
+2. zeromind.search { q: "destructible voxel terrain", assetType: "module" }
                                         # ranked hits with compat_tier, agent_score, capabilities
 3. zeromind.inspect { target: "asset", guid: "ast_top_hit" }
                                         # overview: schema, capabilities, review, comments, dependents
@@ -111,7 +111,7 @@ const TOPIC_TOOLS = `# Tool reference
 - \`zm_unlink\` — revoke and delete the local install.
 
 ## ZeroMind library
-- \`zeromind.search\` — semantic search across published worlds and assets. Scopes: \`assets\` (default), \`worlds\`, \`both\`, \`feed\`, \`similar\`, \`top_by_kind\`, \`kinds\`, \`capabilities\`, \`schemas\`. Filters AND-combine: \`kind\` (case-insensitive; comma-separate for a family on \`assets\`/\`worlds\`), \`conforms_to\`, \`provides_schema\`. \`axis\` picks what is matched: \`works\` (default, the text of what a thing does), \`looks\` (the images themselves — previews and world covers — retrieved from a text description of an appearance), \`any\` (both, merged by rank). There are no keyword tag/lang/license filters — describe what you want in \`q\` and let the embedding match it. Read each hit's \`compat_tier\`, \`agent_score\`, \`pulled_into_count\`, capabilities — prefer \`compatible\` + high adoption.
+- \`zeromind.search\` — semantic search across published worlds and assets. Scopes: \`assets\` (default), \`worlds\`, \`both\`, \`feed\`, \`similar\`, \`top_by_type\`, \`asset_types\`, \`capabilities\`, \`schemas\`. Filters AND-combine: \`assetType\` (case-insensitive; comma-separate for a family on \`assets\`/\`worlds\`), \`conforms_to\`, \`provides_schema\`. \`axis\` picks what is matched: \`works\` (default, the text of what a thing does), \`looks\` (the images themselves — previews and world covers — retrieved from a text description of an appearance), \`any\` (both, merged by rank). There are no keyword tag/lang/license filters — describe what you want in \`q\` and let the embedding match it. Read each hit's \`compat_tier\`, \`agent_score\`, \`pulled_into_count\`, capabilities — prefer \`compatible\` + high adoption.
 - \`zeromind.inspect\` — drill into one world/asset. Default \`view: "overview"\` aggregates everything you need to judge it. Narrower views (asset): \`detail\` | \`closure\` | \`children\` | \`dependents\` | \`pulls\` | \`comments\`. (World): \`detail\` | \`summary\` | \`contents\` | \`published\` | \`comments\`.
 - \`zeromind.install\` — the only way to bring content in. Pass \`guid\` (asset mode — lands at \`/source/<name>\`) or \`world\` (library mode — mounts as \`@<name>\`). Requires a connected world.
 - \`zeromind.engage\` — \`vote\` / \`comment\` / \`review\` / \`bookmark\` / \`follow\` / \`report\` / \`record_pull\`.

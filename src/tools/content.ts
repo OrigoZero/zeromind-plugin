@@ -16,8 +16,8 @@ export type SearchScope =
   | "both"
   | "feed"
   | "similar"
-  | "top_by_kind"
-  | "kinds"
+  | "top_by_type"
+  | "asset_types"
   | "capabilities"
   | "schemas";
 
@@ -33,7 +33,7 @@ export type SearchArgs = {
    * decision, not a filter.
    */
   axis?: "works" | "looks" | "any";
-  kind?: string;
+  assetType?: string;
   sort?: string;
   limit?: number;
   offset?: number;
@@ -51,7 +51,7 @@ export type InspectArgs = {
   target: "world" | "asset";
   guid: string;
   view?: string;
-  kind?: string;
+  assetType?: string;
   sort?: string;
   limit?: number;
   offset?: number;
@@ -204,7 +204,7 @@ export class ContentTools {
         return zmGet(this.cfg, "/v1/discover", {
           q: a.q,
           axis: a.axis,
-          kind: a.kind,
+          assetType: a.assetType,
           conforms_to: a.conforms_to,
           provides_schema: a.provides_schema,
           sort: a.sort,
@@ -220,7 +220,7 @@ export class ContentTools {
         return zmGet(this.cfg, "/v1/discover/worlds", {
           q: a.q,
           axis: a.axis,
-          kind: a.kind,
+          assetType: a.assetType,
           conforms_to: a.conforms_to,
           sort: a.sort,
           limit: a.limit,
@@ -232,14 +232,21 @@ export class ContentTools {
       case "both":
         return zmGet(this.cfg, "/v1/search", {
           q: need(a.q, "q"),
-          kind: a.kind,
+          // That route still spells the filter `kind`; it dies with /v1/search.
+          kind: a.assetType,
           limit: a.limit,
         });
       case "feed":
         return zmGet(this.cfg, "/v1/feed", {
           sort: a.sort,
-          kind: a.kind === "world" || a.kind === "asset" ? a.kind : undefined,
-          asset_kind: a.kind && a.kind !== "world" && a.kind !== "asset" ? a.kind : undefined,
+          // The historical overload survives on the new name: 'world'/'asset'
+          // select the feed class (the wire calls it `scope`), anything else
+          // is a type filter.
+          scope: a.assetType === "world" || a.assetType === "asset" ? a.assetType : undefined,
+          assetType:
+            a.assetType && a.assetType !== "world" && a.assetType !== "asset"
+              ? a.assetType
+              : undefined,
           window: a.window,
           q: a.q,
           cursor: a.cursor,
@@ -249,20 +256,20 @@ export class ContentTools {
         return zmGet(this.cfg, `/v1/discover/similar/${enc(need(a.asset_guid, "asset_guid"))}`, {
           limit: a.limit,
         });
-      case "top_by_kind":
-        return zmGet(this.cfg, "/v1/discover/top-by-kind", {
-          kind: need(a.kind, "kind"),
+      case "top_by_type":
+        return zmGet(this.cfg, "/v1/discover/top-by-type", {
+          assetType: need(a.assetType, "assetType"),
           limit: a.limit,
         });
-      case "kinds":
-        return zmGet(this.cfg, "/v1/discover/kinds");
+      case "asset_types":
+        return zmGet(this.cfg, "/v1/discover/asset-types");
       case "capabilities":
         return zmGet(this.cfg, "/v1/discover/capabilities", { prefix: a.prefix, limit: a.limit });
       case "schemas":
         return zmGet(this.cfg, "/v1/schemas", { prefix: a.prefix, limit: a.limit });
       default:
         throw new Error(
-          `unknown scope '${scope}'. Use one of: assets, worlds, both, feed, similar, top_by_kind, kinds, capabilities, schemas.`,
+          `unknown scope '${scope}'. Use one of: assets, worlds, both, feed, similar, top_by_type, asset_types, capabilities, schemas.`,
         );
     }
   }
@@ -290,14 +297,14 @@ export class ContentTools {
           return zmGet(this.cfg, `/v1/worlds/${enc(guid)}/summary`);
         case "contents":
           return zmGet(this.cfg, `/v1/worlds/${enc(guid)}/contents`, {
-            kind: a.kind,
+            assetType: a.assetType,
             sort: a.sort,
             limit: a.limit,
             offset: a.offset,
           });
         case "published":
           return zmGet(this.cfg, `/v1/worlds/${enc(guid)}/published`, {
-            kind: a.kind,
+            assetType: a.assetType,
             sort: a.sort,
             limit: a.limit,
           });
@@ -332,7 +339,7 @@ export class ContentTools {
           });
         case "children":
           return zmGet(this.cfg, `/v1/assets/${enc(guid)}/children`, {
-            kind: a.kind,
+            assetType: a.assetType,
             limit: a.limit,
             offset: a.offset,
           });

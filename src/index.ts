@@ -93,7 +93,7 @@ const toolDefs = [
   {
     name: "zeromind.search",
     description:
-      "FIRST STEP for any build request — search ZeroMind for content others already published before writing anything yourself. When you pass `q`, the backend embeds it for SEMANTIC vector search (falling back to keyword/BM25 when no embedder is configured); the response's `ranking.mode` reports which fired ('semantic'|'bm25'|'structured') and each hit's `matched_chunks` are the symbol-level snippets that matched (your usage examples). Returns ranked hits with `import_hint` (`@world@commit/name`), `asset_guid`, `compat_tier`, `agent_score`, capabilities/tags/readme so you can (A) drop a solution in directly, (B) reuse parts, or (C) pull a base to modify. `scope`: 'assets' (default — find the exact module/component/shader), 'worlds' (find a whole project), 'both' (quick combined), 'feed' (browse hot/new/top with no query), 'similar' (pure-embedding neighbors of an asset_guid), 'top_by_kind' (best of one kind), 'kinds'/'capabilities'/'schemas' (browse the taxonomy). Filter with kind (or conforms_to); page with limit/offset. Descriptive matching is the embedding's job: there are no keyword tag filters, so put what you want in `q` rather than trying to filter for it. `axis` picks WHAT is matched: 'works' (default) searches the text of what things do; 'looks' searches the images themselves — previews and world covers — so describe an appearance ('shiny red metal', 'rough wooden crate') and you get content that LOOKS like that whatever it is named; 'any' runs both and merges them by rank. Reach for 'looks' when the request is about how something should look and 'works' when it is about what it should do.",
+      "FIRST STEP for any build request — search ZeroMind for content others already published before writing anything yourself. When you pass `q`, the backend embeds it for SEMANTIC vector search (falling back to keyword/BM25 when no embedder is configured); the response's `ranking.mode` reports which fired ('semantic'|'bm25'|'structured') and each hit's `matched_chunks` are the symbol-level snippets that matched (your usage examples). Returns ranked hits with `import_hint` (`@world@commit/name`), `asset_guid`, `compat_tier`, `agent_score`, capabilities/tags/readme so you can (A) drop a solution in directly, (B) reuse parts, or (C) pull a base to modify. `scope`: 'assets' (default — find the exact module/component/shader), 'worlds' (find a whole project), 'both' (quick combined), 'feed' (browse hot/new/top with no query), 'similar' (pure-embedding neighbors of an asset_guid), 'top_by_type' (best of one type), 'asset_types'/'capabilities'/'schemas' (browse the taxonomy). Filter with assetType (or conforms_to); page with limit/offset. Descriptive matching is the embedding's job: there are no keyword tag filters, so put what you want in `q` rather than trying to filter for it. `axis` picks WHAT is matched: 'works' (default) searches the text of what things do; 'looks' searches the images themselves — previews and world covers — so describe an appearance ('shiny red metal', 'rough wooden crate') and you get content that LOOKS like that whatever it is named; 'any' runs both and merges them by rank. Reach for 'looks' when the request is about how something should look and 'works' when it is about what it should do.",
     inputSchema: {
       type: "object",
       properties: {
@@ -105,8 +105,8 @@ const toolDefs = [
             "both",
             "feed",
             "similar",
-            "top_by_kind",
-            "kinds",
+            "top_by_type",
+            "asset_types",
             "capabilities",
             "schemas",
           ],
@@ -119,10 +119,10 @@ const toolDefs = [
           description:
             "What to match on: 'works' (default) = the text of what it does; 'looks' = the actual images, matched from your text description of an appearance; 'any' = both, merged by rank. scope=assets/worlds only.",
         },
-        kind: {
+        assetType: {
           type: "string",
           description:
-            "Asset kind filter, case-insensitive (module, component, tool, bundle, scene, material, shader, texture, mesh, soundclip, …). Comma-separate for a family ('tool,toolbox') on scope=assets or scope=worlds only. An unknown kind is an error naming the nearest match, never a silent empty result. Required for scope=top_by_kind.",
+            "Asset type filter, case-insensitive (module, component, tool, bundle, scene, material, shader, texture, mesh, soundclip, …). Comma-separate for a family ('tool,toolbox') on scope=assets or scope=worlds only. An unknown type is an error naming the nearest match, never a silent empty result. Required for scope=top_by_type.",
         },
         sort: { type: "string", description: "hot | top | popular | new | similar." },
         limit: { type: "integer" },
@@ -158,7 +158,7 @@ const toolDefs = [
           description:
             "Default 'overview' (aggregated). asset: overview|detail|closure|children|dependents|pulls|comments. world: overview|detail|summary|contents|published|comments.",
         },
-        kind: { type: "string" },
+        assetType: { type: "string", description: "Filter a contents/published/children listing to one asset type." },
         sort: { type: "string" },
         limit: { type: "integer" },
         offset: { type: "integer" },

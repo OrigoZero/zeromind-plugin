@@ -293,7 +293,7 @@ export const buildServer = (state: MockState): Server =>
             {
               asset_guid: "ast_mock1",
               owning_world: "wld_mock1",
-              kind: url.searchParams.get("kind") ?? "module",
+              kind: url.searchParams.get("assetType") ?? "module",
               display_name: "mock-module",
               import_hint: "@wld_mock1@cmt_mock/mock-module",
               compat_tier: "compatible",
@@ -303,7 +303,7 @@ export const buildServer = (state: MockState): Server =>
           limit: Number(url.searchParams.get("limit") ?? 25),
           offset: Number(url.searchParams.get("offset") ?? 0),
           received_lean: url.searchParams.get("lean") === "true",
-          query_echo: { q: url.searchParams.get("q"), kind: url.searchParams.get("kind") },
+          query_echo: { q: url.searchParams.get("q"), assetType: url.searchParams.get("assetType") },
         });
       }
       if (method === "GET" && path === "/v1/discover/worlds") {
@@ -326,13 +326,13 @@ export const buildServer = (state: MockState): Server =>
         if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
         return json(res, 200, { hits: [], query_echo: { seed_asset: similarMatch[1] } });
       }
-      if (method === "GET" && path === "/v1/discover/top-by-kind") {
+      if (method === "GET" && path === "/v1/discover/top-by-type") {
         if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
-        return json(res, 200, { kind: url.searchParams.get("kind"), assets: [] });
+        return json(res, 200, { assetType: url.searchParams.get("assetType"), assets: [] });
       }
-      if (method === "GET" && path === "/v1/discover/kinds") {
+      if (method === "GET" && path === "/v1/discover/asset-types") {
         if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
-        return json(res, 200, { kinds: [{ kind: "module", count: 1, is_composite: true }] });
+        return json(res, 200, { assetTypes: [{ assetType: "module", count: 1, is_composite: true }] });
       }
       if (method === "GET" && path === "/v1/discover/capabilities") {
         if (!requireAuth(req, state)) return json(res, 401, { error: "unauthorized" });
