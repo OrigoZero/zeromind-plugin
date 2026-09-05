@@ -116,7 +116,7 @@ const tryRead = (rel: string): string | undefined => {
   }
 };
 
-const MANUAL_FALLBACK = `ZeroMind: a shared content library + a 3D engine you drive remotely. Run \`zeromind.search\` BEFORE writing anything for "make me a X" requests — installing existing published content beats building from scratch. Then \`world.connect\`, \`zeromind.install\`, iterate with \`execute\`/\`capture\`, publish from the engine bash with \`zm add . && zm commit -m '...' && zm push\`. Call \`zeromind.help\` for the full guides.`;
+const MANUAL_FALLBACK = `ZeroMind: a shared content library + a 3D engine you drive remotely, served at https://origozero.ai/mcp. Run \`zeromind.search\` BEFORE writing anything for "make me a X" requests — installing existing published content beats building from scratch. Then \`world.launch\` if nobody has the world open, \`zeromind.install\`, iterate with \`execute\`/\`capture\`, publish from the engine bash with \`zm add . && zm commit -m '...' && zm push\`. Call \`zeromind.help\` for the full guides.`;
 
 /**
  * Canonical condensed operating manual, single source for the body of every
