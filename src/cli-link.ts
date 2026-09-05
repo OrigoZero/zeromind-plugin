@@ -90,7 +90,7 @@ export const clearClaudeEnv = (
   try {
     json = JSON.parse(readFileSync(settingsPath, "utf8")) as Record<string, unknown>;
   } catch {
-    throw new Error(`${settingsPath} is not valid JSON; fix or move it, then run zeromind unlink again`);
+    throw new Error(`${settingsPath} is not valid JSON`);
   }
   const env = { ...((json.env as Record<string, string>) ?? {}) };
   if (env[SECRET_ENV] === undefined) return "absent";
@@ -135,15 +135,25 @@ export const runLinkCli = async (argv: string[]): Promise<void> => {
         out("This machine holds no ZeroMind link.");
         return;
       }
+      // The secret comes out of the file that holds it first, and a file
+      // this cannot read is reported rather than thrown: an unlink that has
+      // already revoked upstream must not report itself as failed, and a
+      // second run would find no link left to clean up after.
+      let claudeNote: string | undefined;
+      try {
+        if (clearClaudeEnv(secret) === "removed") {
+          claudeNote = `Claude Code: removed ${SECRET_ENV} from ~/.claude/settings.json (restart Claude Code).`;
+        }
+      } catch (e) {
+        claudeNote = `Claude Code: ${(e as Error).message} — ${SECRET_ENV} is still in it; remove that one line by hand.`;
+      }
       const outcome = await unlink({ ...cache, install_secret: secret });
       out(
         outcome === "revoked"
           ? "Unlinked: this machine holds no ZeroMind link."
           : "ZeroMind already held no such install; this machine's link is cleared.",
       );
-      if (clearClaudeEnv(secret) === "removed") {
-        out(`Claude Code: removed ${SECRET_ENV} from ~/.claude/settings.json (restart Claude Code).`);
-      }
+      if (claudeNote) out(claudeNote);
       out(
         "The revoked secret is still in the harness configs `zeromind install` wrote; they answer 401 until you link again and re-run the install.",
       );

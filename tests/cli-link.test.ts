@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { startMockServer, type MockServerHandle } from "../tools/mock-zeromind/index.js";
 import { clearClaudeEnv, linkMachine, writeClaudeEnv } from "../src/cli-link.js";
-import { loadCache, updateCache } from "../src/config.js";
+import { installSecret, loadCache, updateCache } from "../src/config.js";
 import { runLinkCli } from "../src/cli-link.js";
 
 describe("zeromind link", () => {
@@ -110,6 +111,57 @@ describe("zeromind link", () => {
     expect(mock.state.linkCodeRequests).toBe(1);
     expect(lines.join("\n")).toMatch(/[A-Z0-9]{4}-[A-Z0-9]{4}/);
     expect(loadCache()?.user_id).toBeTruthy();
+    await mock.stop();
+  });
+
+  it("completes the unlink and warns when Claude Code's settings cannot be read", async () => {
+    const mock: MockServerHandle = await startMockServer();
+    const home = mkdtempSync(join(tmpdir(), "zm-unlink-home-"));
+    mkdirSync(join(home, ".claude"));
+    // A settings.json nothing can parse: the secret in it cannot be removed,
+    // and that must not turn a completed unlink into a failure.
+    writeFileSync(join(home, ".claude", "settings.json"), "{ not json");
+    const configDir = process.env.ZEROMIND_CONFIG_DIR!;
+    const registered = (await (
+      await fetch(`${mock.url}/v1/installs/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ install_name: "zero-engine", public_key: "pk" }),
+      })
+    ).json()) as { install_id: string; install_secret: string };
+    mock.forceApprove(registered.install_id, "usr_unlink");
+    updateCache({ ...registered, user_id: "usr_unlink", issuer: mock.url });
+
+    const child = spawn(
+      process.execPath,
+      [join(process.cwd(), "dist", "index.js"), "unlink"],
+      {
+        env: {
+          ...process.env,
+          ZEROMIND_CONFIG_DIR: configDir,
+          ZEROMIND_ISSUER: mock.url,
+          HOME: home,
+          USERPROFILE: home,
+          APPDATA: join(home, "AppData/Roaming"),
+        },
+      },
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (c) => (stdout += String(c)));
+    child.stderr.on("data", (c) => (stderr += String(c)));
+    const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
+
+    expect(code).toBe(0);
+    expect(stdout).toContain("Unlinked: this machine holds no ZeroMind link.");
+    expect(stdout).toMatch(/settings\.json is not valid JSON/);
+    expect(stdout).toMatch(/remove that one line by hand/);
+    // The link is gone even though the settings file could not be cleaned.
+    expect(installSecret(loadCache())).toBeUndefined();
+    expect(mock.state.installs.get(registered.install_id)?.linked).toBe(false);
+    // Nothing rewrote the file it could not read.
+    expect(readFileSync(join(home, ".claude", "settings.json"), "utf8")).toBe("{ not json");
+    expect(stdout + stderr).not.toContain("ins_sec_");
     await mock.stop();
   });
 

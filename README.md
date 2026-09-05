@@ -76,7 +76,7 @@ On a machine that already holds an approved install — linked by an earlier run
 
 `unlink` revokes the install at ZeroMind and removes it from this machine's cache — the install fields only, so a session the Zero engine signed in with, and the issuer it signed in against, stay where they are. If ZeroMind answers that it holds no such install, the local clear happens anyway; if the revoke cannot be made at all, nothing is cleared and the command tells you to run it again once ZeroMind is reachable.
 
-`unlink` also takes `ZEROMIND_INSTALL_SECRET` back out of `~/.claude/settings.json` when it holds the secret being revoked. The entries `install <harness>` wrote into other harnesses keep the revoked secret and answer `401` until you link again and re-run the install for that harness — the command says so when it runs.
+`unlink` also takes `ZEROMIND_INSTALL_SECRET` back out of `~/.claude/settings.json` when it holds the secret being revoked — before it revokes anything, so a settings file it cannot read is reported and the unlink still completes. (That one line is then yours to delete.) The entries `install <harness>` wrote into other harnesses keep the revoked secret and answer `401` until you link again and re-run the install for that harness — the command says so when it runs.
 
 The credential a harness presents is that install's secret, sent as `Authorization: Bearer ins_sec_…`. **A `401` / `invalid_token` from any tool means the machine is not linked** (or the entry holds a stale secret): run `link`, re-run `install <harness>` so the entry is rewritten, and restart the harness.
 
