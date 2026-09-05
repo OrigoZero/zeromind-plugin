@@ -62,6 +62,7 @@ describe("zeromind upload", () => {
     server.state.mcpWrites = [];
     server.state.mcpConnectedWorld = undefined;
     server.state.connectRefusal = undefined;
+    server.state.writeRefusal = undefined;
   });
 
   it("lands a folder's files at their paths, byte for byte", async () => {
@@ -210,6 +211,27 @@ describe("zeromind upload", () => {
     }
     expect(server.state.mcpWrites).toEqual([]);
     expect(server.state.mcpConnectedWorld).toBeUndefined();
+  });
+
+  it("exits non-zero on a refused write, naming the file and how many landed", async () => {
+    // The second of the two files is refused, so the world is left holding the
+    // first: the error has to say which file stopped it and after how many.
+    server.state.writeRefusal = { after: 1, text: "/source is read-only in play mode" };
+    const child = spawn(
+      process.execPath,
+      [join(process.cwd(), "dist", "index.js"), "upload", payload, "--world", WORLD_NAME],
+      { env: { ...process.env, ZEROMIND_CONFIG_DIR: configDir } },
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (c) => (stdout += String(c)));
+    child.stderr.on("data", (c) => (stderr += String(c)));
+    const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
+
+    expect(code).toBe(1);
+    expect(stderr).toMatch(/'\/source\/[^']+' after 1 file\(s\): \/source is read-only in play mode/);
+    expect(server.state.mcpWrites).toHaveLength(1);
+    expect(stdout + stderr).not.toContain("ins_sec_");
   });
 
   it("prints a refused world.connect and exits non-zero, having written nothing", async () => {

@@ -60,6 +60,9 @@ export class MockState {
   mcpConnectedWorld?: string;
   /** When set, `world.connect` refuses with this text instead of connecting. */
   connectRefusal?: string;
+  /** When set, `write_file` refuses with this text once the given number of
+   *  writes have been accepted — a world half-written, as it happens. */
+  writeRefusal?: { after: number; text: string };
   /** When set, an install's Nth link-status poll while unlinked auto-approves it, standing in for a human completing the browser flow. */
   approveAfterPolls?: number;
   /** POST /v1/issues submissions, recorded for test assertions. */
@@ -200,6 +203,9 @@ export const buildServer = (state: MockState): Server =>
         }
         if (tool === "write_file") {
           if (!state.mcpConnectedWorld) return answer("not connected to a world", true);
+          if (state.writeRefusal && state.mcpWrites.length >= state.writeRefusal.after) {
+            return answer(state.writeRefusal.text, true);
+          }
           const filePath = String(args.path ?? "");
           const contentB64 = String(args.content_b64 ?? "");
           state.mcpWrites.push({ path: filePath, content_b64: contentB64 });
