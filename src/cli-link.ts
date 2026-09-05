@@ -39,7 +39,14 @@ export const writeClaudeEnv = (
   settingsPath = join(homedir(), ".claude", "settings.json"),
 ): "written" | "updated" | "exists" => {
   const existed = existsSync(settingsPath);
-  const json = existed ? (JSON.parse(readFileSync(settingsPath, "utf8")) as Record<string, unknown>) : {};
+  let json: Record<string, unknown> = {};
+  if (existed) {
+    try {
+      json = JSON.parse(readFileSync(settingsPath, "utf8")) as Record<string, unknown>;
+    } catch {
+      throw new Error(`${settingsPath} is not valid JSON; fix or move it, then run zeromind link again`);
+    }
+  }
   const env = { ...((json.env as Record<string, string>) ?? {}) };
   if (env[SECRET_ENV] === secret) return "exists";
   env[SECRET_ENV] = secret;
