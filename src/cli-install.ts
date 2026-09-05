@@ -67,9 +67,16 @@ type Scope = "project" | "global";
 
 type StepStatus = "written" | "updated" | "exists" | "manual" | "skipped";
 
+/** What a step wrote, so a caller can tell one kind of file from another
+ *  without reading it: agent instructions, a harness's MCP config, or a
+ *  whole publish bundle that carries both. */
+export type StepKind = "instructions" | "config" | "bundle";
+
 export type StepResult = {
   label: string;
   status: StepStatus;
+  /** What this step wrote. Every step that touches a path declares one. */
+  kind?: StepKind;
   /** Path that was touched, when applicable. */
   path?: string;
   /** Free-form note printed under the step (next-action hint for manual
@@ -226,7 +233,7 @@ const SKILL_FRONTMATTER = (name: string, description: string): string =>
   `---\nname: ${name}\ndescription: ${description}\n---\n\n`;
 
 const ZM_SKILL_DESCRIPTION =
-  "ZeroMind is a shared library of published worlds + assets and a 3D engine you drive remotely. Check ZeroMind first before building from scratch; install with `zeromind.install`; iterate in the connected world with `execute`/`capture`. Activate for any 'make me a X' / 'add a Y' Zero engine request.";
+  "ZeroMind is a shared library of published worlds + assets and a 3D engine you drive remotely. Check ZeroMind first before building from scratch; install with `zeromind.install`; iterate the world you have open with `execute`/`capture`. Activate for any 'make me a X' / 'add a Y' Zero engine request.";
 
 const newSkill = (manual: string): string =>
   SKILL_FRONTMATTER("zeromind", ZM_SKILL_DESCRIPTION) + manual;
@@ -245,7 +252,7 @@ const writeFileStep = (
   run: (ctx) => {
     const path = pathBuilder(ctx);
     const status = writeOwnedFile(path, body(), ctx.force);
-    return { label, status, path };
+    return { label, status, path, kind: "instructions" };
   },
 });
 
@@ -258,7 +265,7 @@ const upsertBlockStep = (
   run: (ctx) => {
     const path = pathBuilder(ctx);
     const status = upsertMarkdownBlock(path, body());
-    return { label, status, path };
+    return { label, status, path, kind: "instructions" };
   },
 });
 
@@ -273,7 +280,7 @@ const editJsonMcpServerStep = (
     const path = pathBuilder(ctx);
     const status = editJsonEntry(path, parentKey, SERVER_KEY, entry());
     restrictToOwner(path);
-    return { label, status, path };
+    return { label, status, path, kind: "config" };
   },
 });
 
@@ -288,7 +295,7 @@ const editJsoncMcpServerStep = (
     const path = pathBuilder(ctx);
     const status = await editJsoncEntry(path, parentPath, SERVER_KEY, entry());
     restrictToOwner(path);
-    return { label, status, path };
+    return { label, status, path, kind: "config" };
   },
 });
 
@@ -336,7 +343,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
           const path = expand("~/.claude/settings.json");
           const status = writeClaudeEnv(secret, path);
           restrictToOwner(path);
-          return { label: `${SECRET_ENV} in ~/.claude/settings.json`, status, path };
+          return { label: `${SECRET_ENV} in ~/.claude/settings.json`, status, path, kind: "config" };
         },
       },
       {
@@ -379,6 +386,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Cursor plugin: copy bundle to ~/.cursor/plugins/local/",
             status,
             path: dest,
+            kind: "bundle",
             note:
               status === "exists"
                 ? "Plugin already at this path — re-run with --force to refresh."
@@ -409,6 +417,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Manual fallback: rule + ~/.cursor/mcp.json",
             status,
             path: mcpPath,
+            kind: "config",
           };
         },
       },
@@ -443,6 +452,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Codex plugin: copy bundle to personal marketplace",
             status,
             path: dest,
+            kind: "bundle",
             note:
               status === "exists"
                 ? "Plugin already at this path — re-run with --force to refresh."
@@ -474,6 +484,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
                 label: "Manual fallback: `codex mcp add zeromind --url`",
                 status: "updated",
                 path,
+                kind: "config",
                 note: "Registered through the Codex CLI, which writes this file.",
               };
             }
@@ -488,6 +499,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Manual fallback: MCP server in ~/.codex/config.toml",
             status,
             path,
+            kind: "config",
           };
         },
       },
@@ -535,6 +547,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Gemini extension: copy bundle to ~/.gemini/extensions/",
             status,
             path: dest,
+            kind: "bundle",
             note:
               status === "exists"
                 ? "Extension already at this path — re-run with --force to refresh."
@@ -559,6 +572,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Manual fallback: MCP server in ~/.gemini/settings.json",
             status,
             path,
+            kind: "config",
           };
         },
       },
@@ -674,7 +688,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             requestOptions: { headers: s.headers },
           });
           restrictToOwner(path);
-          return { label: "MCP server in ~/.continue/config.yaml", status, path };
+          return { label: "MCP server in ~/.continue/config.yaml", status, path, kind: "config" };
         },
       },
     ],
@@ -740,6 +754,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Zed extension: copy bundle to dev-extensions",
             status,
             path: dest,
+            kind: "bundle",
             note:
               status === "exists"
                 ? "Extension already at this path — re-run with --force to refresh."
@@ -764,6 +779,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Manual fallback: MCP server in ~/.config/zed/settings.json",
             status,
             path,
+            kind: "config",
           };
         },
       },
@@ -805,6 +821,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "skill: zeromind",
             status,
             path,
+            kind: "instructions",
             note: "`openclaw` CLI not on PATH — dropped the SKILL.md directly. Install the openclaw CLI to use `openclaw skills install` (and ClawHub for upgrades) in future.",
           };
         },
@@ -844,6 +861,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "register in .aider.conf.yml (`read:`)",
             status,
             path,
+            kind: "config",
             note: "Aider includes every line of CONVENTIONS.md in every request. If the file grows past ~200 lines, trim the ZeroMind block to keep latency reasonable.",
           };
         },
@@ -889,6 +907,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "MCP server in VS Code user settings.json",
             status,
             path,
+            kind: "config",
             note: "VS Code Copilot agent mode reads MCP servers from this JSONC path. If you use a Code variant (Insiders / Cursor / VSCodium) the path differs; pass --copilot-settings to override, or wire it through the Copilot settings UI.",
           };
         },
@@ -930,6 +949,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Extension entry in ~/.config/goose/config.yaml",
             status,
             path,
+            kind: "config",
           };
         },
       },
@@ -1043,6 +1063,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "MCP server in ~/.hermes/config.yaml",
             status,
             path,
+            kind: "config",
             note: "Once the upstream catalog manifest is merged into nousresearch/hermes-agent, this will be installable via `hermes mcp install zeromind` instead.",
           };
         },
@@ -1067,6 +1088,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Plugin bundle: ~/.hermes/plugins/zeromind/",
             status,
             path: dest,
+            kind: "bundle",
             note:
               status === "exists"
                 ? "Plugin already at this path — re-run with --force to refresh."

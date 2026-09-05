@@ -82,8 +82,8 @@ const walk = async (root: string, maxFiles: number): Promise<Array<{ rel: string
  * that would exceed one leaves the world untouched.
  */
 export const uploadToWorld = async (opts: UploadOptions): Promise<UploadResult> => {
-  const maxBytes = opts.maxBytes && opts.maxBytes > 0 ? opts.maxBytes : DEFAULT_MAX_BYTES;
-  const maxFiles = opts.maxFiles && opts.maxFiles > 0 ? opts.maxFiles : DEFAULT_MAX_FILES;
+  const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
+  const maxFiles = opts.maxFiles ?? DEFAULT_MAX_FILES;
   const to = opts.to && opts.to !== "" ? opts.to : DEFAULT_VFS_DIR;
   const localPath = resolve(expandHome(opts.localPath));
 
@@ -152,12 +152,22 @@ export const runUploadCli = async (argv: string[]): Promise<void> => {
   let to: string | undefined;
   let maxBytes: number | undefined;
   let maxFiles: number | undefined;
+  // A ceiling the caller typed is the ceiling that applies: a missing or
+  // unreadable value is an error naming both, never a quiet fall back to the
+  // default the caller was overriding.
+  const ceiling = (flag: string, raw: string | undefined): number => {
+    const value = Number(raw);
+    if (raw === undefined || raw === "" || !Number.isFinite(value) || value <= 0) {
+      throw new Error(`${flag} needs a positive number; got '${raw ?? ""}'`);
+    }
+    return value;
+  };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--world") world = argv[++i];
     else if (arg === "--to") to = argv[++i];
-    else if (arg === "--max-bytes") maxBytes = Number(argv[++i]);
-    else if (arg === "--max-files") maxFiles = Number(argv[++i]);
+    else if (arg === "--max-bytes") maxBytes = ceiling(arg, argv[++i]);
+    else if (arg === "--max-files") maxFiles = ceiling(arg, argv[++i]);
     else if (arg.startsWith("--")) throw new Error(`unknown flag: ${arg}\n\n${HELP}`);
     else if (localPath === undefined) localPath = arg;
     else throw new Error(`unexpected argument: ${arg}\n\n${HELP}`);

@@ -38,9 +38,7 @@ const readMessage = async (res: Response, id: number): Promise<JsonRpcMessage> =
   }
   const mine = messages.find((m) => m.id === id);
   if (mine) return mine;
-  const answered = messages.find((m) => m.result !== undefined || m.error !== undefined);
-  if (answered) return answered;
-  throw new Error("the event stream carried no answer to the request");
+  throw new Error(`the event stream carried no answer to request ${id}`);
 };
 
 export class McpHttpClient {
@@ -102,7 +100,10 @@ export class McpHttpClient {
     if (sessionId) this.sessionId = sessionId;
     const message = await readMessage(res, id);
     if (message.error) throw new Error(`initialize: ${message.error.message}`);
-    await this.post({ jsonrpc: "2.0", method: "notifications/initialized" });
+    // The body is empty, and reading it is what returns the connection to
+    // the pool instead of leaving it open until the agent is closed.
+    const ack = await this.post({ jsonrpc: "2.0", method: "notifications/initialized" });
+    await ack.text();
   }
 
   /** End every connection this client opened. */

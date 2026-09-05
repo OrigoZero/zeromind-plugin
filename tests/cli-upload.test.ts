@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startMockServer, type MockServerHandle } from "../tools/mock-zeromind/index.js";
@@ -121,6 +121,95 @@ describe("zeromind upload", () => {
       runUploadCli([payload, "--world", WORLD_NAME, "--max-bytes", "4"]),
     ).rejects.toThrow(/max-bytes=4/);
     expect(server.state.mcpWrites).toEqual([]);
+  });
+
+  it("refuses a ceiling it cannot read, naming the flag and the value", async () => {
+    const { runUploadCli } = await import("../src/cli-upload.js");
+    // A typo in a safety ceiling must not quietly restore the default the
+    // caller was overriding.
+    await expect(
+      runUploadCli([payload, "--world", WORLD_NAME, "--max-bytes", "5OO"]),
+    ).rejects.toThrow(/--max-bytes needs a positive number; got '5OO'/);
+    await expect(
+      runUploadCli([payload, "--world", WORLD_NAME, "--max-files", "0"]),
+    ).rejects.toThrow(/--max-files needs a positive number; got '0'/);
+    expect(server.state.mcpWrites).toEqual([]);
+    expect(server.state.mcpConnectedWorld).toBeUndefined();
+  });
+
+  it("refuses a ceiling flag with no value at all", async () => {
+    const { runUploadCli } = await import("../src/cli-upload.js");
+    await expect(
+      runUploadCli([payload, "--world", WORLD_NAME, "--max-files"]),
+    ).rejects.toThrow(/--max-files needs a positive number; got ''/);
+    await expect(
+      runUploadCli([payload, "--world", WORLD_NAME, "--max-bytes"]),
+    ).rejects.toThrow(/--max-bytes needs a positive number; got ''/);
+    expect(server.state.mcpWrites).toEqual([]);
+  });
+
+  it("never follows a symlink out of the folder it was given", async () => {
+    const { runUploadCli } = await import("../src/cli-upload.js");
+    const outside = mkdtempSync(join(tmpdir(), "zm-upload-outside-"));
+    const secret = "host file the world must never see\n";
+    writeFileSync(join(outside, "secret.txt"), secret);
+    const tree = mkdtempSync(join(tmpdir(), "zm-upload-link-"));
+    writeFileSync(join(tree, "keep.txt"), "kept\n");
+    // A plain file symlink needs a privilege Windows grants only in developer
+    // mode; a junction needs none (and is an ordinary symlink off Windows), so
+    // at least the directory leg runs everywhere.
+    const linked: string[] = [];
+    try {
+      symlinkSync(join(outside, "secret.txt"), join(tree, "leak.txt"), "file");
+      linked.push("file");
+    } catch {
+      /* privilege not granted here */
+    }
+    try {
+      symlinkSync(outside, join(tree, "leak-dir"), "junction");
+      linked.push("dir");
+    } catch {
+      /* privilege not granted here */
+    }
+    if (linked.length === 0) {
+      rmSync(outside, { recursive: true, force: true });
+      rmSync(tree, { recursive: true, force: true });
+      return;
+    }
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      await runUploadCli([tree, "--world", WORLD_NAME]);
+    } finally {
+      write.mockRestore();
+      rmSync(outside, { recursive: true, force: true });
+      rmSync(tree, { recursive: true, force: true });
+    }
+    expect(linked.length, "no link was created, so nothing was proven").toBeGreaterThan(0);
+    expect(server.state.mcpWrites.map((w) => w.path)).toEqual(["/source/keep.txt"]);
+    const sent = server.state.mcpWrites.map((w) =>
+      Buffer.from(w.content_b64, "base64").toString("utf8"),
+    );
+    expect(sent).not.toContain(secret);
+  });
+
+  it("refuses a tree nested past the depth ceiling", async () => {
+    const { runUploadCli } = await import("../src/cli-upload.js");
+    const deep = mkdtempSync(join(tmpdir(), "zm-upload-deep-"));
+    let cursor = deep;
+    for (let i = 0; i < 66; i++) {
+      cursor = join(cursor, `d${i}`);
+      mkdirSync(cursor);
+    }
+    writeFileSync(join(cursor, "bottom.txt"), "too deep\n");
+    try {
+      await expect(runUploadCli([deep, "--world", WORLD_NAME])).rejects.toThrow(
+        /nested deeper than 64 directories/,
+      );
+    } finally {
+      rmSync(deep, { recursive: true, force: true });
+    }
+    expect(server.state.mcpWrites).toEqual([]);
+    expect(server.state.mcpConnectedWorld).toBeUndefined();
   });
 
   it("prints a refused world.connect and exits non-zero, having written nothing", async () => {
