@@ -49,27 +49,18 @@ export const deleteCache = (): void => {
 export const installSecret = (c: SessionCache | undefined): string | undefined =>
   c?.install_secret ?? (c?.session_token?.startsWith("ins_sec_") ? c.session_token : undefined);
 
-// --- Task 2 removes these: compatibility shims for the pre-rewrite callers
-// (src/install.ts, src/link.ts, src/index.ts, src/bridge.ts, src/tools/*)
-// that still import the old install.json-shaped API. They exist only to
-// keep the build compiling until those callers are rewritten onto
-// SessionCache directly.
+// --- Task 3 removes this: src/index.ts, src/bridge.ts and src/tools/* (all
+// deleted or rewritten by Task 3) still read the install as `InstallConfig`
+// via `loadConfig`. Task 2 rewrote src/install.ts and src/link.ts onto
+// SessionCache directly, so `saveConfig`, `configPath` and `deleteConfig`
+// (each had exactly one caller, in one of those two files) are gone —
+// `loadConfig`/`InstallConfig` stay only for the callers above.
 
 /** The old per-plugin install shape, superseding onto the engine's cache fields. */
 export type InstallConfig = SessionCache & {
   install_id: string;
   install_secret: string;
-  private_key: string;
   install_name: string;
-  created_at: string;
 };
-
-export const configPath = cachePath;
 
 export const loadConfig = (): InstallConfig | undefined => loadCache() as InstallConfig | undefined;
-
-export const saveConfig = (cfg: InstallConfig): void => {
-  updateCache(cfg);
-};
-
-export const deleteConfig = deleteCache;

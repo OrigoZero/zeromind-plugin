@@ -25,31 +25,31 @@ describe("link", () => {
   });
 
   it("startDeviceCode returns user_code + verification_url", async () => {
-    const cfg = await ensureRegistered({ ideName: "test" });
-    const code = await startDeviceCode(cfg);
+    const cache = await ensureRegistered({ installName: "zero-engine" });
+    const code = await startDeviceCode(cache);
     expect(code.user_code).toMatch(/^[A-F0-9]{4}-[A-F0-9]{4}$/);
     expect(code.verification_url).toBe("http://localhost/link");
     expect(code.interval).toBeGreaterThan(0);
   });
 
   it("pollLinkStatus returns pending then approved", async () => {
-    const cfg = await ensureRegistered({ ideName: "test" });
-    await startDeviceCode(cfg);
-    let status = await pollLinkStatus(cfg);
+    const cache = await ensureRegistered({ installName: "zero-engine" });
+    await startDeviceCode(cache);
+    let status = await pollLinkStatus(cache);
     expect(status.status).toBe("pending");
 
-    server.forceApprove(cfg.install_id, "usr_test");
-    status = await pollLinkStatus(cfg);
+    server.forceApprove(cache.install_id!, "usr_test");
+    status = await pollLinkStatus(cache);
     expect(status.status).toBe("approved");
     if (status.status === "approved") expect(status.user_id).toBe("usr_test");
   });
 
-  it("unlink severs the link and deletes the config", async () => {
-    const cfg = await ensureRegistered({ ideName: "test" });
-    server.forceApprove(cfg.install_id, "usr_test");
-    await unlink(cfg);
-    const { loadConfig } = await import("../src/config.js");
-    expect(loadConfig()).toBeUndefined();
-    expect(server.state.installs.get(cfg.install_id)?.linked).toBe(false);
+  it("unlink severs the link and deletes the cache", async () => {
+    const cache = await ensureRegistered({ installName: "zero-engine" });
+    server.forceApprove(cache.install_id!, "usr_test");
+    await unlink(cache);
+    const { loadCache } = await import("../src/config.js");
+    expect(loadCache()).toBeUndefined();
+    expect(server.state.installs.get(cache.install_id!)?.linked).toBe(false);
   });
 });
