@@ -8,6 +8,7 @@ import {
   BLOCK_END,
   copyPluginBundle,
   editJsonEntry,
+  removeJsonEntry,
   editJsoncEntry,
   upsertMarkdownBlock,
   upsertTomlBlock,
@@ -315,7 +316,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
   claude: {
     name: "Claude Code",
     channel:
-      "skills (`.claude/skills/<name>/SKILL.md`) + MCP server in `~/.claude/settings.json`",
+      "skills (`.claude/skills/<name>/SKILL.md`) + MCP server in `~/.claude.json`, with its bearer expanded from `~/.claude/settings.json` `env`",
     defaultScope: "project",
     scopes: ["project", "global"],
     steps: [
@@ -329,14 +330,37 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
         claudeSkillPath("zeromind-library"),
         () => loadSkillFile("zeromind-library"),
       ),
-      editJsonMcpServerStep(
-        "MCP server in ~/.claude/settings.json",
-        () => expand("~/.claude/settings.json"),
-        // Claude Code expands `${VAR}` in an MCP entry's url and headers
-        // from its own settings `env`, so its config never holds the
-        // secret itself — the step below puts the value there.
-        () => expandingServer("claude-code", `\${${SECRET_ENV}}`),
-      ),
+      {
+        // Claude Code reads user-scope MCP servers from ~/.claude.json —
+        // `claude mcp list` shows an entry there and shows none from
+        // settings.json — and expands `${VAR}` in an entry's url and headers
+        // from the settings `env` the step below writes, so the config never
+        // holds the secret itself.
+        label: "MCP server in ~/.claude.json",
+        run: () => {
+          const path = expand("~/.claude.json");
+          const status = editJsonEntry(
+            path,
+            "mcpServers",
+            SERVER_KEY,
+            expandingServer("claude-code", `\${${SECRET_ENV}}`),
+          );
+          restrictToOwner(path);
+          // An earlier version of this installer wrote the entry into
+          // settings.json, where nothing reads it; take that one out.
+          const stale = expand("~/.claude/settings.json");
+          const removed = existsSync(stale) ? removeJsonEntry(stale, "mcpServers", SERVER_KEY) : false;
+          return {
+            label: "MCP server in ~/.claude.json",
+            status,
+            path,
+            kind: "config",
+            note: removed
+              ? "Removed the stale `mcpServers.zeromind` an earlier install left in ~/.claude/settings.json, which Claude Code does not read."
+              : undefined,
+          };
+        },
+      },
       {
         label: `${SECRET_ENV} in ~/.claude/settings.json`,
         run: () => {

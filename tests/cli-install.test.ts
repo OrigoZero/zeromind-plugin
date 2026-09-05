@@ -78,7 +78,7 @@ describe("cli-install: per-harness full native install", () => {
     }
   });
 
-  it("Claude install drops both bundled skills + adds the MCP server to ~/.claude/settings.json (one shot)", async () => {
+  it("Claude install drops both bundled skills + adds the MCP server to ~/.claude.json (one shot)", async () => {
     const cwd = newTmp();
     useHome(cwd);
     const r = await installHarness({ harness: "claude", scope: "project", cwd, shell: false });
@@ -95,13 +95,15 @@ describe("cli-install: per-harness full native install", () => {
 
     const mcpStep = r.steps.find((s) => s.label.startsWith("MCP server"))!;
     expect(mcpStep.status === "written" || mcpStep.status === "updated").toBe(true);
-    const settings = JSON.parse(readFileSync(mcpStep.path!, "utf8")) as {
+    // Claude Code reads user-scope MCP servers from ~/.claude.json; the entry
+    // goes where the reader looks, not into settings.json.
+    expect(mcpStep.path).toBe(join(cwd, ".claude.json"));
+    const userConfig = JSON.parse(readFileSync(mcpStep.path!, "utf8")) as {
       mcpServers: { zeromind: { type: string; url: string; headers: Record<string, string> } };
-      env: Record<string, string>;
     };
     // Claude Code expands `${VAR}` from its own settings `env`, so the
     // entry names the variable and the second step supplies the value.
-    expect(settings.mcpServers.zeromind).toEqual({
+    expect(userConfig.mcpServers.zeromind).toEqual({
       type: "http",
       url: "https://origozero.ai/mcp",
       headers: {
@@ -109,7 +111,32 @@ describe("cli-install: per-harness full native install", () => {
         "X-ZM-Harness": "claude-code",
       },
     });
+    const envStep = r.steps.find((s) => s.label.startsWith("ZEROMIND_INSTALL_SECRET"))!;
+    const settings = JSON.parse(readFileSync(envStep.path!, "utf8")) as {
+      env: Record<string, string>;
+      mcpServers?: unknown;
+    };
+    expect(envStep.path).toBe(join(cwd, ".claude/settings.json"));
     expect(settings.env.ZEROMIND_INSTALL_SECRET).toBe("ins_sec_test");
+    expect(settings.mcpServers).toBeUndefined();
+  });
+
+  it("takes the entry an earlier install left where Claude Code does not read it", async () => {
+    const cwd = newTmp();
+    useHome(cwd);
+    mkdirSync(join(cwd, ".claude"), { recursive: true });
+    writeFileSync(
+      join(cwd, ".claude/settings.json"),
+      JSON.stringify({ mcpServers: { zeromind: { type: "http" }, other: { type: "http" } } }),
+    );
+    const r = await installHarness({ harness: "claude", scope: "project", cwd, shell: false });
+    const mcpStep = r.steps.find((s) => s.label.startsWith("MCP server"))!;
+    expect(mcpStep.note).toMatch(/stale/);
+    const settings = JSON.parse(readFileSync(join(cwd, ".claude/settings.json"), "utf8")) as {
+      mcpServers: Record<string, unknown>;
+    };
+    // Only ours goes; anything else in that map is not this installer's.
+    expect(Object.keys(settings.mcpServers)).toEqual(["other"]);
   });
 
   it("Cursor install copies the Cursor 3.0 plugin bundle to ~/.cursor/plugins/local/ + writes rule and mcp.json fallback", async () => {

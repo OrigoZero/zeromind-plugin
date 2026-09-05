@@ -26,7 +26,7 @@ npx @origozero/zeromind install claude
 Does the same end-state as the marketplace install without going through `/plugin`:
 
 - Drops `skills/zeromind-getting-started/SKILL.md` and `skills/zeromind-library/SKILL.md` into `.claude/skills/` (use `--global` for `~/.claude/skills/`).
-- Adds the `mcpServers.zeromind` entry to `~/.claude/settings.json` (merging with whatever you already have), and this machine's install secret to the same file's `env`.
+- Adds the `mcpServers.zeromind` entry to `~/.claude.json`, the user-scope config Claude Code reads MCP servers from (merging with whatever you already have), and this machine's install secret to `~/.claude/settings.json` `env`, which is what the entry's `${ZEROMIND_INSTALL_SECRET}` expands from.
 
 Claude Code expands `${VAR}` in an MCP entry's `url` and `headers`, so the entry names the variable rather than the secret:
 

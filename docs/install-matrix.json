@@ -31,7 +31,7 @@
           "note": "Survives upgrades through Claude Code's own plugin lifecycle."
         }
       ],
-      "native_channel": "skills + plugin marketplace + the /mcp server in ~/.claude/settings.json",
+      "native_channel": "skills + plugin marketplace + the /mcp server in ~/.claude.json, its bearer expanded from ~/.claude/settings.json env",
       "doc_url": "https://github.com/OrigoZero/zeromind-plugin/blob/main/ide/claude/README.md"
     },
     {

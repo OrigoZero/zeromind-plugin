@@ -71,6 +71,24 @@ export const editJsoncEntry = async (
   return existed && isUpdate ? "updated" : "written";
 };
 
+/** Take one entry back out of a JSON config's parent map, and the map with it
+ *  when it is then empty. Answers whether anything was there. */
+export const removeJsonEntry = (path: string, parentKey: string, entryKey: string): boolean => {
+  if (!existsSync(path)) return false;
+  let json: JsonObject;
+  try {
+    json = JSON.parse(readFileSync(path, "utf8")) as JsonObject;
+  } catch {
+    return false;
+  }
+  const parent = json[parentKey] as JsonObject | undefined;
+  if (!parent || !(entryKey in parent)) return false;
+  delete parent[entryKey];
+  if (Object.keys(parent).length === 0) delete json[parentKey];
+  writeFileSync(path, JSON.stringify(json, null, 2) + "\n");
+  return true;
+};
+
 // ─── TOML (Codex ~/.codex/config.toml) ──────────────────────────────────
 
 /** Set a nested TOML table value preserving other tables. Uses a
