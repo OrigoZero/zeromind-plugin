@@ -41,4 +41,4 @@ The install secret is the `install_secret` in `~/.config/zero/session.json` (`%A
 
 Agent rule — drop the contents of [`templates/manual.md`](../../templates/manual.md) into `.cursor/rules/zeromind.mdc` with the MDC frontmatter (see [`src/cli-install.ts`](../../src/cli-install.ts) for the exact wrapper).
 
-Restart Cursor. The first engine-related prompt triggers the one-time device-code link.
+Restart Cursor. `npx -y @origozero/zeromind link` is what links this machine — once, before the entry above can authenticate.

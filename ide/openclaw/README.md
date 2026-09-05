@@ -27,7 +27,7 @@ Whether openClaw acts as an MCP client is unconfirmed — the skill IS the prima
 - Header `Authorization`: `Bearer ins_sec_...`
 - Header `X-ZM-Harness`: `openclaw`
 
-The install secret is the `install_secret` in `~/.config/zero/session.json` (`%APPDATA%\zero\session.json` on Windows). `zeromind install <harness>` writes the whole entry for you after `zeromind link`.
+The install secret is the `install_secret` in `~/.config/zero/session.json` (`%APPDATA%\zero\session.json` on Windows) — run `npx -y @origozero/zeromind link` first if there isn't one. openClaw is one of the two harnesses whose MCP config path the install cannot confirm, so it prints this entry for you to paste rather than writing it.
 
 The ClawHub package in [`dist-publishing/clawhub/`](../../dist-publishing/clawhub/) carries the same entry with a `${ZEROMIND_INSTALL_SECRET}` expansion.
 

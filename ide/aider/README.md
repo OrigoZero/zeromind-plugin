@@ -12,7 +12,7 @@ Aider takes MCP servers as JSON on the command line, and an Aider that predates 
 aider --mcp-servers '{"mcpServers":{"zeromind":{"url":"https://origozero.ai/mcp","headers":{"Authorization":"Bearer ins_sec_...","X-ZM-Harness":"aider"}}}}'
 ```
 
-The install secret is the `install_secret` in `~/.config/zero/session.json` (`%APPDATA%\zero\session.json` on Windows). `zeromind install <harness>` writes the whole entry for you after `zeromind link`.
+The install secret is the `install_secret` in `~/.config/zero/session.json` (`%APPDATA%\zero\session.json` on Windows) — run `npx -y @origozero/zeromind link` first if there isn't one. Paste it into the command yourself; Aider takes MCP servers on the command line, so there is no config file for the install to write.
 
 Without that flag only the operating manual reaches the agent — the `zeromind.*` tools are not callable. If you want them, pair Aider with a separate MCP-capable agent for the engine work, or use one of the other harnesses listed in [`../README.md`](../README.md).
 

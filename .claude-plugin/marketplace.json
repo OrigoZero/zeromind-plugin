@@ -1,6 +1,6 @@
 {
   "name": "zeromind",
-  "description": "ZeroMind plugin for Claude Code — drive your browser-running Zero engine worlds via the @origozero/zeromind MCP server. REQUIRES Node.js 18+ (install from https://nodejs.org if needed, then restart Claude Code).",
+  "description": "ZeroMind for Claude Code: the `zeromind` MCP server at origozero.ai/mcp (content discovery, worlds, and the engine tools of the world you have open) plus the skills that teach the agent to check ZeroMind first. Link this machine once with `npx -y @origozero/zeromind link` — REQUIRES Node.js 18+ (install from https://nodejs.org if needed, then restart Claude Code).",
   "owner": {
     "name": "OrigoZero",
     "url": "https://github.com/OrigoZero"

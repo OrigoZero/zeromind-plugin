@@ -22,16 +22,24 @@ In VS Code, open Settings → Features → Copilot → MCP servers and add:
 
 ```json
 {
-  "zeromind": {
-    "type": "http",
-    "url": "https://origozero.ai/mcp",
-    "headers": {
-      "Authorization": "Bearer ins_sec_...",
-      "X-ZM-Harness": "copilot"
+  "github.copilot.advanced": {
+    "mcp": {
+      "servers": {
+        "zeromind": {
+          "type": "http",
+          "url": "https://origozero.ai/mcp",
+          "headers": {
+            "Authorization": "Bearer ins_sec_...",
+            "X-ZM-Harness": "copilot"
+          }
+        }
+      }
     }
   }
 }
 ```
+
+That is the path in VS Code's user `settings.json` — `github.copilot.advanced` is one literal key, with `mcp.servers` nested inside it. `zeromind install copilot` writes exactly this.
 
 The install secret is the `install_secret` in `~/.config/zero/session.json` (`%APPDATA%\zero\session.json` on Windows). `zeromind install <harness>` writes the whole entry for you after `zeromind link`.
 
