@@ -22,13 +22,17 @@ const readOr = (path: string, fallback: string): string =>
 export type JsonObject = Record<string, unknown>;
 
 /** Set a single-key entry inside a top-level object key (e.g.
- *  `mcpServers.zeromind = {...}`). Creates the parent key if missing. */
+ *  `mcpServers.zeromind = {...}`). Creates the parent key if missing.
+ *
+ *  An entry that already says what this would write leaves the file alone:
+ *  a harness edits its own config while it runs, and a read-modify-write
+ *  that changes nothing can only lose what it wrote in between. */
 export const editJsonEntry = (
   path: string,
   parentKey: string,
   entryKey: string,
   entry: unknown,
-): "written" | "updated" => {
+): "written" | "updated" | "exists" => {
   ensureDir(path);
   const existed = existsSync(path);
   let obj: JsonObject = {};
@@ -38,6 +42,7 @@ export const editJsonEntry = (
   }
   const parent = (obj[parentKey] as JsonObject | undefined) ?? {};
   const isUpdate = entryKey in parent;
+  if (isUpdate && JSON.stringify(parent[entryKey]) === JSON.stringify(entry)) return "exists";
   parent[entryKey] = entry;
   obj[parentKey] = parent;
   writeFileSync(path, JSON.stringify(obj, null, 2) + "\n");

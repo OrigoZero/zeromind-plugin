@@ -121,6 +121,29 @@ describe("cli-install: per-harness full native install", () => {
     expect(settings.mcpServers).toBeUndefined();
   });
 
+  it("leaves ~/.claude.json untouched when the entry already says what it would write", async () => {
+    const cwd = newTmp();
+    useHome(cwd);
+    const first = await installHarness({ harness: "claude", scope: "project", cwd, shell: false });
+    const claudeJson = first.steps.find((s) => s.label.startsWith("MCP server"))!.path!;
+    const before = { bytes: readFileSync(claudeJson), at: statSync(claudeJson).mtimeMs };
+
+    const second = await installHarness({
+      harness: "claude",
+      scope: "project",
+      cwd,
+      force: true,
+      shell: false,
+    });
+
+    // Claude Code writes this file while it runs: an edit that changes
+    // nothing can only lose what the harness wrote in between.
+    const mcpStep = second.steps.find((s) => s.label.startsWith("MCP server"))!;
+    expect(mcpStep.status).toBe("exists");
+    expect(readFileSync(claudeJson).equals(before.bytes)).toBe(true);
+    expect(statSync(claudeJson).mtimeMs).toBe(before.at);
+  });
+
   it("takes the entry an earlier install left where Claude Code does not read it", async () => {
     const cwd = newTmp();
     useHome(cwd);
