@@ -37,7 +37,7 @@ npx -y @origozero/zeromind install <harness>
 One command per harness — it links the machine first if it isn't linked yet, writes the harness's native instruction file, and writes the `/mcp` entry into that harness's own MCP config:
 
 ```
-npx -y @origozero/zeromind install claude       # .claude/skills/zeromind/SKILL.md
+npx -y @origozero/zeromind install claude       # .claude/skills/zeromind-{getting-started,library}/SKILL.md
 npx -y @origozero/zeromind install cursor       # .cursor/rules/zeromind.mdc
 npx -y @origozero/zeromind install codex        # ~/.codex/AGENTS.md (or ./AGENTS.md)
 npx -y @origozero/zeromind install gemini       # ~/.gemini/GEMINI.md (or ./GEMINI.md)
@@ -52,6 +52,7 @@ npx -y @origozero/zeromind install amp          # ./AGENT.md
 npx -y @origozero/zeromind install copilot      # .github/copilot-instructions.md
 npx -y @origozero/zeromind install goose        # ~/.config/goose/.goosehints
 npx -y @origozero/zeromind install aider        # ./CONVENTIONS.md
+npx -y @origozero/zeromind install hermes       # ~/.hermes/config.yaml + plugin bundle
 
 npx -y @origozero/zeromind install --list       # enumerate
 ```
@@ -144,7 +145,7 @@ Maintainers: `package.json` `version` is the source of truth — keep `.claude-p
 
 ## Status
 
-0.7.0 — the plugin runs no MCP server of its own. It links a machine, writes the remote `/mcp` entry into fifteen harnesses, uploads local files into a world, and ships the two skills. The tool surface is ZeroMind's, served live at `https://origozero.ai/mcp`; the tests drive the CLI end to end against the bundled mock ZeroMind server in [`tools/mock-zeromind/`](tools/mock-zeromind/).
+0.7.0 — the plugin runs no MCP server of its own. It links a machine, writes the remote `/mcp` entry into sixteen harnesses, uploads local files into a world, and ships the two skills. The tool surface is ZeroMind's, served live at `https://origozero.ai/mcp`; the tests drive the CLI end to end against the bundled mock ZeroMind server in [`tools/mock-zeromind/`](tools/mock-zeromind/).
 
 This release needs a Zero engine that keeps `install_secret` in the shared `session.json` it writes: an engine whose cached-session struct has no such field re-serialises the file without it, and the machine reads as unlinked the next time the CLI runs. 0.7.0 therefore ships after that engine release.
 

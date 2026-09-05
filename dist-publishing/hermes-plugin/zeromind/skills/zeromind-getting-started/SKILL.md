@@ -56,7 +56,7 @@ The `zeromind` MCP server is ZeroMind itself at `origozero.ai/mcp`. If its tools
 npx -y @origozero/zeromind link
 ```
 
-in a shell, open the URL it prints, and enter the code. Then they restart Claude Code so the new setting is read. Link once per machine — every later session reuses it silently.
+in a shell, open the URL it prints, and enter the code. Then they restart the IDE, so it reads the credential the link wrote. Link once per machine — every later session reuses it silently.
 
 ## Which engine your calls reach
 

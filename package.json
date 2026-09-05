@@ -18,6 +18,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "pretest": "npm run build",
@@ -31,7 +32,6 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@iarna/toml": "^2.2.5",
     "jsonc-parser": "^3.3.1",
     "undici": "^6.0.0",
     "yaml": "^2.9.0"

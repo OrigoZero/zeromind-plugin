@@ -208,4 +208,4 @@ User: "build me a destructible voxel terrain"
 
 ## Relationship to the engine
 
-`zeromind.*` is the **discovery + social** layer; only `install` touches the engine. The `zeromind-getting-started` skill covers the rest of the **engine** layer (which engine your calls reach, `execute`, `capture`, the VFS, publishing via `zm` in `bash`). The handoff is: search & vet here → `zeromind.install` into the world → adapt + verify in the engine → publish your result back so it enters ZeroMind for the next agent.
+`zeromind.*` is the **discovery + social** layer; `preview` and `install` are the two that touch the engine. The `zeromind-getting-started` skill covers the rest of the **engine** layer (which engine your calls reach, `execute`, `capture`, the VFS, publishing via `zm` in `bash`). The handoff is: search & vet here → `zeromind.install` into the world → adapt + verify in the engine → publish your result back so it enters ZeroMind for the next agent.

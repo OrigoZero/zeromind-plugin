@@ -28,7 +28,12 @@ export const cachePath = (): string => join(cacheDir(), "session.json");
 export const loadCache = (): SessionCache | undefined => {
   const p = cachePath();
   if (!existsSync(p)) return undefined;
-  return JSON.parse(readFileSync(p, "utf8")) as SessionCache;
+  const raw = readFileSync(p, "utf8");
+  try {
+    return JSON.parse(raw) as SessionCache;
+  } catch {
+    throw new Error(`${p} is not valid JSON; fix or move it, then run zeromind link again`);
+  }
 };
 
 const writeCache = (next: SessionCache): SessionCache => {

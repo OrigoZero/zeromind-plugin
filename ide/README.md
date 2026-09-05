@@ -68,4 +68,4 @@ If your client has a native context channel we haven't custom-crafted, open an i
 
 ## Hermes
 
-Nous Research's [Hermes Agent](https://github.com/nousresearch/hermes-agent) generates its own skills from experience rather than loading user-authored ones, so it stays on the generic MCP fallback for now. Hermes is itself an MCP client, so `zeromind.help` + `getting_started` will work; whether Hermes injects the MCP `instructions` field into its agent's prompt is unconfirmed.
+`npx -y @origozero/zeromind install hermes` writes the `mcp_servers.zeromind` entry into `~/.hermes/config.yaml` and drops the optional plugin bundle (skills, a `/zeromind` slash command, a first-turn context hook) into `~/.hermes/plugins/`. Hermes generates its own skills from experience rather than loading user-authored ones, so the bundle is opt-in — `hermes plugins enable zeromind`. Hermes is an MCP client, so `zeromind.help` reaches the agent on demand; whether Hermes injects the MCP `instructions` field into its agent's prompt is unconfirmed.

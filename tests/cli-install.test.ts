@@ -410,6 +410,7 @@ describe("cli-install: per-harness full native install", () => {
       "openclaw",
       "aider",
       "copilot",
+      "goose",
       "junie",
       "amp",
       "hermes",

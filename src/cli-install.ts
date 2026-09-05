@@ -17,7 +17,7 @@ import {
   writeOwnedFile,
 } from "./config-edit.js";
 import { writeClaudeEnv } from "./cli-link.js";
-import { installSecret, loadCache } from "./config.js";
+import { cachePath, installSecret, loadCache } from "./config.js";
 import {
   remoteServer,
   remoteUrl,
@@ -197,7 +197,7 @@ const restrictToOwner = (path: string): void => {
 
 /** What a manual step tells the user to add, wherever their harness keeps MCP servers. */
 const manualEntry = (harness: string): string =>
-  `  url: ${remoteUrl()}\n  header Authorization: Bearer <this machine's install_secret from ~/.config/zero/session.json>\n  header X-ZM-Harness: ${harness}`;
+  `  url: ${remoteUrl()}\n  header Authorization: Bearer <this machine's install_secret from ${cachePath()}>\n  header X-ZM-Harness: ${harness}`;
 
 /**
  * `codex mcp add` takes `--url` for a streamable HTTP server. It can stand
@@ -874,7 +874,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
         run: () => ({
           label: "MCP server: `aider --mcp-servers`",
           status: "manual",
-          note: `An Aider with MCP support takes the server as JSON on the command line:\n  aider --mcp-servers '{"mcpServers":{"zeromind":{"url":"${remoteUrl()}","headers":{"Authorization":"Bearer <this machine's install_secret from ~/.config/zero/session.json>","X-ZM-Harness":"aider"}}}}'\nWithout it, CONVENTIONS.md still reaches the agent; the zeromind.* tools do not.`,
+          note: `An Aider with MCP support takes the server as JSON on the command line:\n  aider --mcp-servers '{"mcpServers":{"zeromind":{"url":"${remoteUrl()}","headers":{"Authorization":"Bearer <this machine's install_secret from ${cachePath()}>","X-ZM-Harness":"aider"}}}}'\nWithout it, CONVENTIONS.md still reaches the agent; the zeromind.* tools do not.`,
         }),
       },
     ],
