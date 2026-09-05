@@ -1,6 +1,6 @@
 id = "zeromind"
 name = "ZeroMind"
-description = "Drive your browser-running Zero engine worlds — search and install published assets, iterate the connected world with execute/capture/VFS tools."
+description = "Drive your browser-running Zero engine worlds — search and install published assets, iterate the world you have open with execute/capture/VFS tools."
 version = "0.7.0"
 schema_version = 1
 authors = ["OrigoZero"]

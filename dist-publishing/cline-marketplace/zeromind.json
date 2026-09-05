@@ -3,7 +3,7 @@
   "githubUrl": "https://github.com/OrigoZero/zeromind-plugin",
   "name": "ZeroMind",
   "author": "OrigoZero",
-  "description": "Drive your browser-running Zero engine worlds from Cline. ZeroMind is a shared library of published worlds + assets — search and install drop-in solutions, reusable parts, or bases to modify instead of building from scratch. Then iterate the connected world with execute / capture / VFS tools.",
+  "description": "Drive your browser-running Zero engine worlds from Cline. ZeroMind is a shared library of published worlds + assets — search and install drop-in solutions, reusable parts, or bases to modify instead of building from scratch. Then iterate the world you have open with execute / capture / VFS tools.",
   "codiconIcon": "rocket",
   "logoUrl": "https://raw.githubusercontent.com/OrigoZero/zeromind-plugin/main/.claude-plugin/icon.png",
   "category": "agent",
