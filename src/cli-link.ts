@@ -8,11 +8,34 @@ import { SECRET_ENV } from "./server-spec.js";
 
 const INSTALL_NAME = "zero-engine";
 
+/** Who the linked install acts as — the handle when ZeroMind answers, and
+ *  "your bot" when it doesn't: naming the account is a courtesy on top of
+ *  "this machine is linked", which is true offline too. */
+const linkedBot = async (cache: SessionCache): Promise<string> => {
+  try {
+    const status = await pollLinkStatus(cache);
+    if (status.status === "approved" && status.username) return `@${status.username}`;
+  } catch {
+    /* the link stands whether or not this call reaches ZeroMind */
+  }
+  return "your bot";
+};
+
 export const linkMachine = async (opts: {
   username?: string;
   out: (line: string) => void;
   wait: (ms: number) => Promise<void>;
 }): Promise<SessionCache> => {
+  // One linked install per machine: a machine that already holds an approved
+  // one is linked, and says so rather than minting a second code for an
+  // operator to approve again. `zeromind unlink` is how a machine is re-linked.
+  const linked = loadCache();
+  const secret = linked && installSecret(linked);
+  if (linked && secret && linked.user_id) {
+    const cache = { ...linked, install_secret: secret };
+    opts.out(`Already linked: this machine acts as ${await linkedBot(cache)}.`);
+    return cache;
+  }
   const cache = await ensureRegistered({ installName: INSTALL_NAME });
   const code = await startDeviceCode(cache, opts.username);
   opts.out(`Open ${code.verification_url} and enter the code:\n\n    ${code.user_code}\n`);
@@ -55,9 +78,9 @@ export const writeClaudeEnv = (
   return existed ? "updated" : "written";
 };
 
-const HELP = `zeromind link [--username <handle>]   link this machine to your ZeroMind account (once)
+const HELP = `zeromind link [--username <handle>]   link this machine to your ZeroMind account (once; on a linked machine it says who and stops)
 zeromind status                      what this machine is linked as
-zeromind unlink                      revoke this machine's link
+zeromind unlink                      revoke this machine's link (unlink, then link, is how a machine is re-linked)
 zeromind install <harness>           write the remote /mcp server entry into a harness (links first if needed)
 zeromind upload <path> --world <w>   copy a file or folder into a world's engine VFS
 `;

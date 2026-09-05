@@ -64,6 +64,8 @@ export class MockState {
   approveAfterPolls?: number;
   /** POST /v1/issues submissions, recorded for test assertions. */
   issues: IssueSubmission[] = [];
+  /** Device codes asked for, so a test can assert none was. */
+  linkCodeRequests = 0;
   worlds = new Map<string, WorldRow>();
   // Minimal user/profile store keyed by user_id, populated lazily the first
   // time an authed `/v1/me` call resolves an install to its linked user.
@@ -227,6 +229,7 @@ export const buildServer = (state: MockState): Server =>
         if (!install || install.install_id !== linkCodesMatch[1]) {
           return json(res, 401, { error: "unauthorized" });
         }
+        state.linkCodeRequests += 1;
         const body = (await readJson(req)) as { suggested_username?: string };
         const userCode =
           randomBytes(2).toString("hex").toUpperCase() +

@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { startMockServer, type MockServerHandle } from "../tools/mock-zeromind/index.js";
 import { linkMachine, writeClaudeEnv } from "../src/cli-link.js";
-import { loadCache } from "../src/config.js";
+import { loadCache, updateCache } from "../src/config.js";
+import { runLinkCli } from "../src/cli-link.js";
 
 describe("zeromind link", () => {
   beforeEach(() => {
@@ -23,6 +24,91 @@ describe("zeromind link", () => {
     expect(lines.join("\n")).toMatch(/[A-Z0-9]{4}-[A-Z0-9]{4}/);
     expect(lines.join("\n")).toContain("/link");
     expect(cache.install_secret?.startsWith("ins_sec_")).toBe(true);
+    expect(loadCache()?.user_id).toBeTruthy();
+    await mock.stop();
+  });
+
+  it("says who an already-linked machine acts as, and asks for no new code", async () => {
+    const mock: MockServerHandle = await startMockServer();
+    process.env.ZEROMIND_ISSUER = mock.url;
+    // The machine this cache describes was linked once — by an earlier run, or
+    // by the engine, which writes the same file.
+    const registered = (await (
+      await fetch(`${mock.url}/v1/installs/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ install_name: "zero-engine", public_key: "pk" }),
+      })
+    ).json()) as { install_id: string; install_secret: string };
+    mock.forceApprove(registered.install_id, "usr_already", false, { username: "brick-bot" });
+    updateCache({ ...registered, user_id: "usr_already" });
+
+    const lines: string[] = [];
+    const cache = await linkMachine({ out: (l) => lines.push(l), wait: async () => {} });
+
+    expect(lines.join("\n")).toBe("Already linked: this machine acts as @brick-bot.");
+    expect(mock.state.linkCodeRequests).toBe(0);
+    expect(cache.install_secret).toBe(registered.install_secret);
+    // Only a handle ZeroMind actually named carries an `@`.
+    expect(lines.join("\n")).toContain("@brick-bot");
+    expect(loadCache()?.user_id).toBe("usr_already");
+    await mock.stop();
+  });
+
+  it("still hands the secret to Claude Code when the machine was already linked", async () => {
+    const mock: MockServerHandle = await startMockServer();
+    process.env.ZEROMIND_ISSUER = mock.url;
+    const home = mkdtempSync(join(tmpdir(), "zm-home-"));
+    mkdirSync(join(home, ".claude"));
+    const previousHome = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+    process.env.HOME = home;
+    process.env.USERPROFILE = home;
+    updateCache({ install_id: "inst_engine", install_secret: "ins_sec_engine", user_id: "usr_engine" });
+    const printed: string[] = [];
+    const write = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      printed.push(String(chunk));
+      return true;
+    });
+    try {
+      await runLinkCli(["link"]);
+    } finally {
+      write.mockRestore();
+      process.env.HOME = previousHome.HOME;
+      process.env.USERPROFILE = previousHome.USERPROFILE;
+    }
+    const settings = JSON.parse(readFileSync(join(home, ".claude", "settings.json"), "utf8"));
+    expect(settings.env.ZEROMIND_INSTALL_SECRET).toBe("ins_sec_engine");
+    expect(printed.join("")).toContain("Already linked");
+    expect(mock.state.linkCodeRequests).toBe(0);
+    await mock.stop();
+  });
+
+  it("still reports the link when ZeroMind cannot be reached, without a handle", async () => {
+    process.env.ZEROMIND_ISSUER = "http://127.0.0.1:9";
+    updateCache({ install_id: "inst_off", install_secret: "ins_sec_off", user_id: "usr_off" });
+    const lines: string[] = [];
+    await linkMachine({ out: (l) => lines.push(l), wait: async () => {} });
+    expect(lines.join("\n")).toBe("Already linked: this machine acts as your bot.");
+  });
+
+  it("asks for a code when the install was registered but never approved", async () => {
+    const mock: MockServerHandle = await startMockServer({ approveAfterPolls: 1 });
+    process.env.ZEROMIND_ISSUER = mock.url;
+    const registered = (await (
+      await fetch(`${mock.url}/v1/installs/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ install_name: "zero-engine", public_key: "pk" }),
+      })
+    ).json()) as { install_id: string; install_secret: string };
+    // A secret with no user_id is a registration nobody approved.
+    updateCache(registered);
+
+    const lines: string[] = [];
+    await linkMachine({ out: (l) => lines.push(l), wait: async () => {} });
+
+    expect(mock.state.linkCodeRequests).toBe(1);
+    expect(lines.join("\n")).toMatch(/[A-Z0-9]{4}-[A-Z0-9]{4}/);
     expect(loadCache()?.user_id).toBeTruthy();
     await mock.stop();
   });

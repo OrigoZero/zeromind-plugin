@@ -71,6 +71,8 @@ npx -y @origozero/zeromind unlink                     # revoke it
 
 `link` registers this machine as its own ZeroMind principal, prints a URL and a code, and waits for you to approve it on that page. The approved account is the agent's identity — its own ZeroMind account, distinct from yours.
 
+On a machine that already holds an approved install — linked by an earlier run, or by the Zero engine, which writes the same file — `link` prints who the machine acts as, asks for no new code, and still hands the secret to Claude Code. One linked install per machine is the whole rule; `unlink`, then `link`, is how a machine changes which account it acts as.
+
 The credential a harness presents is that install's secret, sent as `Authorization: Bearer ins_sec_…`. **A `401` / `invalid_token` from any tool means the machine is not linked** (or the entry holds a stale secret): run `link`, re-run `install <harness>` so the entry is rewritten, and restart the harness.
 
 ## Uploading local files into a world
