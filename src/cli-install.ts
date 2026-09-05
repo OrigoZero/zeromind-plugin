@@ -65,7 +65,9 @@ export type Harness =
 
 type Scope = "project" | "global";
 
-type StepStatus = "written" | "updated" | "exists" | "manual" | "skipped";
+/** `skipped` is a step with nothing to do here; a step that tried and
+ *  could not is `failed`, and the command says so with its exit code. */
+type StepStatus = "written" | "updated" | "exists" | "manual" | "skipped" | "failed";
 
 /** What a step wrote, so a caller can tell one kind of file from another
  *  without reading it: agent instructions, a harness's MCP config, or a
@@ -1137,11 +1139,7 @@ export const installHarness = async (opts: {
     try {
       steps.push(await step.run(ctx));
     } catch (e) {
-      steps.push({
-        label: step.label,
-        status: "skipped",
-        note: `failed: ${(e as Error).message}`,
-      });
+      steps.push({ label: step.label, status: "failed", note: (e as Error).message });
     }
   }
   return {
@@ -1178,7 +1176,8 @@ const STATUS_GLYPH: Record<StepStatus, string> = {
   updated: "~",
   exists: "=",
   manual: "?",
-  skipped: "x",
+  skipped: "-",
+  failed: "!",
 };
 
 const HELP = `zeromind install <harness> [--global | --project] [--force] [--cwd <p>]
@@ -1258,15 +1257,24 @@ export const runInstallCli = async (argv: string[]): Promise<void> => {
     process.stdout.write(`  [${STATUS_GLYPH[s.status]}] ${s.label}`);
     if (s.path) process.stdout.write(`  →  ${s.path}`);
     process.stdout.write("\n");
-    if (s.note && (s.status === "manual" || s.status === "skipped")) {
+    if (s.note && (s.status === "manual" || s.status === "skipped" || s.status === "failed")) {
       manualNotes.push(`\n${s.label}:\n${s.note}`);
     }
   }
   process.stdout.write(
-    `\nLegend: + written  ~ updated  = exists (use --force)  ? manual step  x skipped\n`,
+    `\nLegend: + written  ~ updated  = exists (use --force)  ? manual step  - nothing to do  ! failed\n`,
   );
   if (manualNotes.length > 0) {
     process.stdout.write(`\nManual follow-ups:${manualNotes.join("\n")}\n`);
+  }
+  // A step that could not do its job is the command's answer, not a footnote:
+  // a script running this has only the exit code to read.
+  const failed = report.steps.filter((s) => s.status === "failed");
+  if (failed.length > 0) {
+    process.stderr.write(
+      `\nzeromind: ${failed.length} step(s) failed: ${failed.map((s) => s.label).join(", ")}\n`,
+    );
+    process.exitCode = 1;
   }
 };
 

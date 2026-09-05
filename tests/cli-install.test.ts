@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { spawn } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -483,6 +484,61 @@ describe("cli-install: per-harness full native install", () => {
       }
       expect(notes, h.harness).not.toContain("npx");
     }
+  });
+
+  it("reports a step that could not do its job as failed, not skipped", async () => {
+    const cwd = newTmp();
+    const home = newTmp();
+    useHome(home);
+    // A settings.json that is a directory: the config edit tries and cannot.
+    mkdirSync(join(home, ".claude", "settings.json"), { recursive: true });
+    const report = await installHarness({
+      harness: "claude",
+      cwd,
+      scope: "project",
+      force: true,
+      shell: false,
+    });
+    const failed = report.steps.filter((s) => s.status === "failed");
+    expect(failed.length, "the settings.json steps should have failed").toBeGreaterThan(0);
+    expect(failed.every((s) => (s.note ?? "").length > 0)).toBe(true);
+    expect(report.steps.filter((s) => s.status === "skipped")).toEqual([]);
+    // The steps that could do their job still did.
+    expect(report.steps.filter((s) => s.status === "written").length).toBeGreaterThan(0);
+  });
+
+  it("exits 1 when a step failed", async () => {
+    const cwd = newTmp();
+    const home = newTmp();
+    mkdirSync(join(home, ".claude", "settings.json"), { recursive: true });
+    const configDir = newTmp();
+    writeFileSync(
+      join(configDir, "session.json"),
+      JSON.stringify({ install_id: "inst_test", install_secret: "ins_sec_test" }),
+    );
+    const child = spawn(
+      process.execPath,
+      [join(process.cwd(), "dist", "index.js"), "install", "claude", "--project", "--force", "--cwd", cwd],
+      {
+        env: {
+          ...process.env,
+          ZEROMIND_CONFIG_DIR: configDir,
+          HOME: home,
+          USERPROFILE: home,
+          APPDATA: join(home, "AppData/Roaming"),
+        },
+      },
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (c) => (stdout += String(c)));
+    child.stderr.on("data", (c) => (stderr += String(c)));
+    const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
+
+    expect(code).toBe(1);
+    expect(stderr).toMatch(/step\(s\) failed/);
+    expect(stdout).toContain("[!]");
+    expect(stdout + stderr).not.toContain("ins_sec_test");
   });
 
   it("rejects unknown harnesses", async () => {
