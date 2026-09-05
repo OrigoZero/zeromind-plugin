@@ -345,7 +345,9 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             SERVER_KEY,
             expandingServer("claude-code", `\${${SECRET_ENV}}`),
           );
-          restrictToOwner(path);
+          // No chmod: this entry names the variable, not the secret, and the
+          // file is Claude Code's own — its mode is not this installer's to
+          // set. The secret goes into settings.json, which is restricted.
           // An earlier version of this installer wrote the entry into
           // settings.json, where nothing reads it; take that one out.
           const stale = expand("~/.claude/settings.json");
