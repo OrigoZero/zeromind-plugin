@@ -1,7 +1,16 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { platform, tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
 import { installHarness, listHarnesses, type Harness } from "../src/cli-install.js";
 import { updateCache } from "../src/config.js";
 
@@ -71,7 +80,7 @@ describe("cli-install: per-harness full native install", () => {
   it("Claude install drops both bundled skills + adds the MCP server to ~/.claude/settings.json (one shot)", async () => {
     const cwd = newTmp();
     useHome(cwd);
-    const r = await installHarness({ harness: "claude", scope: "project", cwd });
+    const r = await installHarness({ harness: "claude", scope: "project", cwd, shell: false });
     const gettingStarted = r.steps.find((s) => s.label.includes("getting-started"))!;
     const library = r.steps.find((s) => s.label.includes("library"))!;
     expect(gettingStarted.status).toBe("written");
@@ -105,7 +114,7 @@ describe("cli-install: per-harness full native install", () => {
   it("Cursor install copies the Cursor 3.0 plugin bundle to ~/.cursor/plugins/local/ + writes rule and mcp.json fallback", async () => {
     const cwd = newTmp();
     useHome(cwd);
-    const r = await installHarness({ harness: "cursor", scope: "project", cwd });
+    const r = await installHarness({ harness: "cursor", scope: "project", cwd, shell: false });
     // Native channel: the Cursor 3.0 plugin bundle.
     const pluginStep = r.steps.find((s) => s.label.includes("Cursor plugin"))!;
     expect(
@@ -142,7 +151,7 @@ describe("cli-install: per-harness full native install", () => {
   it("Hermes install writes mcp_servers.zeromind to ~/.hermes/config.yaml + drops the optional plugin bundle", async () => {
     const cwd = newTmp();
     useHome(cwd);
-    const r = await installHarness({ harness: "hermes", cwd });
+    const r = await installHarness({ harness: "hermes", cwd, shell: false });
     // Canonical channel: config.yaml MCP entry.
     const mcpStep = r.steps.find((s) => s.label.includes("config.yaml"))!;
     expect(mcpStep.status === "written" || mcpStep.status === "updated").toBe(true);
@@ -199,7 +208,7 @@ describe("cli-install: per-harness full native install", () => {
       }),
     );
 
-    const r = await installHarness({ harness: "hermes", cwd });
+    const r = await installHarness({ harness: "hermes", cwd, shell: false });
     const mcpStep = r.steps.find((s) => s.label.includes("config.yaml"))!;
     expect(mcpStep.status).toBe("updated");
 
@@ -219,7 +228,7 @@ describe("cli-install: per-harness full native install", () => {
   it("Codex install copies the .codex-plugin bundle to the personal marketplace + writes config.toml fallback + AGENTS.md", async () => {
     const cwd = newTmp();
     useHome(cwd);
-    const r = await installHarness({ harness: "codex", scope: "global", cwd });
+    const r = await installHarness({ harness: "codex", scope: "global", cwd, shell: false });
     // Native channel: the Codex plugin bundle (skills + .mcp.json + .codex-plugin/plugin.json).
     const pluginStep = r.steps.find((s) => s.label.includes("personal marketplace"))!;
     expect(
@@ -258,14 +267,76 @@ describe("cli-install: per-harness full native install", () => {
     useHome(cwd);
     const agentsPath = join(cwd, "AGENTS.md");
     writeFileSync(agentsPath, "## project conventions\n- run tests\n");
-    await installHarness({ harness: "codex", scope: "project", cwd });
-    await installHarness({ harness: "codex", scope: "project", cwd });
-    await installHarness({ harness: "codex", scope: "project", cwd });
+    await installHarness({ harness: "codex", scope: "project", cwd, shell: false });
+    await installHarness({ harness: "codex", scope: "project", cwd, shell: false });
+    await installHarness({ harness: "codex", scope: "project", cwd, shell: false });
     const body = readFileSync(agentsPath, "utf8");
     expect((body.match(/<!-- BEGIN ZEROMIND -->/g) ?? []).length).toBe(1);
     expect((body.match(/<!-- END ZEROMIND -->/g) ?? []).length).toBe(1);
     expect(body).toMatch(/## project conventions/);
     expect(body).toMatch(/- run tests/);
+  });
+
+  it("shell: false never runs the harness's own CLI, even when it is first on PATH", async () => {
+    // A child process resolves its own home directory, so a step that shells
+    // out writes where useHome() has no say — a Codex that grows `--header`
+    // would otherwise put a test's bearer in the developer's real
+    // ~/.codex/config.toml. `shell: false` is what keeps a run off that path.
+    //
+    // The fake `codex` is a copy of this very node binary, so it is genuinely
+    // spawnable on every platform (a .cmd/.sh stand-in is not: execFileSync
+    // refuses both without a shell). NODE_OPTIONS is inherited by children, so
+    // ANY spawn of it — the `--help` probe included — leaves the marker.
+    const cwd = newTmp();
+    useHome(cwd);
+    const binDir = newTmp();
+    const marker = join(binDir, "spawned");
+    const hook = join(binDir, "hook.cjs");
+    writeFileSync(hook, `require("fs").writeFileSync(${JSON.stringify(marker)}, "1");\n`);
+    copyFileSync(process.execPath, join(binDir, platform() === "win32" ? "codex.exe" : "codex"));
+    const path0 = process.env.PATH;
+    const nodeOptions0 = process.env.NODE_OPTIONS;
+    process.env.PATH = binDir + delimiter + (path0 ?? "");
+    process.env.NODE_OPTIONS = `--require ${JSON.stringify(hook)}`;
+    try {
+      const r = await installHarness({ harness: "codex", scope: "global", cwd, shell: false });
+      expect(existsSync(marker), "the install spawned a harness CLI").toBe(false);
+      const toml = r.steps.find((s) => s.label.includes("config.toml"))!;
+      expect(toml.path).toBe(join(cwd, ".codex/config.toml"));
+      const body = readFileSync(toml.path!, "utf8");
+      expect(body).toMatch(/url = "https:\/\/origozero\.ai\/mcp"/);
+      expect(body).toMatch(/"Authorization" = "Bearer ins_sec_test"/);
+    } finally {
+      process.env.PATH = path0;
+      if (nodeOptions0 === undefined) delete process.env.NODE_OPTIONS;
+      else process.env.NODE_OPTIONS = nodeOptions0;
+    }
+  });
+
+  it("shell: true does reach that CLI — the gate above is a gate", async () => {
+    // The inverse of the case above: with the same fake first on PATH and the
+    // shell allowed, the `codex mcp add --help` probe spawns it. (The probe
+    // finds no --header in a node binary's output, so the step still writes
+    // the file — what is asserted here is that the child ran at all.)
+    const cwd = newTmp();
+    useHome(cwd);
+    const binDir = newTmp();
+    const marker = join(binDir, "spawned");
+    const hook = join(binDir, "hook.cjs");
+    writeFileSync(hook, `require("fs").writeFileSync(${JSON.stringify(marker)}, "1");\n`);
+    copyFileSync(process.execPath, join(binDir, platform() === "win32" ? "codex.exe" : "codex"));
+    const path0 = process.env.PATH;
+    const nodeOptions0 = process.env.NODE_OPTIONS;
+    process.env.PATH = binDir + delimiter + (path0 ?? "");
+    process.env.NODE_OPTIONS = `--require ${JSON.stringify(hook)}`;
+    try {
+      await installHarness({ harness: "codex", scope: "global", cwd, shell: true });
+      expect(existsSync(marker), "the shell path never reached the CLI").toBe(true);
+    } finally {
+      process.env.PATH = path0;
+      if (nodeOptions0 === undefined) delete process.env.NODE_OPTIONS;
+      else process.env.NODE_OPTIONS = nodeOptions0;
+    }
   });
 
   it("Gemini install merges MCP server JSON without nuking other entries", async () => {
@@ -279,7 +350,7 @@ describe("cli-install: per-harness full native install", () => {
       settingsPath,
       JSON.stringify({ mcpServers: { other: { command: "other-cmd" } } }, null, 2),
     );
-    await installHarness({ harness: "gemini", scope: "global", cwd });
+    await installHarness({ harness: "gemini", scope: "global", cwd, shell: false });
     const after = JSON.parse(readFileSync(settingsPath, "utf8")) as {
       mcpServers: {
         other: { command: string };
@@ -295,8 +366,8 @@ describe("cli-install: per-harness full native install", () => {
   it("Aider install adds CONVENTIONS.md to the .aider.conf.yml `read:` list (and is idempotent)", async () => {
     const cwd = newTmp();
     useHome(cwd);
-    await installHarness({ harness: "aider", scope: "project", cwd });
-    await installHarness({ harness: "aider", scope: "project", cwd });
+    await installHarness({ harness: "aider", scope: "project", cwd, shell: false });
+    await installHarness({ harness: "aider", scope: "project", cwd, shell: false });
     const yaml = readFileSync(join(cwd, ".aider.conf.yml"), "utf8");
     // CONVENTIONS.md should appear exactly once.
     expect((yaml.match(/CONVENTIONS\.md/g) ?? []).length).toBe(1);
@@ -307,7 +378,7 @@ describe("cli-install: per-harness full native install", () => {
   it("Zed install copies the extension bundle + falls back to context_server in settings.json", async () => {
     const cwd = newTmp();
     useHome(cwd);
-    const r = await installHarness({ harness: "zed", scope: "project", cwd });
+    const r = await installHarness({ harness: "zed", scope: "project", cwd, shell: false });
     // Native channel: the Zed extension bundle (extension.toml with context_servers.zeromind).
     const extStep = r.steps.find((s) => s.label.includes("Zed extension"))!;
     expect(
@@ -346,7 +417,7 @@ describe("cli-install: per-harness full native install", () => {
     for (const h of harnesses) {
       const cwd = newTmp();
       useHome(cwd);
-      const r = await installHarness({ harness: h, cwd });
+      const r = await installHarness({ harness: h, cwd, shell: false });
       const filePaths = r.steps.map((s) => s.path).filter(Boolean) as string[];
       // Each harness ships some form of the operating manual (either the
       // canonical condensed text or the long-form skill content). Common
@@ -368,6 +439,7 @@ describe("cli-install: per-harness full native install", () => {
         cwd,
         scope: h.defaultScope,
         force: true,
+        shell: false,
       });
       const files = report.steps
         .filter((s) => s.path && (s.status === "written" || s.status === "updated"))
@@ -403,7 +475,7 @@ describe("cli-install: per-harness full native install", () => {
   it("rejects unknown harnesses", async () => {
     const cwd = newTmp();
     await expect(
-      installHarness({ harness: "notahost" as Harness, cwd }),
+      installHarness({ harness: "notahost" as Harness, cwd, shell: false }),
     ).rejects.toThrow(/unknown harness/);
   });
 });

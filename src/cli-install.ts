@@ -81,6 +81,13 @@ type Ctx = {
   cwd: string;
   scope: Scope;
   force: boolean;
+  /**
+   * Whether a step may run a harness's own CLI. A child process resolves its
+   * own home directory, so it writes where the caller's environment says
+   * nothing — which is why a caller that has redirected HOME (a test) turns
+   * this off and takes the file-writing path instead.
+   */
+  shell: boolean;
 };
 
 type Step = {
@@ -449,10 +456,10 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
         // browser. Belt-and-suspenders — Codex reads BOTH plugin
         // manifests AND config.toml entries.
         label: "Manual fallback: MCP server in ~/.codex/config.toml",
-        run: () => {
+        run: (ctx) => {
           const s = literalServer("codex");
           const path = expand("~/.codex/config.toml");
-          if (isOnPath("codex") && codexAddCarriesHeaders()) {
+          if (ctx.shell && isOnPath("codex") && codexAddCarriesHeaders()) {
             const r = tryShell("codex", [
               "mcp",
               "add",
@@ -773,7 +780,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
       {
         label: "skill via `openclaw skills install`",
         run: (ctx) => {
-          if (isOnPath("openclaw")) {
+          if (ctx.shell && isOnPath("openclaw")) {
             const r = tryShell("openclaw", [
               "skills",
               "install",
@@ -1086,6 +1093,8 @@ export const installHarness = async (opts: {
   scope?: Scope;
   cwd?: string;
   force?: boolean;
+  /** May a step run the harness's own CLI? Off, every step writes files. */
+  shell?: boolean;
 }): Promise<InstallReport> => {
   const spec = HARNESSES[opts.harness];
   if (!spec) throw new Error(`unknown harness: ${opts.harness}`);
@@ -1095,7 +1104,12 @@ export const installHarness = async (opts: {
       `${spec.name}: ${scope} scope not supported (supported: ${spec.scopes.join(", ")})`,
     );
   }
-  const ctx: Ctx = { cwd: opts.cwd ?? process.cwd(), scope, force: opts.force ?? false };
+  const ctx: Ctx = {
+    cwd: opts.cwd ?? process.cwd(),
+    scope,
+    force: opts.force ?? false,
+    shell: opts.shell ?? true,
+  };
   const steps: StepResult[] = [];
   for (const step of spec.steps) {
     try {
