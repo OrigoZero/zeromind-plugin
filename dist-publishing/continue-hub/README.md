@@ -35,3 +35,7 @@ That's a one-line install per block. Continue handles version pinning, updates, 
 ## Until the Hub blocks are live
 
 `npx @origozero/zeromind install continue` writes the rule file and MCP server entry locally (`.continue/rules/zeromind.md` + `~/.continue/config.yaml`) — see [`ide/continue/README.md`](../../ide/continue/README.md).
+
+## The install secret
+
+A published bundle never holds a secret, so this one names `${{ secrets.ZEROMIND_INSTALL_SECRET }}` and Continue expands it. Run `npx @origozero/zeromind link` once, then either export that variable, or run `npx @origozero/zeromind install continue`, which writes the same entry with this machine's own `install_secret` in place of the expansion.

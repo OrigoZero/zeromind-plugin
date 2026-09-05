@@ -1,9 +1,11 @@
 {
   "mcpServers": {
     "zeromind": {
-      "command": "npx",
-      "args": ["-y", "@origozero/zeromind"],
-      "env": { "ZEROMIND_IDE_NAME": "cursor" }
+      "url": "https://origozero.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:ZEROMIND_INSTALL_SECRET}",
+        "X-ZM-Harness": "cursor"
+      }
     }
   }
 }

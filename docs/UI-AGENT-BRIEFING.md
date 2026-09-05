@@ -125,7 +125,8 @@ The matrix has 17 entries (16 harnesses + a generic `other`). Each entry drives 
 
 ```
   ⚠ Instructions only          ← yellow badge
-  Aider does not support MCP. The agent gets ZeroMind's
+  Aider takes MCP servers as a --mcp-servers flag, so the
+  install prints it. Without that flag the agent gets ZeroMind's
   operating manual in CONVENTIONS.md, but cannot call
   zeromind.search / world.connect / etc.
 ```
@@ -135,18 +136,25 @@ Show `tools_note` as an inline explainer right under the badge.
 ### "Other" variant (config snippet)
 
 ```
-  ✓ Works on any MCP client
-  ┌────────────────────────────────────────────┐ [📋 Copy]
-  │  {                                          │
-  │    "mcpServers": {                          │
-  │      "zeromind": {                          │
-  │        "command": "npx",                    │
-  │        "args": ["-y", "@origozero/zeromind"]│
-  │      }                                      │
-  │    }                                        │
-  │  }                                          │
-  └────────────────────────────────────────────┘
-  Paste this into your client's MCP-server config file.
+  ✓ Works on any MCP client                      [📋 Copy]
+
+  {
+    "mcpServers": {
+      "zeromind": {
+        "type": "http",
+        "url": "https://origozero.ai/mcp",
+        "headers": {
+          "Authorization": "Bearer ins_sec_…",
+          "X-ZM-Harness": "your-client"
+        }
+      }
+    }
+  }
+
+  Paste this into your client's MCP-server config file. Render the
+  snippet from the matrix, which carries the placeholder bearer — the
+  real one is the machine's own install secret, written by
+  `zeromind link`.
 ```
 
 ### "Copied" feedback
@@ -318,7 +326,10 @@ For the implementor: here's the shape of a single harness entry from the matrix.
   "category": "cli-agent",
   "icon_hint": "openai",
   "tools_available": true,
-  "prerequisites": ["Node.js 18+"],
+  "prerequisites": [
+    "Node.js 18+ to run the install command",
+    "a linked machine (the install runs `zeromind link` when needed)"
+  ],
   "primary_install": {
     "kind": "shell",
     "command": "npx @origozero/zeromind install codex",
@@ -328,8 +339,9 @@ For the implementor: here's the shape of a single harness entry from the matrix.
   "alternatives": [
     {
       "kind": "shell",
-      "label": "MCP server only",
-      "command": "codex mcp add zeromind -- npx -y @origozero/zeromind"
+      "label": "MCP server only (address only)",
+      "command": "codex mcp add zeromind --url https://origozero.ai/mcp",
+      "note": "The CLI has no --header flag, so the Authorization and X-ZM-Harness headers still have to be added to ~/.codex/config.toml by hand — which is what the install command does."
     }
   ],
   "native_channel": "Codex plugin (`.codex-plugin/plugin.json` bundle in personal marketplace)",

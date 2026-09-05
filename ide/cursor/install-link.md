@@ -19,21 +19,25 @@ Does both pieces:
 
 MCP server — one-click:
 
-[**Install ZeroMind MCP in Cursor →**](cursor://anysphere.cursor-deeplink/mcp/install?name=zeromind&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBvcmlnb3plcm8vemVyb21pbmQiXSwiZW52Ijp7IlpFUk9NSU5EX0lERV9OQU1FIjoiY3Vyc29yIn19)
+[**Install ZeroMind MCP in Cursor →**](cursor://anysphere.cursor-deeplink/mcp/install?name=zeromind&config=eyJ1cmwiOiJodHRwczovL29yaWdvemVyby5haS9tY3AiLCJoZWFkZXJzIjp7IkF1dGhvcml6YXRpb24iOiJCZWFyZXIgJHtlbnY6WkVST01JTkRfSU5TVEFMTF9TRUNSRVR9IiwiWC1aTS1IYXJuZXNzIjoiY3Vyc29yIn19)
 
-Or hand-edit `~/.cursor/mcp.json`:
+The deeplink carries `${env:ZEROMIND_INSTALL_SECRET}` rather than a secret, so it is safe to share; export that variable, or hand-edit `~/.cursor/mcp.json` with the secret itself:
 
 ```json
 {
   "mcpServers": {
     "zeromind": {
-      "command": "npx",
-      "args": ["-y", "@origozero/zeromind"],
-      "env": { "ZEROMIND_IDE_NAME": "cursor" }
+      "url": "https://origozero.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer ins_sec_...",
+        "X-ZM-Harness": "cursor"
+      }
     }
   }
 }
 ```
+
+The install secret is the `install_secret` in `~/.config/zero/session.json` (`%APPDATA%\zero\session.json` on Windows). `zeromind install <harness>` writes the whole entry for you after `zeromind link`.
 
 Agent rule — drop the contents of [`templates/manual.md`](../../templates/manual.md) into `.cursor/rules/zeromind.mdc` with the MDC frontmatter (see [`src/cli-install.ts`](../../src/cli-install.ts) for the exact wrapper).
 

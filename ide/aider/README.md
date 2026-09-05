@@ -4,9 +4,17 @@
 
 **Native channel:** `CONVENTIONS.md` — loaded into every request via `aider --read CONVENTIONS.md` or `.aider.conf.yml`.
 
-## Heads-up: no MCP outbound
+## Heads-up: MCP goes on the command line
 
-Aider does not have a native MCP client (as of mid-2026; see [aider-ai/aider#4506](https://github.com/aider-ai/aider/issues/4506)). That means **ZeroMind's tools are not callable from Aider** — only the operating manual content reaches it. If you want full ZeroMind tool access, pair Aider with a separate MCP-capable agent for the engine work, or use one of the other harnesses listed in [`../README.md`](../README.md).
+Aider takes MCP servers as JSON on the command line, and an Aider that predates `--mcp-servers` errors on an unknown key in `.aider.conf.yml` (see [aider-ai/aider#4506](https://github.com/aider-ai/aider/issues/4506)) — so `zeromind install aider` prints this rather than writing it:
+
+```
+aider --mcp-servers '{"mcpServers":{"zeromind":{"url":"https://origozero.ai/mcp","headers":{"Authorization":"Bearer ins_sec_...","X-ZM-Harness":"aider"}}}}'
+```
+
+The install secret is the `install_secret` in `~/.config/zero/session.json` (`%APPDATA%\zero\session.json` on Windows). `zeromind install <harness>` writes the whole entry for you after `zeromind link`.
+
+Without that flag only the operating manual reaches the agent — the `zeromind.*` tools are not callable. If you want them, pair Aider with a separate MCP-capable agent for the engine work, or use one of the other harnesses listed in [`../README.md`](../README.md).
 
 ## Install
 

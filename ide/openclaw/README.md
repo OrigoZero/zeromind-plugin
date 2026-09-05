@@ -21,12 +21,16 @@ openclaw skills install @origozero/zeromind
 
 ## MCP support
 
-Whether openClaw acts as an MCP client is unconfirmed — the skill IS the primary onboarding channel for this harness. If you do find an MCP entry point, register the server the same way as any stdio MCP host:
+Whether openClaw acts as an MCP client is unconfirmed — the skill IS the primary onboarding channel for this harness, and `zeromind install openclaw` prints the server as a manual step rather than writing a config path it cannot confirm. If you do find an MCP entry point, register it as a streamable-HTTP server:
 
-- Command: `npx`
-- Args: `-y @origozero/zeromind`
-- Env: `ZEROMIND_IDE_NAME=openclaw`
+- URL: `https://origozero.ai/mcp`
+- Header `Authorization`: `Bearer ins_sec_...`
+- Header `X-ZM-Harness`: `openclaw`
+
+The install secret is the `install_secret` in `~/.config/zero/session.json` (`%APPDATA%\zero\session.json` on Windows). `zeromind install <harness>` writes the whole entry for you after `zeromind link`.
+
+The ClawHub package in [`dist-publishing/clawhub/`](../../dist-publishing/clawhub/) carries the same entry with a `${ZEROMIND_INSTALL_SECRET}` expansion.
 
 ## Troubleshooting
 
-**"status failed"** → Node.js isn't on PATH. Install from nodejs.org, restart openClaw.
+**"status failed" / 401** → this machine is not linked, or its config holds a stale secret. Run `npx @origozero/zeromind link`, then re-run `npx @origozero/zeromind install <harness>` to rewrite the entry. Node.js is needed to run those two commands; the server itself is reached over HTTPS, not spawned locally.

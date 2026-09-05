@@ -34,3 +34,7 @@ Codex marketplaces are git-tracked, so:
 ## Updating
 
 The `npx @origozero/zeromind install codex` CLI in the main package copies this whole `dist-publishing/codex-plugin/` directory into the user's local Codex personal marketplace path, falling back to direct `~/.codex/config.toml` + `~/.codex/AGENTS.md` edits if the marketplace path isn't where we expect.
+
+## The install secret
+
+A published bundle never holds a secret, so `.mcp.json` names `env_http_headers = { "Authorization" = "ZEROMIND_INSTALL_SECRET_BEARER" }` — Codex reads that header's whole value, `Bearer ins_sec_...`, from that variable. Run `npx @origozero/zeromind link` once, then either export it, or run `npx @origozero/zeromind install codex`, which writes `http_headers` with this machine's own `install_secret` into `~/.codex/config.toml` (mode 0600 off Windows) instead.

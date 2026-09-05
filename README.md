@@ -60,7 +60,7 @@ Claude Code users get the install bundled (server + skills) via the plugin marke
 
 ### Anything else (generic MCP)
 
-Any MCP-capable harness we haven't custom-crafted for can still use the plugin — see [`ide/README.md`](ide/README.md#generic-mcp-fallback) for the generic stdio MCP wiring. Hermes Agent currently falls here too (it generates its own skills rather than loading user-authored ones).
+Any MCP-capable harness we haven't custom-crafted for can still use the plugin — see [`ide/README.md`](ide/README.md#generic-mcp-fallback) for the generic streamable-HTTP MCP wiring. Hermes Agent currently falls here too (it generates its own skills rather than loading user-authored ones).
 
 ## Pointing the plugin at a local / self-hosted ZeroMind
 
@@ -70,20 +70,34 @@ Every backend URL the plugin uses is derived from one environment variable:
 |---|---|---|
 | `ZEROMIND_ISSUER` | `https://origozero.ai` | Base for **all** REST calls (`/v1/installs/*`, `/v1/me/worlds`, `/v1/worlds`, the content/social surface) and for the bridge websocket URL, which is derived as `issuer.replace(/^http/, "ws")` — so `http://` → `ws://` and `https://` → `wss://` automatically. Also used to build `/edit/<guid>` world links. |
 | `ZEROMIND_BRIDGE_URL` | *(derived from issuer)* | Optional override for the bridge websocket origin only, e.g. `ws://127.0.0.1:3003`. The plugin appends `/v1/bridge?role=ide`. Only needed when the bridge lives on a different origin than the REST API. |
-| `ZEROMIND_CONFIG_DIR` | `~/.config/zeromind` (XDG) | Where `install.json` (the per-install `install_id`/`install_secret` identity) is stored. Point it somewhere separate (e.g. `~/.config/zeromind-local`) so your local backend gets a **fresh install identity** instead of replaying credentials registered against prod. |
+| `ZEROMIND_CONFIG_DIR` | `~/.config/zero` (XDG; `%APPDATA%\zero` on Windows) | Where `session.json` (the per-install `install_id`/`install_secret` identity, shared with the Zero engine) is stored. Point it somewhere separate (e.g. `~/.config/zero-local`) so your local backend gets a **fresh install identity** instead of replaying credentials registered against prod. |
 
 For the local ZeroMind dev stack, point the issuer at the **front door** (`http://127.0.0.1:3003`), **not** the bare API on `:3001` — the front door proxies the `/v1` REST surface *and* the `/v1/bridge` websocket *and* serves the web app (including the `/link` approval page and the `/edit/<guid>` engine pages) on a single origin, which is what the plugin assumes.
+
+`ZEROMIND_ISSUER` is what `zeromind link` and `zeromind install` read, so the entry they write points at the local stack:
+
+```bash
+ZEROMIND_ISSUER=http://127.0.0.1:3003 \
+ZEROMIND_CONFIG_DIR=$HOME/.config/zero-local \
+  npx @origozero/zeromind link
+
+ZEROMIND_ISSUER=http://127.0.0.1:3003 \
+ZEROMIND_CONFIG_DIR=$HOME/.config/zero-local \
+  npx @origozero/zeromind install claude
+```
+
+The entry that lands is the same shape as the production one, at the local address:
 
 ```jsonc
 // .mcp.json
 {
   "mcpServers": {
     "zeromind-local": {
-      "command": "npx",
-      "args": ["-y", "@origozero/zeromind"],
-      "env": {
-        "ZEROMIND_ISSUER": "http://127.0.0.1:3003",
-        "ZEROMIND_CONFIG_DIR": "/home/you/.config/zeromind-local"
+      "type": "http",
+      "url": "http://127.0.0.1:3003/mcp",
+      "headers": {
+        "Authorization": "Bearer ins_sec_...",
+        "X-ZM-Harness": "claude-code"
       }
     }
   }
@@ -93,10 +107,9 @@ For the local ZeroMind dev stack, point the issuer at the **front door** (`http:
 Or with the Claude Code CLI:
 
 ```bash
-claude mcp add zeromind-local \
-  --env ZEROMIND_ISSUER=http://127.0.0.1:3003 \
-  --env ZEROMIND_CONFIG_DIR=$HOME/.config/zeromind-local \
-  -- npx -y @origozero/zeromind
+claude mcp add --transport http zeromind-local http://127.0.0.1:3003/mcp \
+  --header "Authorization: Bearer ins_sec_..." \
+  --header "X-ZM-Harness: claude-code"
 ```
 
 Notes:
@@ -116,20 +129,20 @@ The plugin itself is shippable to npm today; it'll be functional end-to-end once
 
 ## Prerequisites
 
-**Node.js 18 or newer** must be installed and on your PATH. The plugin is a Node MCP server spawned by your harness via `npx`. If you don't have Node yet, install it:
+**Node.js 18 or newer** must be installed and on your PATH to run `zeromind link` and `zeromind install` — your harness then talks to `https://origozero.ai/mcp` over HTTPS and spawns nothing locally. If you don't have Node yet, install it:
 
 - **macOS:** `brew install node` (or download from https://nodejs.org)
 - **Linux:** your distro's package manager, or https://nodejs.org / [nvm](https://github.com/nvm-sh/nvm)
 - **Windows:** https://nodejs.org (LTS installer) — restart your IDE after install so it picks up the new PATH
 
-Verify with `node --version` (should print v18+ or higher). **If you see "status failed" after installing the plugin, Node is almost certainly the cause** — install it, restart your IDE, retry.
+Verify with `node --version` (should print v18+ or higher). **If you see "status failed" after installing, this machine is almost certainly not linked** — run `npx @origozero/zeromind link`, approve the code in your browser, then re-run the install so the entry is rewritten with the new secret.
 
 ## Updating
 
 There are two pieces, released together under one version number:
 
-- **The MCP server** — the npm package `@origozero/zeromind`, launched by each harness via `npx -y @origozero/zeromind`. `npx` resolves the latest published version, so a fresh session generally picks up new releases automatically (clear the npx cache if it lags).
-- **The native artifacts** written by `zeromind install <harness>` — re-run the install command after upgrading to refresh `AGENTS.md` blocks / skill content. Shared-file installs replace the existing ZeroMind block in place; owned-file installs need `--force` to overwrite.
+- **The MCP server** — hosted at `https://origozero.ai/mcp`. Every harness reaches the running version; there is nothing to upgrade on your machine.
+- **The native artifacts** written by `zeromind install <harness>` — re-run the install command after upgrading to refresh `AGENTS.md` blocks / skill content, or to rewrite the server entry. Shared-file installs replace the existing ZeroMind block in place; owned-file installs need `--force` to overwrite.
 - **The Claude Code plugin bundle** (skills + `.mcp.json`) is also distributed via the Claude Code marketplace and updated through `/plugin`.
 
 **First-use update check.** On the first `auth_status` call of a session the server does one best-effort check against the npm registry and returns an `update` object (`current`, `latest`, `update_available`, `how_to_update`). When a newer release exists the agent surfaces it and asks the user whether to update — the agent never updates on its own. The check is memoized per process, fails silently when offline, and can be pointed at a stub via `ZEROMIND_NPM_REGISTRY` (used by the tests).

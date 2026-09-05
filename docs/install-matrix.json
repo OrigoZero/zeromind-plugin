@@ -2,7 +2,7 @@
   "$schema": "./install-matrix.schema.json",
   "version": "0.7.0",
   "generated_from": "src/cli-install.ts",
-  "description": "Per-harness install instructions for the ZeroMind 'bring your own agent' screen. Each entry powers one row of the harness dropdown: a display name, a one-liner the user can copy-paste, prerequisites, and post-install notes. The `primary` install is what the screen highlights; `alternatives` are the harness-native paths (marketplace, deeplink, plugin browser) that exist alongside the one-liner.",
+  "description": "Per-harness install instructions for the ZeroMind 'bring your own agent' screen. Each entry powers one row of the harness dropdown: a display name, a one-liner the user can copy-paste, prerequisites, and post-install notes. Every harness ends up pointing at the same remote server, https://origozero.ai/mcp, with an Authorization bearer and an X-ZM-Harness header; what differs is the config shape that harness wants it in. The `primary` install is what the screen highlights; `alternatives` are the harness-native paths (marketplace, deeplink, plugin browser) that exist alongside the one-liner.",
   "harnesses": [
     {
       "id": "claude",
@@ -11,7 +11,8 @@
       "icon_hint": "claude",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
@@ -30,7 +31,7 @@
           "note": "Survives upgrades through Claude Code's own plugin lifecycle."
         }
       ],
-      "native_channel": "skills + plugin marketplace + ~/.claude/settings.json",
+      "native_channel": "skills + plugin marketplace + the /mcp server in ~/.claude/settings.json",
       "doc_url": "https://github.com/OrigoZero/zeromind-plugin/blob/main/ide/claude/README.md"
     },
     {
@@ -40,8 +41,9 @@
       "icon_hint": "cursor",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+",
-        "Cursor 3.0+ for the plugin path"
+        "Cursor 3.0+ for the plugin path",
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
@@ -53,8 +55,8 @@
         {
           "kind": "deeplink",
           "label": "Install MCP server in one click",
-          "url": "cursor://anysphere.cursor-deeplink/mcp/install?name=zeromind&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBvcmlnb3plcm8vemVyb21pbmQiXSwiZW52Ijp7IlpFUk9NSU5EX0lERV9OQU1FIjoiY3Vyc29yIn19",
-          "note": "MCP server only; doesn't drop the agent rule."
+          "url": "cursor://anysphere.cursor-deeplink/mcp/install?name=zeromind&config=eyJ1cmwiOiJodHRwczovL29yaWdvemVyby5haS9tY3AiLCJoZWFkZXJzIjp7IkF1dGhvcml6YXRpb24iOiJCZWFyZXIgJHtlbnY6WkVST01JTkRfSU5TVEFMTF9TRUNSRVR9IiwiWC1aTS1IYXJuZXNzIjoiY3Vyc29yIn19",
+          "note": "MCP server only; doesn't drop the agent rule. Carries ${env:ZEROMIND_INSTALL_SECRET}, so export that variable or run the install command instead."
         },
         {
           "kind": "marketplace",
@@ -72,7 +74,8 @@
       "icon_hint": "openai",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
@@ -83,8 +86,9 @@
       "alternatives": [
         {
           "kind": "shell",
-          "label": "MCP server only",
-          "command": "codex mcp add zeromind -- npx -y @origozero/zeromind"
+          "label": "MCP server only (address only)",
+          "command": "codex mcp add zeromind --url https://origozero.ai/mcp",
+          "note": "The CLI has no --header flag, so the Authorization and X-ZM-Harness headers still have to be added to ~/.codex/config.toml by hand — which is what the install command does."
         }
       ],
       "native_channel": "Codex plugin (`.codex-plugin/plugin.json` bundle in personal marketplace)",
@@ -97,7 +101,8 @@
       "icon_hint": "google",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
@@ -122,7 +127,8 @@
       "icon_hint": "sst",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+ or Bun"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
@@ -142,13 +148,14 @@
       "tools_available": true,
       "prerequisites": [
         "VS Code or JetBrains IDE",
-        "Node.js 18+"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install cline",
         "label": "Run in your project root",
-        "post_install_note": "Open Cline's MCP Servers UI (Command Palette \u2192 'Cline: MCP Servers') and add the JSON block shown after install."
+        "post_install_note": "Writes VS Code's cline_mcp_settings.json. On JetBrains, add the same URL and headers through Cline's MCP Servers UI."
       },
       "alternatives": [
         {
@@ -157,7 +164,7 @@
           "note": "Will give a single-click install inside Cline's UI."
         }
       ],
-      "native_channel": "Cline MCP Marketplace + .clinerules",
+      "native_channel": "Cline MCP Marketplace + .clinerules + cline_mcp_settings.json",
       "doc_url": "https://github.com/OrigoZero/zeromind-plugin/blob/main/ide/cline/README.md"
     },
     {
@@ -168,7 +175,8 @@
       "tools_available": true,
       "prerequisites": [
         "VS Code or JetBrains IDE",
-        "Node.js 18+"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
@@ -180,7 +188,8 @@
         {
           "kind": "config-snippet",
           "label": "Continue Hub blocks (once published)",
-          "snippet": "rules:\n  - uses: OrigoZero/zeromind-rule\nmcpServers:\n  - uses: OrigoZero/zeromind-mcp"
+          "snippet": "rules:\n  - uses: OrigoZero/zeromind-rule\nmcpServers:\n  - uses: OrigoZero/zeromind-mcp",
+          "note": "The mcpServers block is the remote /mcp server; it reads the bearer from a Continue secret named ZEROMIND_INSTALL_SECRET."
         }
       ],
       "native_channel": "Continue Hub blocks (rules + mcpServers)",
@@ -193,7 +202,8 @@
       "icon_hint": "codeium",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
@@ -212,13 +222,14 @@
       "icon_hint": "zed",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install zed",
         "label": "Run in your project root",
-        "post_install_note": "Restart Zed. Command Palette \u2192 'zed: extensions' confirms ZeroMind is loaded."
+        "post_install_note": "Restart Zed. Command Palette → 'zed: extensions' confirms ZeroMind is loaded."
       },
       "alternatives": [
         {
@@ -237,7 +248,8 @@
       "icon_hint": "openclaw",
       "tools_available": false,
       "prerequisites": [
-        "Node.js 18+"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
@@ -253,7 +265,8 @@
         }
       ],
       "native_channel": "skills + ClawHub",
-      "doc_url": "https://github.com/OrigoZero/zeromind-plugin/blob/main/ide/openclaw/README.md"
+      "doc_url": "https://github.com/OrigoZero/zeromind-plugin/blob/main/ide/openclaw/README.md",
+      "tools_note": "openClaw's MCP entry point is unconfirmed, so the install prints the URL and headers as a manual step. The skill reaches the agent either way."
     },
     {
       "id": "aider",
@@ -261,10 +274,11 @@
       "category": "cli-agent",
       "icon_hint": "aider",
       "tools_available": false,
-      "tools_note": "Aider does not support MCP. Only the operating manual reaches the agent (no zeromind.* tool calls available).",
+      "tools_note": "Aider takes MCP servers as `--mcp-servers` JSON on the command line; the install prints the flag rather than writing an unknown key into .aider.conf.yml. Without it, only the operating manual reaches the agent.",
       "prerequisites": [
         "Python 3.10+ (Aider)",
-        "Node.js 18+ for the install command"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
@@ -286,7 +300,8 @@
       "prerequisites": [
         "VS Code",
         "GitHub Copilot subscription",
-        "Node.js 18+"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
@@ -305,7 +320,8 @@
       "icon_hint": "goose",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
@@ -317,7 +333,8 @@
         {
           "kind": "deeplink",
           "label": "One-click install (web)",
-          "url": "goose://extension?cmd=npx&arg=-y&arg=%40origozero%2Fzeromind&id=zeromind&name=ZeroMind&description=Drive+your+browser-running+Zero+engine+worlds+via+MCP.&timeout=300"
+          "url": "goose://extension?type=streamable_http&url=https%3A%2F%2Forigozero.ai%2Fmcp&id=zeromind&name=ZeroMind&description=Drive+your+browser-running+Zero+engine+worlds+via+MCP.&timeout=300",
+          "note": "Registers the address; each recipient then adds their own Authorization and X-ZM-Harness headers, which the install command writes for them."
         }
       ],
       "native_channel": "extensions in ~/.config/goose/config.yaml + goose:// deeplink + .goosehints",
@@ -332,7 +349,8 @@
       "prerequisites": [
         "JetBrains IDE",
         "Junie plugin",
-        "Node.js 18+"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
@@ -351,16 +369,17 @@
       "icon_hint": "sourcegraph",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
         "command": "npx @origozero/zeromind install amp",
         "label": "Run in your project root",
-        "post_install_note": "Add the MCP server in Amp's settings UI (printed manually after install)."
+        "post_install_note": "Writes the Amp CLI's ~/.config/amp/settings.json. Amp's VS Code extension keeps its own amp.mcpServers — add the same URL and headers there."
       },
       "alternatives": [],
-      "native_channel": "AGENT.md + Amp settings",
+      "native_channel": "AGENT.md + amp.mcpServers in ~/.config/amp/settings.json",
       "doc_url": "https://github.com/OrigoZero/zeromind-plugin/blob/main/ide/amp/README.md"
     },
     {
@@ -371,7 +390,8 @@
       "tools_available": true,
       "prerequisites": [
         "Hermes Agent installed",
-        "Node.js 18+"
+        "Node.js 18+ to run the install command",
+        "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
         "kind": "shell",
@@ -395,19 +415,19 @@
       "category": "generic",
       "icon_hint": "mcp",
       "tools_available": true,
-      "tools_note": "Generic fallback for any MCP-capable client not listed above. The agent gets the operating manual via MCP `instructions` (Claude Code is confirmed to honor this; others vary) + the `zeromind.help` tool on demand + a `getting_started` block returned by the first `auth_status` call.",
+      "tools_note": "Generic fallback for any MCP-capable client not listed above. Every harness reaches the same server at https://origozero.ai/mcp; the agent gets the operating manual via the MCP `instructions` field (Claude Code is confirmed to honor this; others vary) + the `zeromind.help` tool on demand + a `getting_started` block returned by the first `auth_status` call.",
       "prerequisites": [
-        "Node.js 18+",
-        "an MCP-capable client"
+        "an MCP-capable client",
+        "a linked machine (`npx @origozero/zeromind link`)"
       ],
       "primary_install": {
         "kind": "config-snippet",
-        "label": "Add as a stdio MCP server",
-        "snippet": "{\n  \"mcpServers\": {\n    \"zeromind\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@origozero/zeromind\"],\n      \"env\": { \"ZEROMIND_IDE_NAME\": \"your-client\" }\n    }\n  }\n}",
-        "post_install_note": "Whatever the client calls its MCP-server config file \u2014 drop this in."
+        "label": "Add as a streamable-HTTP MCP server",
+        "snippet": "{\n  \"mcpServers\": {\n    \"zeromind\": {\n      \"type\": \"http\",\n      \"url\": \"https://origozero.ai/mcp\",\n      \"headers\": {\n        \"Authorization\": \"Bearer <install_secret>\",\n        \"X-ZM-Harness\": \"your-client\"\n      }\n    }\n  }\n}",
+        "post_install_note": "Whatever the client calls its MCP-server config file — drop this in. The install secret is the `install_secret` in ~/.config/zero/session.json (%APPDATA%\\zero\\session.json on Windows), written by `zeromind link`."
       },
       "alternatives": [],
-      "native_channel": "stdio MCP server",
+      "native_channel": "streamable-HTTP MCP server",
       "doc_url": "https://github.com/OrigoZero/zeromind-plugin/blob/main/ide/README.md"
     }
   ]

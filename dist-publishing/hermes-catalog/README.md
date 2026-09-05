@@ -15,3 +15,7 @@ hermes mcp install zeromind
 ## Until it's merged
 
 `npx @origozero/zeromind install hermes` writes the same `mcp_servers.zeromind` block into the user's `~/.hermes/config.yaml` directly — no upstream dependency.
+
+## The install secret
+
+A published bundle never holds a secret, so this one names `${ZEROMIND_INSTALL_SECRET}` and Hermes expands it. Run `npx @origozero/zeromind link` once, then either export that variable, or run `npx @origozero/zeromind install hermes`, which writes the same entry with this machine's own `install_secret` in place of the expansion.
