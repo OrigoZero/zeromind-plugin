@@ -58,7 +58,7 @@ export const writeClaudeEnv = (
 const HELP = `zeromind link [--username <handle>]   link this machine to your ZeroMind account (once)
 zeromind status                         what this machine is linked as
 zeromind unlink                         revoke this machine's link
-zeromind install <harness>              write the /mcp server into a harness (runs link first if needed)
+zeromind install <harness>              point a harness at origozero.ai/mcp (links first if needed)
 `;
 
 export const runLinkCli = async (argv: string[]): Promise<void> => {

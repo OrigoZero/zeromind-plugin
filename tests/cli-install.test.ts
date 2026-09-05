@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { platform, tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
-import { installHarness, listHarnesses, type Harness } from "../src/cli-install.js";
+import { blockMarkers, installHarness, listHarnesses, type Harness } from "../src/cli-install.js";
 import { updateCache } from "../src/config.js";
 
 const newTmp = (): string => mkdtempSync(join(tmpdir(), "zm-install-"));
@@ -444,7 +444,14 @@ describe("cli-install: per-harness full native install", () => {
       const files = report.steps
         .filter((s) => s.path && (s.status === "written" || s.status === "updated"))
         .flatMap((s) => collect(s.path!));
-      const configs = files.filter((p) => !/\.(md|mdc)$/i.test(p));
+      // A harness's instruction channel isn't always a `.md` — Goose reads
+      // `.goosehints` — so classify by content: a file carrying the ZeroMind
+      // block is prose, and the manual's own text names the
+      // `npx -y @origozero/zeromind link` command it tells the agent to ask
+      // the user for. Everything else is an MCP config.
+      const isProse = (p: string) =>
+        /\.(md|mdc)$/i.test(p) || readFileSync(p, "utf8").includes(blockMarkers.begin);
+      const configs = files.filter((p) => !isProse(p));
       const written = configs.map((p) => readFileSync(p, "utf8")).join("\n");
       // A harness whose MCP entry point is unconfirmed (openClaw, Aider)
       // carries the same server in the note the install prints instead.
@@ -463,8 +470,8 @@ describe("cli-install: per-harness full native install", () => {
         expect(written, h.harness).toMatch(/ins_sec_test|ZEROMIND_INSTALL_SECRET/);
       }
       // No config the install writes, and no instruction it prints, still
-      // starts a local server. Prose (READMEs, skills) may name the
-      // `zeromind install` command, so it is read but not asserted on.
+      // starts a local server. Prose (READMEs, skills, `.goosehints`) may
+      // name the `zeromind` CLI, so it is read but not asserted on.
       for (const p of configs) {
         expect(readFileSync(p, "utf8"), `${h.harness}: ${p}`).not.toContain("npx");
       }
