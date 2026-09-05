@@ -415,7 +415,7 @@
       "category": "generic",
       "icon_hint": "mcp",
       "tools_available": true,
-      "tools_note": "Generic fallback for any MCP-capable client not listed above. Every harness reaches the same server at https://origozero.ai/mcp; the agent gets the operating manual via the MCP `instructions` field (Claude Code is confirmed to honor this; others vary) + the `zeromind.help` tool on demand + a `getting_started` block returned by the first `auth_status` call.",
+      "tools_note": "Generic fallback for any MCP-capable client not listed above. Every harness reaches the same server at https://origozero.ai/mcp; the agent gets the operating manual via the MCP `instructions` field (Claude Code is confirmed to honor this; others vary) + the `zeromind.help` tool on demand.",
       "prerequisites": [
         "an MCP-capable client",
         "a linked machine (`npx @origozero/zeromind link`)"

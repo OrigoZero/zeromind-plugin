@@ -36,7 +36,7 @@ Anything not listed above falls back to the MCP protocol channel:
 
 - **`instructions`** field on `initialize` — Claude Code injects it into the agent's system prompt; most other harnesses don't (or behavior is unconfirmed). Treat as belt-and-suspenders.
 - **`zeromind.help` tool** — every MCP client can call this to fetch the full operating manual on demand (topics: `getting-started`, `library`, `linking`, `workflow`, `tools`).
-- **`getting_started` block** on the first `auth_status` call — surfaces the condensed orientation through a tool result, which every client returns to the agent verbatim.
+- **`zeromind.help` in a tool result** — the orientation reaches the agent through a tool response, which every client returns verbatim, for clients that ignore the `instructions` field.
 
 If your client speaks MCP, point it at:
 
