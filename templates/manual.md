@@ -21,6 +21,7 @@ Only build from scratch when search genuinely turns up nothing usable — and th
 - **Platform feedback** — `zeromind.issue` (file a bug / feedback / report about ZeroMind itself; see "When the platform misbehaves" below).
 - **Worlds** — `world.list`, `world.create`, `world.fork`, `world.launch` (opens the world in the browser, where its engine boots), `world.disconnect`, and `world.delete` / `world.trash` / `world.restore` for the reversible soft-delete.
 - **Engine** (acts on the running engine of the world you are working in — make the call; if it reports the target is ambiguous, `session.list` shows your engines and `session.connect` pins one, and an agent running inside an engine is already bound to it and has no connect tool) — `execute` (Luau), `guides` (engine docs; call with no args FIRST after connecting), `capture` (screenshot), `preview` (render one asset), `read_file` / `write_file` / `edit_file` (VFS at `/zero/...`), `bash`.
+- **Local files** — bytes already on the user's machine (image, model, audio, asset pack) go into a world with the CLI: `npx -y @origozero/zeromind upload <path> --world <name-or-guid> [--to <vfs dir>]`. It copies a file or a whole folder, layout preserved, straight from disk into the world's VFS.
 - **Self-help** — `zeromind.help` returns the full reference for any topic (`getting-started`, `library`, `linking`, `workflow`, `tools`). Call it any time you want depth.
 
 ## The end-to-end workflow

@@ -201,6 +201,8 @@ The engine exposes its **entire state** through a virtual filesystem at `/zero/`
 
 VFS access from tools: `bash` for browsing, and `read_file` / `write_file` / `edit_file` for content.
 
+**Bytes that already exist on the user's machine** — an image, a model, an audio clip, a whole asset pack — go in through the CLI rather than through a tool call: `npx -y @origozero/zeromind upload <path> --world <name-or-guid> [--to <vfs dir>]` copies a file or a folder (layout preserved, `/source` by default) straight from disk into the world, so the bytes never pass through your context. Ask the user to run it, or run it yourself if you have a shell on their machine.
+
 ## Building content
 
 **For the canonical examples + edge cases, call `guides`:**

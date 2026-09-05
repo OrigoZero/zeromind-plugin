@@ -2,7 +2,7 @@ import { fetch } from "undici";
 import { loadCache } from "./config.js";
 
 /** The running plugin version. Keep in sync with `package.json` "version". */
-const VERSION = "0.7.0";
+export const VERSION = "0.7.0";
 
 /** The API host: an env override, else the cache's own issuer, else the default. */
 export const issuer = (): string =>

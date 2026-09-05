@@ -8,7 +8,7 @@ What the agent gets, once linked: the ZeroMind library (search, inspect, preview
 
 ## Prerequisites
 
-**Node.js 18 or newer**, on your PATH, to run `zeromind link` and `zeromind install`. Your harness then talks to `https://origozero.ai/mcp` over HTTPS and spawns nothing locally.
+**Node.js 18 or newer**, on your PATH, to run `zeromind link`, `zeromind install` and `zeromind upload`. Your harness then talks to `https://origozero.ai/mcp` over HTTPS and spawns nothing locally.
 
 - **macOS:** `brew install node` (or download from https://nodejs.org)
 - **Linux:** your distro's package manager, or https://nodejs.org / [nvm](https://github.com/nvm-sh/nvm)
@@ -73,6 +73,14 @@ npx -y @origozero/zeromind unlink                     # revoke it
 
 The credential a harness presents is that install's secret, sent as `Authorization: Bearer ins_sec_…`. **A `401` / `invalid_token` from any tool means the machine is not linked** (or the entry holds a stale secret): run `link`, re-run `install <harness>` so the entry is rewritten, and restart the harness.
 
+## Uploading local files into a world
+
+```
+npx -y @origozero/zeromind upload <path> --world <name-or-guid> [--to <vfs dir>]
+```
+
+Copies a file — or a folder, its relative layout preserved — from this machine into the world's engine VFS, under `/source` unless `--to` says otherwise. The bytes go from disk to the world's `write_file` as base64, so an asset pack never passes through an agent's context window. Ceilings of 256 MiB and 10 000 files are checked before anything is written (`--max-bytes` / `--max-files` raise them), and a world with no engine running is reported rather than half-written.
+
 ## Pointing at a local / self-hosted ZeroMind
 
 Two environment variables move the whole CLI to another backend:
@@ -132,7 +140,7 @@ Maintainers: `package.json` `version` is the source of truth — keep `.claude-p
 
 ## Status
 
-0.7.0 — the plugin runs no MCP server of its own. It links a machine, writes the remote `/mcp` entry into fifteen harnesses, and ships the two skills. The tool surface is ZeroMind's, served live at `https://origozero.ai/mcp`; the tests drive the CLI end to end against the bundled mock ZeroMind server in [`tools/mock-zeromind/`](tools/mock-zeromind/).
+0.7.0 — the plugin runs no MCP server of its own. It links a machine, writes the remote `/mcp` entry into fifteen harnesses, uploads local files into a world, and ships the two skills. The tool surface is ZeroMind's, served live at `https://origozero.ai/mcp`; the tests drive the CLI end to end against the bundled mock ZeroMind server in [`tools/mock-zeromind/`](tools/mock-zeromind/).
 
 ## Development
 

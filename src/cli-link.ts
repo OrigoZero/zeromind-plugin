@@ -59,6 +59,7 @@ const HELP = `zeromind link [--username <handle>]   link this machine to your Ze
 zeromind status                         what this machine is linked as
 zeromind unlink                         revoke this machine's link
 zeromind install <harness>              point a harness at origozero.ai/mcp (links first if needed)
+zeromind upload <path> --world <w>      copy a file or folder into a world's engine VFS
 `;
 
 export const runLinkCli = async (argv: string[]): Promise<void> => {

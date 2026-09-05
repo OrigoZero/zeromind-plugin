@@ -46,8 +46,20 @@ export type IssueSubmission = {
   headers: Record<string, string | string[] | undefined>;
 };
 
+/** One `write_file` the mock `/mcp` accepted, as it arrived. */
+export type McpWrite = { path: string; content_b64: string };
+
+/** The session id the mock hands out on `initialize`. */
+export const MCP_SESSION_ID = "mcp_mock_session";
+
 export class MockState {
   installs = new Map<string, InstallRow>();
+  /** Every `write_file` the `/mcp` surface accepted, in order. */
+  mcpWrites: McpWrite[] = [];
+  /** The world a `/mcp` session last connected to. */
+  mcpConnectedWorld?: string;
+  /** When set, `world.connect` refuses with this text instead of connecting. */
+  connectRefusal?: string;
   /** When set, an install's Nth link-status poll while unlinked auto-approves it, standing in for a human completing the browser flow. */
   approveAfterPolls?: number;
   /** POST /v1/issues submissions, recorded for test assertions. */
@@ -116,6 +128,80 @@ export const buildServer = (state: MockState): Server =>
       // check resolves deterministically to update_available:false.
       if (method === "GET" && path === "/@origozero/zeromind/latest") {
         return json(res, 200, { version: "0.0.1" });
+      }
+
+      // ── MCP: initialize + tools/call ─────────────────────────────────
+      // The narrow slice `zeromind upload` speaks: a session opened with
+      // `initialize`, then `world.connect` and `write_file`.
+      if (method === "POST" && path === "/mcp") {
+        const install = requireAuth(req, state);
+        if (!install) return json(res, 401, { error: "invalid_token" });
+        const body = (await readJson(req)) as {
+          id?: number;
+          method?: string;
+          params?: { name?: string; arguments?: Record<string, unknown> };
+        };
+        if (body.method === "initialize") {
+          res.setHeader("mcp-session-id", MCP_SESSION_ID);
+          return json(res, 200, {
+            jsonrpc: "2.0",
+            id: body.id,
+            result: {
+              protocolVersion: "2025-06-18",
+              capabilities: { tools: {} },
+              serverInfo: { name: "mock-zeromind", version: "0" },
+            },
+          });
+        }
+        // Every later message carries the session id the initialize handed out.
+        if (req.headers["mcp-session-id"] !== MCP_SESSION_ID) {
+          return json(res, 400, { error: "missing_session_id" });
+        }
+        if (body.method === "notifications/initialized") {
+          res.writeHead(202);
+          return res.end();
+        }
+        if (body.method !== "tools/call") {
+          return json(res, 200, {
+            jsonrpc: "2.0",
+            id: body.id,
+            error: { code: -32601, message: `method not found: ${body.method}` },
+          });
+        }
+        const tool = body.params?.name;
+        const args = body.params?.arguments ?? {};
+        const answer = (text: string, isError = false) =>
+          json(res, 200, {
+            jsonrpc: "2.0",
+            id: body.id,
+            result: { content: [{ type: "text", text }], isError },
+          });
+        if (tool === "world.connect") {
+          if (state.connectRefusal) return answer(state.connectRefusal, true);
+          const wanted = String(args.world ?? "");
+          const world = [...state.worlds.values()].find(
+            (w) => !w.deleted_at && (w.guid === wanted || w.name === wanted),
+          );
+          if (!world) {
+            return answer(`no world of yours is called '${wanted}'`, true);
+          }
+          state.mcpConnectedWorld = world.guid;
+          return answer(
+            JSON.stringify({
+              connected: true,
+              session_id: MCP_SESSION_ID,
+              world_guid: world.guid,
+            }),
+          );
+        }
+        if (tool === "write_file") {
+          if (!state.mcpConnectedWorld) return answer("not connected to a world", true);
+          const filePath = String(args.path ?? "");
+          const contentB64 = String(args.content_b64 ?? "");
+          state.mcpWrites.push({ path: filePath, content_b64: contentB64 });
+          return answer(`wrote ${filePath}`);
+        }
+        return answer(`unknown tool: ${tool}`, true);
       }
 
       if (method === "POST" && path === "/v1/installs/register") {
