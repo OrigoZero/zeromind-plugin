@@ -7,8 +7,16 @@
   "codiconIcon": "rocket",
   "logoUrl": "https://raw.githubusercontent.com/OrigoZero/zeromind-plugin/main/.claude-plugin/icon.png",
   "category": "agent",
-  "tags": ["3d", "game-dev", "engine", "library", "discovery", "zero", "origozero"],
+  "tags": [
+    "3d",
+    "game-dev",
+    "engine",
+    "library",
+    "discovery",
+    "zero",
+    "origozero"
+  ],
   "requiresApiKey": false,
   "readmeUrl": "https://raw.githubusercontent.com/OrigoZero/zeromind-plugin/main/ide/cline/README.md",
-  "llmsInstallationContent": "ZeroMind is an MCP plugin that drives a 3D engine running in the user's browser. Install via Cline's MCP Servers UI (Command Palette → \"Cline: MCP Servers\" → \"Configure MCP Servers\"):\n```json\n{\n  \"mcpServers\": {\n    \"zeromind\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@origozero/zeromind\"],\n      \"env\": { \"ZEROMIND_IDE_NAME\": \"cline\" },\n      \"disabled\": false,\n      \"autoApprove\": []\n    }\n  }\n}\n```\nThen drop the agent rule:\n```\nnpx @origozero/zeromind install cline\n```\nOr write `.clinerules/zeromind.md` yourself with the content of https://raw.githubusercontent.com/OrigoZero/zeromind-plugin/main/templates/manual.md\n\nFirst engine-related prompt triggers a one-time device-code link at https://origozero.ai/link."
+  "llmsInstallationContent": "ZeroMind is a remote MCP server that drives a 3D engine running in the user's browser. Link the machine once with `zeromind link`, then install via Cline's MCP Servers UI (Command Palette → \"Cline: MCP Servers\" → \"Configure MCP Servers\"):\n```json\n{\n  \"mcpServers\": {\n    \"zeromind\": {\n      \"type\": \"streamableHttp\",\n      \"url\": \"https://origozero.ai/mcp\",\n      \"headers\": {\n        \"Authorization\": \"Bearer <this machine's install_secret>\",\n        \"X-ZM-Harness\": \"cline\"\n      },\n      \"disabled\": false,\n      \"autoApprove\": []\n    }\n  }\n}\n```\nThe install secret is the `install_secret` in `~/.config/zero/session.json` (`%APPDATA%/zero/session.json` on Windows); `zeromind install cline` writes the whole entry for you.\nThen drop the agent rule:\n```\nnpx @origozero/zeromind install cline\n```\nOr write `.clinerules/zeromind.md` yourself with the content of https://raw.githubusercontent.com/OrigoZero/zeromind-plugin/main/templates/manual.md\n\nRun `zeromind link` first if this machine has never been linked — it opens a one-time device-code approval at https://origozero.ai/link."
 }

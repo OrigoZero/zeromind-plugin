@@ -1,13 +1,13 @@
 {
   "name": "zeromind",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "description": "ZeroMind for Gemini CLI — drive your browser-running Zero engine worlds, search and install published assets, and iterate via execute/capture/VFS tools.",
   "mcpServers": {
     "zeromind": {
-      "command": "npx",
-      "args": ["-y", "@origozero/zeromind"],
-      "env": {
-        "ZEROMIND_IDE_NAME": "gemini-cli"
+      "httpUrl": "https://origozero.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer ${ZEROMIND_INSTALL_SECRET}",
+        "X-ZM-Harness": "gemini-cli"
       }
     }
   },
