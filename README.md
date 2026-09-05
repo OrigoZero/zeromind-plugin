@@ -146,6 +146,8 @@ Maintainers: `package.json` `version` is the source of truth — keep `.claude-p
 
 0.7.0 — the plugin runs no MCP server of its own. It links a machine, writes the remote `/mcp` entry into fifteen harnesses, uploads local files into a world, and ships the two skills. The tool surface is ZeroMind's, served live at `https://origozero.ai/mcp`; the tests drive the CLI end to end against the bundled mock ZeroMind server in [`tools/mock-zeromind/`](tools/mock-zeromind/).
 
+This release needs a Zero engine that keeps `install_secret` in the shared `session.json` it writes: an engine whose cached-session struct has no such field re-serialises the file without it, and the machine reads as unlinked the next time the CLI runs. 0.7.0 therefore ships after that engine release.
+
 ## Development
 
 ```bash
