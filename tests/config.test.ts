@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { mkdtempSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, readFileSync, existsSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cachePath, loadCache, updateCache, deleteCache, installSecret } from "../src/config.js";
@@ -38,5 +38,10 @@ describe("config: the engine's session cache", () => {
     deleteCache();
     expect(existsSync(cachePath())).toBe(false);
     expect(loadCache()).toBeUndefined();
+  });
+
+  it.skipIf(process.platform === "win32")("writes mode 0600 off Windows", () => {
+    updateCache({ issuer: "x" });
+    expect(statSync(cachePath()).mode & 0o777).toBe(0o600);
   });
 });
