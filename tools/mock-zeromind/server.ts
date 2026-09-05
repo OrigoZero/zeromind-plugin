@@ -14,6 +14,8 @@ export type InstallRow = {
   pending_suggested_username?: string;
   /** Whether the last approval minted a fresh account (vs reused one). */
   linked_is_new?: boolean;
+  /** link-status reads taken while unlinked, counted toward `approveAfterPolls`. */
+  poll_count?: number;
 };
 
 export type WorldRow = {
@@ -46,6 +48,8 @@ export type IssueSubmission = {
 
 export class MockState {
   installs = new Map<string, InstallRow>();
+  /** When set, an install's Nth link-status poll while unlinked auto-approves it, standing in for a human completing the browser flow. */
+  approveAfterPolls?: number;
   /** POST /v1/issues submissions, recorded for test assertions. */
   issues: IssueSubmission[] = [];
   worlds = new Map<string, WorldRow>();
@@ -157,6 +161,15 @@ export const buildServer = (state: MockState): Server =>
         const install = requireAuth(req, state);
         if (!install || install.install_id !== linkStatusMatch[1]) {
           return json(res, 401, { error: "unauthorized" });
+        }
+        if (!install.linked && state.approveAfterPolls !== undefined) {
+          install.poll_count = (install.poll_count ?? 0) + 1;
+          if (install.poll_count >= state.approveAfterPolls) {
+            install.linked = true;
+            install.linked_is_new = true;
+            install.user_id = `usr_${randomBytes(8).toString("hex")}`;
+            state.profileFor(install.user_id);
+          }
         }
         if (install.linked) {
           const profile = install.user_id ? state.profiles.get(install.user_id) : undefined;

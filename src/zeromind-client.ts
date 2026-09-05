@@ -1,10 +1,12 @@
 import { fetch } from "undici";
+import { loadCache } from "./config.js";
 
 /** The running plugin version. Keep in sync with `package.json` "version". */
 const VERSION = "0.6.0";
 
+/** The API host: an env override, else the cache's own issuer, else the default. */
 export const issuer = (): string =>
-  (process.env.ZEROMIND_ISSUER ?? "https://origozero.ai").replace(/\/+$/, "");
+  (process.env.ZEROMIND_ISSUER ?? loadCache()?.issuer ?? "https://origozero.ai").replace(/\/+$/, "");
 
 /**
  * Client-identification headers attached to every ZeroMind API call. The

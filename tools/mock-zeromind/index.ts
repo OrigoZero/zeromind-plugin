@@ -15,9 +15,15 @@ export type MockServerHandle = {
 };
 
 export const startMockServer = async (
-  opts: { port?: number; seed?: (state: MockState) => void } = {},
+  opts: {
+    port?: number;
+    seed?: (state: MockState) => void;
+    /** Auto-approves an install on its Nth link-status poll; see `MockState.approveAfterPolls`. */
+    approveAfterPolls?: number;
+  } = {},
 ): Promise<MockServerHandle> => {
   const state = new MockState();
+  if (opts.approveAfterPolls !== undefined) state.approveAfterPolls = opts.approveAfterPolls;
   if (opts.seed) opts.seed(state);
   const server = buildServer(state);
   await new Promise<void>((resolve) =>
