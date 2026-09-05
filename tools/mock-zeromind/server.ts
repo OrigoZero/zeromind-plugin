@@ -49,7 +49,6 @@ export class MockState {
   /** POST /v1/issues submissions, recorded for test assertions. */
   issues: IssueSubmission[] = [];
   worlds = new Map<string, WorldRow>();
-  sessionsByWorld = new Map<string, Set<string>>();
   // Minimal user/profile store keyed by user_id, populated lazily the first
   // time an authed `/v1/me` call resolves an install to its linked user.
   profiles = new Map<string, ProfileRow>();

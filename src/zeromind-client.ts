@@ -1,5 +1,7 @@
 import { fetch } from "undici";
-import { VERSION } from "./update.js";
+
+/** The running plugin version. Keep in sync with `package.json` "version". */
+const VERSION = "0.6.0";
 
 export const issuer = (): string =>
   (process.env.ZEROMIND_ISSUER ?? "https://origozero.ai").replace(/\/+$/, "");

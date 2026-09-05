@@ -48,19 +48,3 @@ export const deleteCache = (): void => {
 /** The install secret: its own field, else a session token that has the install shape. */
 export const installSecret = (c: SessionCache | undefined): string | undefined =>
   c?.install_secret ?? (c?.session_token?.startsWith("ins_sec_") ? c.session_token : undefined);
-
-// --- Task 3 removes this: src/index.ts, src/bridge.ts and src/tools/* (all
-// deleted or rewritten by Task 3) still read the install as `InstallConfig`
-// via `loadConfig`. Task 2 rewrote src/install.ts and src/link.ts onto
-// SessionCache directly, so `saveConfig`, `configPath` and `deleteConfig`
-// (each had exactly one caller, in one of those two files) are gone —
-// `loadConfig`/`InstallConfig` stay only for the callers above.
-
-/** The old per-plugin install shape, superseding onto the engine's cache fields. */
-export type InstallConfig = SessionCache & {
-  install_id: string;
-  install_secret: string;
-  install_name: string;
-};
-
-export const loadConfig = (): InstallConfig | undefined => loadCache() as InstallConfig | undefined;

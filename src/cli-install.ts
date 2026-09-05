@@ -3,7 +3,6 @@ import { homedir, platform } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { MANUAL } from "./instructions.js";
 import {
   BLOCK_BEGIN,
   BLOCK_END,
@@ -87,6 +86,24 @@ type HarnessSpec = {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = join(HERE, "..");
+
+const tryRead = (rel: string): string | undefined => {
+  try {
+    return readFileSync(join(PKG_ROOT, rel), "utf8");
+  } catch {
+    return undefined;
+  }
+};
+
+const MANUAL_FALLBACK = `ZeroMind: a shared content library + a 3D engine you drive remotely. Run \`zeromind.search\` BEFORE writing anything for "make me a X" requests — installing existing published content beats building from scratch. Then \`world.connect\`, \`zeromind.install\`, iterate with \`execute\`/\`capture\`, publish from the engine bash with \`zm add . && zm commit -m '...' && zm push\`. Call \`zeromind.help\` for the full guides.`;
+
+/**
+ * Canonical condensed operating manual, single source for the body of every
+ * harness-specific artifact `zeromind install <harness>` writes (AGENTS.md /
+ * GEMINI.md / SKILL.md / .cursor/rules/zeromind.mdc / .clinerules /
+ * CONVENTIONS.md / …).
+ */
+const MANUAL: string = tryRead(join("templates", "manual.md")) ?? MANUAL_FALLBACK;
 
 const expand = (p: string): string =>
   p.startsWith("~/") ? join(homedir(), p.slice(2)) : p;
