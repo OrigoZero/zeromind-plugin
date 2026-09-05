@@ -78,6 +78,30 @@ export const writeClaudeEnv = (
   return existed ? "updated" : "written";
 };
 
+/** Take `${SECRET_ENV}` back out of Claude Code's settings when it holds the
+ *  credential being revoked — the inverse of `writeClaudeEnv`. A different
+ *  value belongs to something else and is left alone. */
+export const clearClaudeEnv = (
+  secret: string,
+  settingsPath = join(homedir(), ".claude", "settings.json"),
+): "removed" | "kept" | "absent" => {
+  if (!existsSync(settingsPath)) return "absent";
+  let json: Record<string, unknown>;
+  try {
+    json = JSON.parse(readFileSync(settingsPath, "utf8")) as Record<string, unknown>;
+  } catch {
+    throw new Error(`${settingsPath} is not valid JSON; fix or move it, then run zeromind unlink again`);
+  }
+  const env = { ...((json.env as Record<string, string>) ?? {}) };
+  if (env[SECRET_ENV] === undefined) return "absent";
+  if (env[SECRET_ENV] !== secret) return "kept";
+  delete env[SECRET_ENV];
+  const next = { ...json, env };
+  if (Object.keys(env).length === 0) delete (next as { env?: unknown }).env;
+  writeFileSync(settingsPath, JSON.stringify(next, null, 2) + "\n");
+  return "removed";
+};
+
 const HELP = `zeromind link [--username <handle>]   link this machine to your ZeroMind account (once; on a linked machine it says who and stops)
 zeromind status                      what this machine is linked as
 zeromind unlink                      revoke this machine's link (unlink, then link, is how a machine is re-linked)
@@ -116,6 +140,12 @@ export const runLinkCli = async (argv: string[]): Promise<void> => {
         outcome === "revoked"
           ? "Unlinked: this machine holds no ZeroMind link."
           : "ZeroMind already held no such install; this machine's link is cleared.",
+      );
+      if (clearClaudeEnv(secret) === "removed") {
+        out(`Claude Code: removed ${SECRET_ENV} from ~/.claude/settings.json (restart Claude Code).`);
+      }
+      out(
+        "The revoked secret is still in the harness configs `zeromind install` wrote; they answer 401 until you link again and re-run the install.",
       );
       return;
     }

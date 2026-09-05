@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { startMockServer, type MockServerHandle } from "../tools/mock-zeromind/index.js";
-import { linkMachine, writeClaudeEnv } from "../src/cli-link.js";
+import { clearClaudeEnv, linkMachine, writeClaudeEnv } from "../src/cli-link.js";
 import { loadCache, updateCache } from "../src/config.js";
 import { runLinkCli } from "../src/cli-link.js";
 
@@ -144,6 +144,38 @@ describe("zeromind link", () => {
       permissions: { allow: ["Bash"] },
       env: { ZEROMIND_INSTALL_SECRET: "ins_sec_q" },
     });
+  });
+
+  it("takes the revoked secret back out of Claude Code's settings", () => {
+    const dir = mkdtempSync(join(tmpdir(), "zm-claude-clear-"));
+    const p = join(dir, "settings.json");
+    writeFileSync(
+      p,
+      JSON.stringify({ permissions: { allow: ["Bash"] }, env: { OTHER: "1", ZEROMIND_INSTALL_SECRET: "ins_sec_gone" } }),
+    );
+    expect(clearClaudeEnv("ins_sec_gone", p)).toBe("removed");
+    const json = JSON.parse(readFileSync(p, "utf8"));
+    expect(json.env).toEqual({ OTHER: "1" });
+    expect(json.permissions.allow).toEqual(["Bash"]);
+    // A second unlink has nothing left to take out.
+    expect(clearClaudeEnv("ins_sec_gone", p)).toBe("absent");
+  });
+
+  it("leaves a secret it did not revoke, and a settings file it never wrote", () => {
+    const dir = mkdtempSync(join(tmpdir(), "zm-claude-keep-"));
+    const p = join(dir, "settings.json");
+    writeFileSync(p, JSON.stringify({ env: { ZEROMIND_INSTALL_SECRET: "ins_sec_other" } }));
+    expect(clearClaudeEnv("ins_sec_gone", p)).toBe("kept");
+    expect(JSON.parse(readFileSync(p, "utf8")).env.ZEROMIND_INSTALL_SECRET).toBe("ins_sec_other");
+    expect(clearClaudeEnv("ins_sec_gone", join(dir, "no-such-settings.json"))).toBe("absent");
+  });
+
+  it("drops an env block that held nothing but the revoked secret", () => {
+    const dir = mkdtempSync(join(tmpdir(), "zm-claude-only-"));
+    const p = join(dir, "settings.json");
+    writeFileSync(p, JSON.stringify({ model: "opus", env: { ZEROMIND_INSTALL_SECRET: "ins_sec_only" } }));
+    expect(clearClaudeEnv("ins_sec_only", p)).toBe("removed");
+    expect(JSON.parse(readFileSync(p, "utf8"))).toEqual({ model: "opus" });
   });
 
   it("throws a clear error on unparsable JSON and leaves the file untouched", () => {
