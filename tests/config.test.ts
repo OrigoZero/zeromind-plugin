@@ -1,63 +1,42 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
+import { mkdtempSync, readFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { existsSync, statSync } from "node:fs";
-import { loadConfig, saveConfig, configPath, deleteConfig } from "../src/config.js";
-import { withTmpConfigDir } from "./helpers/tmp-config.js";
+import { cachePath, loadCache, updateCache, deleteCache, installSecret } from "../src/config.js";
 
-describe("config", () => {
-  let tmp: ReturnType<typeof withTmpConfigDir>;
+describe("config: the engine's session cache", () => {
   beforeEach(() => {
-    tmp = withTmpConfigDir();
-    process.env.ZEROMIND_CONFIG_DIR = tmp.dir;
+    process.env.ZEROMIND_CONFIG_DIR = mkdtempSync(join(tmpdir(), "zm-cache-"));
   });
-  afterEach(() => {
+
+  it("lives at <dir>/session.json", () => {
+    expect(cachePath()).toBe(join(process.env.ZEROMIND_CONFIG_DIR!, "session.json"));
     delete process.env.ZEROMIND_CONFIG_DIR;
-    tmp.cleanup();
+    const p = cachePath();
+    expect(p.endsWith(join("zero", "session.json"))).toBe(true);
   });
 
-  it("configPath() returns ZEROMIND_CONFIG_DIR/install.json when env is set", () => {
-    expect(configPath()).toBe(join(tmp.dir, "install.json"));
-  });
-
-  it("loadConfig() returns undefined when no file exists", () => {
-    expect(loadConfig()).toBeUndefined();
-  });
-
-  it("saveConfig() then loadConfig() round-trips", () => {
-    const cfg = {
-      install_id: "inst_abc",
-      install_secret: "ins_sec_xyz",
-      private_key: "pem...",
-      install_name: "test",
-      created_at: "2026-05-26T00:00:00Z",
-    };
-    saveConfig(cfg);
-    expect(loadConfig()).toEqual(cfg);
-  });
-
-  it("saveConfig() writes mode 0600 on POSIX", () => {
-    if (process.platform === "win32") return;
-    saveConfig({
-      install_id: "x",
-      install_secret: "y",
-      private_key: "",
-      install_name: "n",
-      created_at: new Date().toISOString(),
+  it("merges a patch over what is there and writes the engine's keys", () => {
+    updateCache({ session_token: "ses_human", issuer: "https://origozero.ai" });
+    updateCache({ install_id: "inst_1", install_secret: "ins_sec_a", install_private_key: "k", install_name: "zero-engine" });
+    const raw = JSON.parse(readFileSync(cachePath(), "utf8"));
+    expect(raw).toEqual({
+      session_token: "ses_human", issuer: "https://origozero.ai", install_id: "inst_1",
+      install_secret: "ins_sec_a", install_private_key: "k", install_name: "zero-engine",
     });
-    const stat = statSync(configPath());
-    expect(stat.mode & 0o777).toBe(0o600);
+    expect(loadCache()?.session_token).toBe("ses_human");
   });
 
-  it("deleteConfig() removes the file", () => {
-    saveConfig({
-      install_id: "x",
-      install_secret: "y",
-      private_key: "",
-      install_name: "n",
-      created_at: new Date().toISOString(),
-    });
-    expect(existsSync(configPath())).toBe(true);
-    deleteConfig();
-    expect(existsSync(configPath())).toBe(false);
+  it("reads the install secret from a cache written before the field existed", () => {
+    expect(installSecret({ session_token: "ins_sec_old" })).toBe("ins_sec_old");
+    expect(installSecret({ session_token: "ses_x" })).toBeUndefined();
+    expect(installSecret({ session_token: "ses_x", install_secret: "ins_sec_n" })).toBe("ins_sec_n");
+  });
+
+  it("deletes the file", () => {
+    updateCache({ issuer: "x" });
+    deleteCache();
+    expect(existsSync(cachePath())).toBe(false);
+    expect(loadCache()).toBeUndefined();
   });
 });
