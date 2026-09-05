@@ -66,6 +66,8 @@ export class MockState {
   issues: IssueSubmission[] = [];
   /** Device codes asked for, so a test can assert none was. */
   linkCodeRequests = 0;
+  /** When set, POST unlink answers this status instead of revoking. */
+  unlinkStatus?: number;
   worlds = new Map<string, WorldRow>();
   // Minimal user/profile store keyed by user_id, populated lazily the first
   // time an authed `/v1/me` call resolves an install to its linked user.
@@ -276,6 +278,9 @@ export const buildServer = (state: MockState): Server =>
 
       const unlinkMatch = path.match(/^\/v1\/installs\/([^/]+)\/unlink$/);
       if (method === "POST" && unlinkMatch) {
+        if (state.unlinkStatus !== undefined) {
+          return json(res, state.unlinkStatus, { error: "unlink_refused" });
+        }
         const install = requireAuth(req, state);
         if (!install || install.install_id !== unlinkMatch[1]) {
           return json(res, 401, { error: "unauthorized" });

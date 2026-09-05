@@ -106,8 +106,17 @@ export const runLinkCli = async (argv: string[]): Promise<void> => {
     }
     case "unlink": {
       const cache = loadCache();
-      if (cache && installSecret(cache)) await unlink({ ...cache, install_secret: installSecret(cache) });
-      out("unlinked");
+      const secret = cache && installSecret(cache);
+      if (!cache || !secret) {
+        out("This machine holds no ZeroMind link.");
+        return;
+      }
+      const outcome = await unlink({ ...cache, install_secret: secret });
+      out(
+        outcome === "revoked"
+          ? "Unlinked: this machine holds no ZeroMind link."
+          : "ZeroMind already held no such install; this machine's link is cleared.",
+      );
       return;
     }
     default:

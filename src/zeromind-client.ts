@@ -89,15 +89,18 @@ export const getLinkStatus = async (cfg: {
   return (await res.json()) as LinkStatusResponse;
 };
 
+/** Revoke this install upstream, answering with the status ZeroMind gave:
+ *  the caller decides what "the install is already gone" means. Throws only
+ *  when the request could not be made at all. */
 export const postUnlink = async (cfg: {
   install_id: string;
   install_secret: string;
-}): Promise<void> => {
+}): Promise<number> => {
   const res = await fetch(`${issuer()}/v1/installs/${cfg.install_id}/unlink`, {
     method: "POST",
     headers: authed(cfg.install_secret),
   });
-  if (!res.ok) throw new Error(`unlink failed: ${res.status} ${await res.text()}`);
+  return res.status;
 };
 
 // ── Generic ZeroMind REST helpers ──────────────────────────────────────────

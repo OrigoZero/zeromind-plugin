@@ -31,8 +31,7 @@ export const loadCache = (): SessionCache | undefined => {
   return JSON.parse(readFileSync(p, "utf8")) as SessionCache;
 };
 
-export const updateCache = (patch: Partial<SessionCache>): SessionCache => {
-  const next: SessionCache = { ...(loadCache() ?? {}), ...patch };
+const writeCache = (next: SessionCache): SessionCache => {
   const p = cachePath();
   mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, JSON.stringify(next, null, 2), { encoding: "utf8" });
@@ -40,9 +39,42 @@ export const updateCache = (patch: Partial<SessionCache>): SessionCache => {
   return next;
 };
 
+export const updateCache = (patch: Partial<SessionCache>): SessionCache =>
+  writeCache({ ...(loadCache() ?? {}), ...patch });
+
 export const deleteCache = (): void => {
   const p = cachePath();
   if (existsSync(p)) rmSync(p);
+};
+
+/** The fields the machine's link owns. The rest of the cache — the engine's
+ *  own session and the issuer it signed in against — is not this CLI's to
+ *  throw away. */
+const INSTALL_FIELDS = [
+  "install_id",
+  "install_secret",
+  "install_private_key",
+  "install_name",
+  "user_id",
+] as const;
+
+/**
+ * Remove the machine's link from the cache and leave everything else in it.
+ * A `session_token` that is the install secret under another name is that
+ * same credential and goes with it; a file left holding nothing is deleted.
+ */
+export const clearInstall = (): SessionCache | undefined => {
+  const cache = loadCache();
+  if (!cache) return undefined;
+  const secret = installSecret(cache);
+  const next: SessionCache = { ...cache };
+  for (const field of INSTALL_FIELDS) delete next[field];
+  if (next.session_token && next.session_token === secret) delete next.session_token;
+  if (Object.keys(next).length === 0) {
+    deleteCache();
+    return undefined;
+  }
+  return writeCache(next);
 };
 
 /** The install secret: its own field, else a session token that has the install shape. */
