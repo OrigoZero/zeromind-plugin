@@ -36,14 +36,14 @@ Anything not listed above falls back to the MCP protocol channel:
 
 - **`instructions`** field on `initialize` — Claude Code injects it into the agent's system prompt; most other harnesses don't (or behavior is unconfirmed). Treat as belt-and-suspenders.
 - **`zeromind.help` tool** — every MCP client can call this to fetch the full operating manual on demand (topics: `getting-started`, `library`, `linking`, `workflow`, `tools`).
-- **`getting_started` block** on the first `auth_status` call — surfaces the condensed orientation through a tool result, which every client returns to the agent verbatim.
+- **`zeromind.help` in a tool result** — the orientation reaches the agent through a tool response, which every client returns verbatim, for clients that ignore the `instructions` field.
 
 If your client speaks MCP, point it at:
 
-- **Command:** `npx`
-- **Args:** `-y @origozero/zeromind`
-- **Env:** `ZEROMIND_IDE_NAME=<your-client>` (free-form; helps support cases)
-- **Transport:** stdio
+- **URL:** `https://origozero.ai/mcp`
+- **Transport:** streamable HTTP
+- **Header `Authorization`:** `Bearer <this machine's install secret>`
+- **Header `X-ZM-Harness`:** `<your-client>` (free-form; helps support cases)
 
 Equivalent JSON (the shape most clients accept):
 
@@ -51,16 +51,21 @@ Equivalent JSON (the shape most clients accept):
 {
   "mcpServers": {
     "zeromind": {
-      "command": "npx",
-      "args": ["-y", "@origozero/zeromind"],
-      "env": { "ZEROMIND_IDE_NAME": "your-client" }
+      "type": "http",
+      "url": "https://origozero.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer ins_sec_...",
+        "X-ZM-Harness": "your-client"
+      }
     }
   }
 }
 ```
 
+The install secret is the `install_secret` in `~/.config/zero/session.json` (`%APPDATA%\zero\session.json` on Windows). `zeromind install <harness>` writes the whole entry for you after `zeromind link`.
+
 If your client has a native context channel we haven't custom-crafted, open an issue at https://github.com/OrigoZero/zeromind-plugin/issues — adding another harness to the `zeromind install` CLI is a 20-line entry in `src/cli-install.ts`.
 
 ## Hermes
 
-Nous Research's [Hermes Agent](https://github.com/nousresearch/hermes-agent) generates its own skills from experience rather than loading user-authored ones, so it stays on the generic MCP fallback for now. Hermes is itself an MCP client, so `zeromind.help` + `getting_started` will work; whether Hermes injects the MCP `instructions` field into its agent's prompt is unconfirmed.
+`npx -y @origozero/zeromind install hermes` writes the `mcp_servers.zeromind` entry into `~/.hermes/config.yaml` and drops the optional plugin bundle (skills, a `/zeromind` slash command, a first-turn context hook) into `~/.hermes/plugins/`. Hermes generates its own skills from experience rather than loading user-authored ones, so the bundle is opt-in — `hermes plugins enable zeromind`. Hermes is an MCP client, so `zeromind.help` reaches the agent on demand; whether Hermes injects the MCP `instructions` field into its agent's prompt is unconfirmed.

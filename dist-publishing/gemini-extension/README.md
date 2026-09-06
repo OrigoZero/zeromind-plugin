@@ -37,3 +37,7 @@ When `@origozero/zeromind` releases a new version:
 The fallback path for Gemini CLI users is `npx @origozero/zeromind install
 gemini`, which writes both `~/.gemini/settings.json` and `~/.gemini/GEMINI.md`
 directly. See [`ide/gemini/README.md`](../../ide/gemini/README.md).
+
+## The install secret
+
+A published bundle never holds a secret, so this one names `${ZEROMIND_INSTALL_SECRET}` and Gemini CLI expands it. Run `npx @origozero/zeromind link` once, then either export that variable, or run `npx @origozero/zeromind install gemini`, which writes the same entry with this machine's own `install_secret` in place of the expansion.

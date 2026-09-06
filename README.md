@@ -1,89 +1,126 @@
 # @origozero/zeromind
 
-ZeroMind IDE plugin — an MCP server with **a custom-crafted native integration per agent harness**. Each supported harness (Claude Code, Cursor, Codex CLI, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, openClaw, JetBrains Junie, Sourcegraph Amp, GitHub Copilot, Block Goose, Aider) gets its onboarding through that harness's own native channel — skills, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/*.mdc`, `.clinerules`, `CONVENTIONS.md`, `.goosehints`, etc. Anything we haven't custom-crafted for falls back to a generic MCP integration that works on any MCP-capable client.
+`@origozero/zeromind` is two things: a **declaration of the remote ZeroMind MCP server** (`https://origozero.ai/mcp`) written into your agent harness's own config, and the **skills** that teach the agent to check ZeroMind before it builds anything. Nothing runs on your machine — the CLI links the machine to your ZeroMind account, writes the server entry, and exits. Every tool the agent then calls (ZeroMind content discovery, worlds, and the engine of the world you have open) is served by ZeroMind over HTTPS, so a new tool is available the moment ZeroMind ships it, with nothing to upgrade here.
 
-The plugin self-registers as a per-install ZeroMind principal, links to the user's account via a one-time device code, and exposes:
+Each supported harness (Claude Code, Cursor, Codex CLI, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, openClaw, JetBrains Junie, Sourcegraph Amp, GitHub Copilot, Block Goose, Aider) gets its onboarding through that harness's own native channel — skills, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/*.mdc`, `.clinerules`, `CONVENTIONS.md`, `.goosehints` — plus the MCP entry in the config file that harness reads. A harness with no custom-crafted integration uses the generic streamable-HTTP wiring in [`ide/README.md`](ide/README.md#generic-mcp-fallback).
 
-- **ZeroMind content** — the shared library of published worlds and assets (modules, components, tools, materials, shaders, scenes, packages). Four tools (`zeromind.search`, `zeromind.inspect`, `zeromind.install`, `zeromind.engage`) let the agent find existing content, vet it, install a drop-in solution / reusable parts / a base to modify, and contribute back via votes, comments, and structured reviews.
-- **World + engine tools** — list/create/launch/connect worlds, and drive the WASM engine in your browser (`execute`, `guides`, `capture`, VFS, `bash`).
-- **`watch` / `unwatch`** — register a non-blocking watcher on engine state (a Luau expression's return value, a VFS file appearing, a counter crossing a threshold) and end the turn. The plugin polls the condition in the background; when the matcher fires, an MCP notification (`notifications/zeromind/watcher`) is emitted so the host re-enters the agent in a new turn with the matched value. `unwatch { id }` from any later turn cancels a pending watcher. This is what makes long-running `execute()` / `bash` tasks usable without burning the context window on polling — kick the task, watch its `tasks.status(id)`, end the turn, and wake up when it's done.
+What the agent gets, once linked: the ZeroMind library (search, inspect, preview, install, engage), worlds (list, create, fork, launch, connect, and the reversible delete / trash / restore), and — for the world it is connected to — the engine itself (`execute`, `guides`, `capture`, the VFS, `bash`). `tools/list` on `https://origozero.ai/mcp` is the current surface; it is served rather than shipped, so this README does not enumerate it.
 
-### ZeroMind tool surface
+## Prerequisites
 
-The ZeroMind content + social API (discovery, feed, search, votes, comments, agent reviews, bookmarks, follows, reports) is exposed through **four** verb tools rather than one-tool-per-endpoint. No content bytes ever pass through the MCP client: discovery/inspection is metadata-only, and `install` hands the engine an id so the engine fetches content directly.
+**Node.js 18 or newer**, on your PATH, to run `zeromind link`, `zeromind install` and `zeromind upload`. Your harness then talks to `https://origozero.ai/mcp` over HTTPS and spawns nothing locally.
 
-| Tool | Verb | Backs |
-|---|---|---|
-| `zeromind.search` | find | `/v1/discover`, `/v1/discover/worlds`, `/v1/search`, `/v1/feed`, `/v1/discover/similar`, `/v1/discover/top-by-kind`, `/v1/discover/kinds`, `/v1/discover/capabilities`, `/v1/schemas` |
-| `zeromind.inspect` | vet | `/v1/worlds/{guid}` (+ `/summary` `/contents` `/published` `/comments`), `/v1/assets/{guid}` (detail), `/v1/assets/{guid}/{closure,children,dependents,pulls,comments}`. Default `overview` aggregates detail + comments + dependents (asset) / detail + summary + comments (world) in one call. |
-| `zeromind.install` | install | engine-side `world.installLibrary` / `world.installAsset` via the bridge — adds a world as a library or installs an asset's content at a path; the engine pulls the bytes from ZeroMind. Requires a connected world. |
-| `zeromind.engage` | give back | `/v1/{worlds,assets}/{guid}/{vote,comments,bookmark,follow,report}`, `/v1/comments/{id}/vote`, `/v1/assets/{guid}/agent-review`, `/v1/users/{id}/follow`, `/v1/worlds/{guid}/pulls` |
-| `zeromind.help` | learn | Returns the full ZeroMind operating manual. Pass `topic` for one of `getting-started`, `library`, `linking`, `workflow`, `tools`. |
+- **macOS:** `brew install node` (or download from https://nodejs.org)
+- **Linux:** your distro's package manager, or https://nodejs.org / [nvm](https://github.com/nvm-sh/nvm)
+- **Windows:** https://nodejs.org (LTS installer) — restart your IDE after install so it picks up the new PATH
+
+Verify with `node --version`.
 
 ## Install
 
-Each harness has its own one-shot command. See [`ide/README.md`](ide/README.md) for the full table.
-
-```
-# Pick your harness
-npx @origozero/zeromind install claude       # .claude/skills/zeromind/SKILL.md
-npx @origozero/zeromind install cursor       # .cursor/rules/zeromind.mdc
-npx @origozero/zeromind install codex        # ~/.codex/AGENTS.md (or ./AGENTS.md)
-npx @origozero/zeromind install gemini       # ~/.gemini/GEMINI.md (or ./GEMINI.md)
-npx @origozero/zeromind install opencode     # .opencode/skills/zeromind/SKILL.md
-npx @origozero/zeromind install cline        # .clinerules/zeromind.md
-npx @origozero/zeromind install continue     # .continue/rules/zeromind.md
-npx @origozero/zeromind install windsurf     # ./AGENTS.md
-npx @origozero/zeromind install zed          # .claude/skills/zeromind/SKILL.md
-npx @origozero/zeromind install openclaw     # skills/zeromind/SKILL.md
-npx @origozero/zeromind install junie        # ./AGENTS.md
-npx @origozero/zeromind install amp          # ./AGENT.md
-npx @origozero/zeromind install copilot      # .github/copilot-instructions.md
-npx @origozero/zeromind install goose        # ~/.config/goose/.goosehints
-npx @origozero/zeromind install aider        # ./CONVENTIONS.md
-
-npx @origozero/zeromind install --list       # enumerate
-```
-
-Each command is idempotent (shared files like `AGENTS.md` get a delimited `<!-- BEGIN ZEROMIND -->` block; re-running replaces the block in place).
-
-You still wire the MCP server into your harness's MCP config — the per-harness READMEs under [`ide/`](ide/) give the exact JSON/TOML/YAML snippet each one wants.
-
-### Claude Code (marketplace shortcut)
-
-Claude Code users get the install bundled (server + skills) via the plugin marketplace:
+### Claude Code
 
 ```
 /plugin marketplace add OrigoZero/zeromind-plugin
 /plugin install zeromind
+npx -y @origozero/zeromind link
 ```
 
-### Anything else (generic MCP)
+The bundle carries the skills and an `.mcp.json` whose `Authorization` header expands `${ZEROMIND_INSTALL_SECRET}`; `zeromind link` writes that variable into `~/.claude/settings.json` `env`. Restart Claude Code afterwards so the new setting is read.
 
-Any MCP-capable harness we haven't custom-crafted for can still use the plugin — see [`ide/README.md`](ide/README.md#generic-mcp-fallback) for the generic stdio MCP wiring. Hermes Agent currently falls here too (it generates its own skills rather than loading user-authored ones).
+### Every other harness
 
-## Pointing the plugin at a local / self-hosted ZeroMind
+```
+npx -y @origozero/zeromind install <harness>
+```
 
-Every backend URL the plugin uses is derived from one environment variable:
+One command per harness — it links the machine first if it isn't linked yet, writes the harness's native instruction file, and writes the `/mcp` entry into that harness's own MCP config:
+
+```
+npx -y @origozero/zeromind install claude       # .claude/skills/zeromind-{getting-started,library}/SKILL.md
+npx -y @origozero/zeromind install cursor       # .cursor/rules/zeromind.mdc
+npx -y @origozero/zeromind install codex        # ~/.codex/AGENTS.md (or ./AGENTS.md)
+npx -y @origozero/zeromind install gemini       # ~/.gemini/GEMINI.md (or ./GEMINI.md)
+npx -y @origozero/zeromind install opencode     # .opencode/skills/zeromind/SKILL.md
+npx -y @origozero/zeromind install cline        # .clinerules/zeromind.md
+npx -y @origozero/zeromind install continue     # .continue/rules/zeromind.md
+npx -y @origozero/zeromind install windsurf     # ./AGENTS.md
+npx -y @origozero/zeromind install zed          # .claude/skills/zeromind/SKILL.md
+npx -y @origozero/zeromind install openclaw     # skills/zeromind/SKILL.md
+npx -y @origozero/zeromind install junie        # ./AGENTS.md
+npx -y @origozero/zeromind install amp          # ./AGENT.md
+npx -y @origozero/zeromind install copilot      # .github/copilot-instructions.md
+npx -y @origozero/zeromind install goose        # ~/.config/goose/.goosehints
+npx -y @origozero/zeromind install aider        # ./CONVENTIONS.md
+npx -y @origozero/zeromind install hermes       # ~/.hermes/config.yaml + plugin bundle
+
+npx -y @origozero/zeromind install --list       # enumerate
+```
+
+Every command is idempotent: shared files (`AGENTS.md`, `GEMINI.md`, `CONVENTIONS.md`, `.goosehints`, `copilot-instructions.md`) carry a delimited `<!-- BEGIN ZEROMIND -->` block that is replaced in place; owned files (skills, rule files) need `--force` to overwrite. Two harnesses have no MCP config path to write into — openClaw's is unconfirmed, and Aider takes servers on the command line — so the install prints their entry for you to paste. [`ide/README.md`](ide/README.md) has the full table, with a README per harness.
+
+## Linking
+
+A machine links **once**, and the link is the same one the Zero engine uses: both read and write `session.json` in the OS config dir (`~/.config/zero/session.json`; `%APPDATA%\zero\session.json` on Windows; mode 0600 off Windows). Linking from either side links both, and unlinking revokes every harness on the machine at once.
+
+```
+npx -y @origozero/zeromind link                       # device code, approved in the browser
+npx -y @origozero/zeromind link --username <handle>   # pre-fill the approval page's agent name
+npx -y @origozero/zeromind status                     # what this machine is linked as
+npx -y @origozero/zeromind unlink                     # revoke it
+```
+
+`link` registers this machine as its own ZeroMind principal, prints a URL and a code, and waits for you to approve it on that page. The approved account is the agent's identity — its own ZeroMind account, distinct from yours.
+
+On a machine that already holds an approved install — linked by an earlier run, or by the Zero engine, which writes the same file — `link` prints who the machine acts as, asks for no new code, and still hands the secret to Claude Code. One linked install per machine is the whole rule; `unlink`, then `link`, is how a machine changes which account it acts as.
+
+`unlink` revokes the install at ZeroMind and removes it from this machine's cache — the install fields only, so a session the Zero engine signed in with, and the issuer it signed in against, stay where they are. If ZeroMind answers that it holds no such install, the local clear happens anyway; if the revoke cannot be made at all, nothing is cleared and the command tells you to run it again once ZeroMind is reachable.
+
+`unlink` also takes `ZEROMIND_INSTALL_SECRET` back out of `~/.claude/settings.json` when it holds the secret being revoked — before it revokes anything, so a settings file it cannot read is reported and the unlink still completes. (That one line is then yours to delete.) The entries `install <harness>` wrote into other harnesses keep the revoked secret and answer `401` until you link again and re-run the install for that harness — the command says so when it runs.
+
+The credential a harness presents is that install's secret, sent as `Authorization: Bearer ins_sec_…`. **A `401` / `invalid_token` from any tool means the machine is not linked** (or the entry holds a stale secret): run `link`, re-run `install <harness>` so the entry is rewritten, and restart the harness.
+
+## Uploading local files into a world
+
+```
+npx -y @origozero/zeromind upload <path> --world <name-or-guid> [--to <vfs dir>]
+```
+
+Copies a file — or a folder, its relative layout preserved — from this machine into the world's engine VFS, under `/source` unless `--to` says otherwise. The bytes go from disk to the world's `write_file` as base64, so an asset pack never passes through an agent's context window. Ceilings of 256 MiB and 10 000 files are checked before anything is written (`--max-bytes` / `--max-files` raise them), and a world with no engine running is reported rather than half-written.
+
+## Pointing at a local / self-hosted ZeroMind
+
+Two environment variables move the whole CLI to another backend:
 
 | Variable | Default | What it controls |
 |---|---|---|
-| `ZEROMIND_ISSUER` | `https://origozero.ai` | Base for **all** REST calls (`/v1/installs/*`, `/v1/me/worlds`, `/v1/worlds`, the content/social surface) and for the bridge websocket URL, which is derived as `issuer.replace(/^http/, "ws")` — so `http://` → `ws://` and `https://` → `wss://` automatically. Also used to build `/edit/<guid>` world links. |
-| `ZEROMIND_BRIDGE_URL` | *(derived from issuer)* | Optional override for the bridge websocket origin only, e.g. `ws://127.0.0.1:3003`. The plugin appends `/v1/bridge?role=ide`. Only needed when the bridge lives on a different origin than the REST API. |
-| `ZEROMIND_CONFIG_DIR` | `~/.config/zeromind` (XDG) | Where `install.json` (the per-install `install_id`/`install_secret` identity) is stored. Point it somewhere separate (e.g. `~/.config/zeromind-local`) so your local backend gets a **fresh install identity** instead of replaying credentials registered against prod. |
+| `ZEROMIND_ISSUER` | `https://origozero.ai` | Base for every REST call (`/v1/installs/*`, `/v1/worlds`, …) **and** the `/mcp` URL written into a harness's config. Also the origin of the `/link` approval page. |
+| `ZEROMIND_CONFIG_DIR` | `~/.config/zero` (XDG; `%APPDATA%\zero` on Windows) | Where `session.json` — the `install_id` / `install_secret` this machine shares with the Zero engine — lives. Point it elsewhere (e.g. `~/.config/zero-local`) so a local backend gets a **fresh install identity** instead of replaying credentials registered against production. |
 
-For the local ZeroMind dev stack, point the issuer at the **front door** (`http://127.0.0.1:3003`), **not** the bare API on `:3001` — the front door proxies the `/v1` REST surface *and* the `/v1/bridge` websocket *and* serves the web app (including the `/link` approval page and the `/edit/<guid>` engine pages) on a single origin, which is what the plugin assumes.
+For the local ZeroMind dev stack, point the issuer at the **front door** (`http://127.0.0.1:3003`), not the bare API on `:3001` — the front door serves the `/v1` REST surface, `/mcp`, and the web app (including `/link` and the `/edit/<guid>` engine pages) on one origin, which is what the CLI assumes.
+
+```bash
+ZEROMIND_ISSUER=http://127.0.0.1:3003 \
+ZEROMIND_CONFIG_DIR=$HOME/.config/zero-local \
+  npx -y @origozero/zeromind link
+
+ZEROMIND_ISSUER=http://127.0.0.1:3003 \
+ZEROMIND_CONFIG_DIR=$HOME/.config/zero-local \
+  npx -y @origozero/zeromind install claude
+```
+
+The entry that lands is the production shape at the local address:
 
 ```jsonc
 // .mcp.json
 {
   "mcpServers": {
-    "zeromind-local": {
-      "command": "npx",
-      "args": ["-y", "@origozero/zeromind"],
-      "env": {
-        "ZEROMIND_ISSUER": "http://127.0.0.1:3003",
-        "ZEROMIND_CONFIG_DIR": "/home/you/.config/zeromind-local"
+    "zeromind": {
+      "type": "http",
+      "url": "http://127.0.0.1:3003/mcp",
+      "headers": {
+        "Authorization": "Bearer ins_sec_...",
+        "X-ZM-Harness": "claude-code"
       }
     }
   }
@@ -93,68 +130,44 @@ For the local ZeroMind dev stack, point the issuer at the **front door** (`http:
 Or with the Claude Code CLI:
 
 ```bash
-claude mcp add zeromind-local \
-  --env ZEROMIND_ISSUER=http://127.0.0.1:3003 \
-  --env ZEROMIND_CONFIG_DIR=$HOME/.config/zeromind-local \
-  -- npx -y @origozero/zeromind
+claude mcp add --transport http zeromind http://127.0.0.1:3003/mcp \
+  --header "Authorization: Bearer ins_sec_..." \
+  --header "X-ZM-Harness: claude-code"
 ```
 
-Notes:
-
-- The device-code **link approval flow happens at `<issuer>/link`** — for a local stack that's `http://127.0.0.1:3003/link`. The agent-facing manual text (`src/instructions.ts` / `src/prompts.ts`) intentionally hardcodes the production `https://origozero.ai/link` URL; when running against a local backend, open your local `/link` page instead.
-- Plain `http://` issuers work end-to-end: REST goes through `fetch` and the bridge derives `ws://` (no TLS-only assumptions, no cookies — auth is a Bearer header on every request and on the websocket upgrade).
-- `ZEROMIND_NPM_REGISTRY` (update check) is independent of the backend and does not need to change.
-
-## Status
-
-v0.1.0 — feature-complete against the in-repo mock ZeroMind server. End-to-end (stdio MCP) tested. Production use against the live `origozero.ai` depends on:
-
-- **L1 (ZeroMind backend)** — endpoints `/v1/installs/*`, `/v1/me/worlds`, `/v1/worlds`, `wss /v1/bridge`. Spec in [`docs/L1-BACKEND-BRIEFING.md`](docs/L1-BACKEND-BRIEFING.md).
-- **L2 (engine bridge module)** — trusted Luau module that opens the WSS bridge on WASM boot. Tracked in `OrigoZero/zero`.
-
-The plugin itself is shippable to npm today; it'll be functional end-to-end once L1 lands.
-
-## Prerequisites
-
-**Node.js 18 or newer** must be installed and on your PATH. The plugin is a Node MCP server spawned by your harness via `npx`. If you don't have Node yet, install it:
-
-- **macOS:** `brew install node` (or download from https://nodejs.org)
-- **Linux:** your distro's package manager, or https://nodejs.org / [nvm](https://github.com/nvm-sh/nvm)
-- **Windows:** https://nodejs.org (LTS installer) — restart your IDE after install so it picks up the new PATH
-
-Verify with `node --version` (should print v18+ or higher). **If you see "status failed" after installing the plugin, Node is almost certainly the cause** — install it, restart your IDE, retry.
+Plain `http://` issuers work end to end: auth is a Bearer header on every request, with no cookies and no TLS-only assumption.
 
 ## Updating
 
-There are two pieces, released together under one version number:
+- **The tools** are served from `https://origozero.ai/mcp`. Every harness reaches the running version; there is nothing to upgrade on your machine.
+- **The artifacts `zeromind install <harness>` wrote** — instruction blocks, skills, the MCP entry — refresh by re-running the install command.
+- **The Claude Code bundle** (skills + `.mcp.json`) updates through `/plugin`.
 
-- **The MCP server** — the npm package `@origozero/zeromind`, launched by each harness via `npx -y @origozero/zeromind`. `npx` resolves the latest published version, so a fresh session generally picks up new releases automatically (clear the npx cache if it lags).
-- **The native artifacts** written by `zeromind install <harness>` — re-run the install command after upgrading to refresh `AGENTS.md` blocks / skill content. Shared-file installs replace the existing ZeroMind block in place; owned-file installs need `--force` to overwrite.
-- **The Claude Code plugin bundle** (skills + `.mcp.json`) is also distributed via the Claude Code marketplace and updated through `/plugin`.
+Maintainers: `package.json` `version` is the source of truth — keep `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` in lockstep with it.
 
-**First-use update check.** On the first `auth_status` call of a session the server does one best-effort check against the npm registry and returns an `update` object (`current`, `latest`, `update_available`, `how_to_update`). When a newer release exists the agent surfaces it and asks the user whether to update — the agent never updates on its own. The check is memoized per process, fails silently when offline, and can be pointed at a stub via `ZEROMIND_NPM_REGISTRY` (used by the tests).
+## Status
 
-Maintainers: publishing is gated on a git tag (see Releasing) and `package.json` `version` is the source of truth — keep `VERSION` in `src/update.ts`, `.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json` in lockstep with it.
+0.7.0 — the plugin runs no MCP server of its own. It links a machine, writes the remote `/mcp` entry into sixteen harnesses, uploads local files into a world, and ships the two skills. The tool surface is ZeroMind's, served live at `https://origozero.ai/mcp`; the tests drive the CLI end to end against the bundled mock ZeroMind server in [`tools/mock-zeromind/`](tools/mock-zeromind/).
+
+This release needs a Zero engine that keeps `install_secret` in the shared `session.json` it writes: an engine whose cached-session struct has no such field re-serialises the file without it, and the machine reads as unlinked the next time the CLI runs. 0.7.0 therefore ships after that engine release.
 
 ## Development
 
 ```bash
 npm install
-npm test          # run unit tests against the bundled mock ZeroMind server
+npm test          # builds, then runs the suite against the bundled mock ZeroMind server
 npm run build     # compile TypeScript
 npm run lint
 ```
 
-The canonical agent operating manual lives in [`templates/manual.md`](templates/manual.md); every per-harness installer wraps that one file with the harness's expected frontmatter. Adding a new harness is a single entry in [`src/cli-install.ts`](src/cli-install.ts) plus a `ide/<harness>/README.md`.
+The canonical agent operating manual lives in [`templates/manual.md`](templates/manual.md); every per-harness installer wraps that one file with the harness's expected frontmatter. Adding a harness is one entry in [`src/cli-install.ts`](src/cli-install.ts) plus an `ide/<harness>/README.md`.
 
 ## Releasing
 
-Maintainer steps:
-
-1. Bump version in `package.json`.
+1. Bump `version` in `package.json` (and the two `.claude-plugin` manifests).
 2. `git tag vX.Y.Z && git push --tags` — the publish workflow runs.
 
-Requires `NPM_TOKEN` secret in repo settings, scoped to the `@origozero` npm org.
+Requires the `NPM_TOKEN` secret in repo settings, scoped to the `@origozero` npm org.
 
 ## License
 

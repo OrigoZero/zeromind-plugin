@@ -38,3 +38,7 @@ Per Zed's extension submission process:
 
 Bump `version` in `extension.toml` when the npm package version moves; the
 registry pulls the latest tagged version.
+
+## The install secret
+
+A published bundle never holds a secret, so this one names `${ZEROMIND_INSTALL_SECRET}` and Zed expands it. Run `npx @origozero/zeromind link` once, then either export that variable, or run `npx @origozero/zeromind install zed`, which writes the same entry with this machine's own `install_secret` in place of the expansion.

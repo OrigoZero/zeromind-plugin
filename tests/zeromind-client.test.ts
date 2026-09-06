@@ -1,37 +1,28 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { startMockServer, type MockServerHandle } from "../tools/mock-zeromind/index.js";
-import { withTmpConfigDir } from "./helpers/tmp-config.js";
-import { ensureRegistered } from "../src/install.js";
-import { listWorlds, createWorld } from "../src/zeromind-client.js";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { issuer } from "../src/zeromind-client.js";
+import { updateCache } from "../src/config.js";
 
-describe("zeromind REST client (worlds)", () => {
-  let server: MockServerHandle;
-  let tmp: ReturnType<typeof withTmpConfigDir>;
-  beforeAll(async () => {
-    server = await startMockServer({ port: 0 });
-  });
-  afterAll(async () => {
-    await server.stop();
-  });
+describe("zeromind-client: issuer resolution", () => {
   beforeEach(() => {
-    tmp = withTmpConfigDir();
-    process.env.ZEROMIND_CONFIG_DIR = tmp.dir;
-    process.env.ZEROMIND_ISSUER = server.url;
+    process.env.ZEROMIND_CONFIG_DIR = mkdtempSync(join(tmpdir(), "zm-issuer-"));
   });
   afterEach(() => {
     delete process.env.ZEROMIND_CONFIG_DIR;
     delete process.env.ZEROMIND_ISSUER;
-    tmp.cleanup();
   });
 
-  it("creates a world and lists it", async () => {
-    const cfg = await ensureRegistered({ ideName: "t" });
-    server.forceApprove(cfg.install_id, "usr_t");
-    const w = await createWorld(cfg, { name: "test-world" });
-    expect(w.guid).toMatch(/^wld_/);
-    expect(w.name).toBe("test-world");
-    expect(w.owner_user_id).toBe("usr_t");
-    const list = await listWorlds(cfg);
-    expect(list.find((x) => x.guid === w.guid)).toBeDefined();
+  it("falls back to the cache's issuer when the env is unset", () => {
+    delete process.env.ZEROMIND_ISSUER;
+    updateCache({ issuer: "https://zm.local/" });
+    expect(issuer()).toBe("https://zm.local");
+  });
+
+  it("prefers the env over the cache's issuer", () => {
+    updateCache({ issuer: "https://zm.local/" });
+    process.env.ZEROMIND_ISSUER = "https://override.example/";
+    expect(issuer()).toBe("https://override.example");
   });
 });

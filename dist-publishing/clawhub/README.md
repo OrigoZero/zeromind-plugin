@@ -45,3 +45,7 @@ cp ../../skills/zeromind-getting-started/SKILL.md zeromind/SKILL.md
 cd zeromind
 clawhub publish --bump
 ```
+
+## The install secret
+
+A published bundle never holds a secret, so this one names `${ZEROMIND_INSTALL_SECRET}` and openClaw expands it. Run `npx @origozero/zeromind link` once, then either export that variable, or run `npx @origozero/zeromind install openclaw`, which writes the same entry with this machine's own `install_secret` in place of the expansion.

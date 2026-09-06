@@ -1,7 +1,10 @@
 {
   "zeromind": {
-    "command": "npx",
-    "args": ["-y", "@origozero/zeromind"],
-    "env": { "ZEROMIND_IDE_NAME": "claude-code" }
+    "type": "http",
+    "url": "${ZEROMIND_ISSUER:-https://origozero.ai}/mcp",
+    "headers": {
+      "Authorization": "Bearer ${ZEROMIND_INSTALL_SECRET}",
+      "X-ZM-Harness": "claude-code"
+    }
   }
 }

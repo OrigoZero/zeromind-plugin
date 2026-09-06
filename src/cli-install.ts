@@ -1,14 +1,14 @@
-import { existsSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { MANUAL } from "./instructions.js";
 import {
   BLOCK_BEGIN,
   BLOCK_END,
   copyPluginBundle,
   editJsonEntry,
+  removeJsonEntry,
   editJsoncEntry,
   upsertMarkdownBlock,
   upsertTomlBlock,
@@ -17,19 +17,33 @@ import {
   upsertYamlMapEntry,
   writeOwnedFile,
 } from "./config-edit.js";
+import { writeClaudeEnv } from "./cli-link.js";
+import { cachePath, installSecret, loadCache } from "./config.js";
+import {
+  remoteServer,
+  remoteUrl,
+  SECRET_ENV,
+  SERVER_KEY,
+  type RemoteServer,
+} from "./server-spec.js";
 
 /**
- * Per-harness installer. `npx @origozero/zeromind install <harness>`
- * runs every step needed to make ZeroMind feel native in <harness> —
- * MCP server registration into that harness's config, agent instructions
- * into that harness's discovery path, plus any auxiliary setup. Each
- * step is independent and idempotent. Where the harness has a built-in
- * CLI subcommand for MCP registration (Codex, Goose) we shell out to it
- * and fall back to a direct config edit if it isn't on PATH.
+ * Per-harness installer. `zeromind install <harness>` runs every step
+ * needed to make ZeroMind feel native in <harness> — the remote `/mcp`
+ * server into that harness's own config, agent instructions into that
+ * harness's discovery path, plus any auxiliary setup. Each step is
+ * independent and idempotent.
  *
- * Steps that require user UI (JetBrains AI MCP picker, Amp settings UI)
- * are emitted as Manual steps with copy-paste instructions printed at the
- * end — those harnesses don't expose a programmatic config path.
+ * Every harness points at the same address, `https://origozero.ai/mcp`,
+ * and identifies itself with `X-ZM-Harness`. What differs per harness is
+ * the shape its config file wants that in, and whether it can expand an
+ * environment variable in the file (Claude Code can, so its config holds
+ * `${ZEROMIND_INSTALL_SECRET}`; the rest hold the machine's own install
+ * secret, in a file readable only by its owner).
+ *
+ * Steps that require a harness UI, or a harness whose MCP entry point is
+ * unconfirmed (openClaw, Aider), are emitted as Manual steps carrying the
+ * URL and the headers, printed at the end.
  */
 
 export type Harness =
@@ -52,11 +66,20 @@ export type Harness =
 
 type Scope = "project" | "global";
 
-type StepStatus = "written" | "updated" | "exists" | "manual" | "skipped";
+/** `skipped` is a step with nothing to do here; a step that tried and
+ *  could not is `failed`, and the command says so with its exit code. */
+type StepStatus = "written" | "updated" | "exists" | "manual" | "skipped" | "failed";
+
+/** What a step wrote, so a caller can tell one kind of file from another
+ *  without reading it: agent instructions, a harness's MCP config, or a
+ *  whole publish bundle that carries both. */
+export type StepKind = "instructions" | "config" | "bundle";
 
 export type StepResult = {
   label: string;
   status: StepStatus;
+  /** What this step wrote. Every step that touches a path declares one. */
+  kind?: StepKind;
   /** Path that was touched, when applicable. */
   path?: string;
   /** Free-form note printed under the step (next-action hint for manual
@@ -68,6 +91,13 @@ type Ctx = {
   cwd: string;
   scope: Scope;
   force: boolean;
+  /**
+   * Whether a step may run a harness's own CLI. A child process resolves its
+   * own home directory, so it writes where the caller's environment says
+   * nothing — which is why a caller that has redirected HOME (a test) turns
+   * this off and takes the file-writing path instead.
+   */
+  shell: boolean;
 };
 
 type Step = {
@@ -87,6 +117,24 @@ type HarnessSpec = {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = join(HERE, "..");
+
+const tryRead = (rel: string): string | undefined => {
+  try {
+    return readFileSync(join(PKG_ROOT, rel), "utf8");
+  } catch {
+    return undefined;
+  }
+};
+
+const MANUAL_FALLBACK = `ZeroMind: a shared content library + a 3D engine you drive remotely, served at https://origozero.ai/mcp. Run \`zeromind.search\` BEFORE writing anything for "make me a X" requests — installing existing published content beats building from scratch. Then \`world.launch\` if nobody has the world open, \`zeromind.install\`, iterate with \`execute\`/\`capture\`, publish from the engine bash with \`zm add . && zm commit -m '...' && zm push\`. Call \`zeromind.help\` for the full guides.`;
+
+/**
+ * Canonical condensed operating manual, single source for the body of every
+ * harness-specific artifact `zeromind install <harness>` writes (AGENTS.md /
+ * GEMINI.md / SKILL.md / .cursor/rules/zeromind.mdc / .clinerules /
+ * CONVENTIONS.md / …).
+ */
+const MANUAL: string = tryRead(join("templates", "manual.md")) ?? MANUAL_FALLBACK;
 
 const expand = (p: string): string =>
   p.startsWith("~/") ? join(homedir(), p.slice(2)) : p;
@@ -114,14 +162,65 @@ const tryShell = (
   }
 };
 
-const SERVER_SPEC = {
-  command: "npx",
-  args: ["-y", "@origozero/zeromind"],
+/** What a command printed, or undefined if it could not be run. */
+const shellOutput = (cmd: string, args: string[]): string | undefined => {
+  try {
+    return execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  } catch {
+    return undefined;
+  }
 };
 
-const ideEnv = (ide: string): Record<string, string> => ({
-  ZEROMIND_IDE_NAME: ide,
+/** The literal descriptor for harnesses that read no environment in their config. */
+const literalServer = (harness: string): RemoteServer => {
+  const secret = installSecret(loadCache());
+  if (!secret) throw new Error("this machine is not linked; run `zeromind link` first");
+  return remoteServer(harness, secret);
+};
+
+/** The expanding descriptor for harnesses that interpolate env in their config. */
+const expandingServer = (harness: string, expansion: string): RemoteServer =>
+  remoteServer(harness, expansion);
+
+/** The form for harnesses whose HTTP entry carries no `type` discriminator. */
+const urlHeaders = (s: RemoteServer): { url: string; headers: Record<string, string> } => ({
+  url: s.url,
+  headers: s.headers,
 });
+
+/** A config file now holding the install secret belongs to its owner alone. */
+const restrictToOwner = (path: string): void => {
+  if (platform() === "win32") return;
+  try {
+    chmodSync(path, 0o600);
+  } catch {
+    // The harness may hold the file open; the entry is written either way.
+  }
+};
+
+/** What a manual step tells the user to add, wherever their harness keeps MCP servers. */
+const manualEntry = (harness: string): string =>
+  `  url: ${remoteUrl()}\n  header Authorization: Bearer <this machine's install_secret from ${cachePath()}>\n  header X-ZM-Harness: ${harness}`;
+
+/**
+ * `codex mcp add` takes `--url` for a streamable HTTP server. It can stand
+ * in for the config.toml edit only when it can also carry the two headers
+ * the server is reached with, which the CLI advertises as `--header`.
+ */
+const codexAddCarriesHeaders = (): boolean => {
+  const help = shellOutput("codex", ["mcp", "add", "--help"]);
+  return help !== undefined && help.includes("--url") && help.includes("--header");
+};
+
+/** VS Code's per-user config directory, home to both Copilot's and Cline's settings. */
+const vscodeUserDir = (): string => {
+  const home = homedir();
+  if (platform() === "win32") {
+    return join(process.env.APPDATA ?? join(home, "AppData/Roaming"), "Code/User");
+  }
+  if (platform() === "darwin") return join(home, "Library/Application Support/Code/User");
+  return join(home, ".config/Code/User");
+};
 
 const loadSkillFile = (skillDir: string): string => {
   const p = join(PKG_ROOT, "skills", skillDir, "SKILL.md");
@@ -137,7 +236,7 @@ const SKILL_FRONTMATTER = (name: string, description: string): string =>
   `---\nname: ${name}\ndescription: ${description}\n---\n\n`;
 
 const ZM_SKILL_DESCRIPTION =
-  "ZeroMind is a shared library of published worlds + assets and a 3D engine you drive remotely. Check ZeroMind first before building from scratch; install with `zeromind.install`; iterate in the connected world with `execute`/`capture`. Activate for any 'make me a X' / 'add a Y' Zero engine request.";
+  "ZeroMind is a shared library of published worlds + assets and a 3D engine you drive remotely. Check ZeroMind first before building from scratch; install with `zeromind.install`; iterate the world you have open with `execute`/`capture`. Activate for any 'make me a X' / 'add a Y' Zero engine request.";
 
 const newSkill = (manual: string): string =>
   SKILL_FRONTMATTER("zeromind", ZM_SKILL_DESCRIPTION) + manual;
@@ -156,7 +255,7 @@ const writeFileStep = (
   run: (ctx) => {
     const path = pathBuilder(ctx);
     const status = writeOwnedFile(path, body(), ctx.force);
-    return { label, status, path };
+    return { label, status, path, kind: "instructions" };
   },
 });
 
@@ -169,24 +268,22 @@ const upsertBlockStep = (
   run: (ctx) => {
     const path = pathBuilder(ctx);
     const status = upsertMarkdownBlock(path, body());
-    return { label, status, path };
+    return { label, status, path, kind: "instructions" };
   },
 });
 
 const editJsonMcpServerStep = (
   label: string,
   pathBuilder: (ctx: Ctx) => string,
-  ideName: string,
+  entry: () => unknown,
   parentKey = "mcpServers",
 ): Step => ({
   label,
   run: (ctx) => {
     const path = pathBuilder(ctx);
-    const status = editJsonEntry(path, parentKey, "zeromind", {
-      ...SERVER_SPEC,
-      env: ideEnv(ideName),
-    });
-    return { label, status, path };
+    const status = editJsonEntry(path, parentKey, SERVER_KEY, entry());
+    restrictToOwner(path);
+    return { label, status, path, kind: "config" };
   },
 });
 
@@ -194,33 +291,14 @@ const editJsoncMcpServerStep = (
   label: string,
   pathBuilder: (ctx: Ctx) => string,
   parentPath: string[],
-  ideName: string,
-  shape: "command-args" | "zed-context" | "opencode" = "command-args",
+  entry: () => unknown,
 ): Step => ({
   label,
   run: async (ctx) => {
     const path = pathBuilder(ctx);
-    let entry: unknown;
-    if (shape === "zed-context") {
-      entry = {
-        command: {
-          path: SERVER_SPEC.command,
-          args: SERVER_SPEC.args,
-          env: ideEnv(ideName),
-        },
-      };
-    } else if (shape === "opencode") {
-      entry = {
-        type: "local",
-        command: [SERVER_SPEC.command, ...SERVER_SPEC.args],
-        environment: ideEnv(ideName),
-        enabled: true,
-      };
-    } else {
-      entry = { ...SERVER_SPEC, env: ideEnv(ideName) };
-    }
-    const status = await editJsoncEntry(path, parentPath, "zeromind", entry);
-    return { label, status, path };
+    const status = await editJsoncEntry(path, parentPath, SERVER_KEY, entry());
+    restrictToOwner(path);
+    return { label, status, path, kind: "config" };
   },
 });
 
@@ -238,7 +316,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
   claude: {
     name: "Claude Code",
     channel:
-      "skills (`.claude/skills/<name>/SKILL.md`) + MCP server in `~/.claude/settings.json`",
+      "skills (`.claude/skills/<name>/SKILL.md`) + MCP server in `~/.claude.json`, with its bearer expanded from `~/.claude/settings.json` `env`",
     defaultScope: "project",
     scopes: ["project", "global"],
     steps: [
@@ -252,11 +330,50 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
         claudeSkillPath("zeromind-library"),
         () => loadSkillFile("zeromind-library"),
       ),
-      editJsonMcpServerStep(
-        "MCP server in ~/.claude/settings.json",
-        () => expand("~/.claude/settings.json"),
-        "claude-code",
-      ),
+      {
+        // Claude Code reads user-scope MCP servers from ~/.claude.json —
+        // `claude mcp list` shows an entry there and shows none from
+        // settings.json — and expands `${VAR}` in an entry's url and headers
+        // from the settings `env` the step below writes, so the config never
+        // holds the secret itself.
+        label: "MCP server in ~/.claude.json",
+        run: () => {
+          const path = expand("~/.claude.json");
+          const status = editJsonEntry(
+            path,
+            "mcpServers",
+            SERVER_KEY,
+            expandingServer("claude-code", `\${${SECRET_ENV}}`),
+          );
+          // No chmod: this entry names the variable, not the secret, and the
+          // file is Claude Code's own — its mode is not this installer's to
+          // set. The secret goes into settings.json, which is restricted.
+          // An earlier version of this installer wrote the entry into
+          // settings.json, where nothing reads it; take that one out.
+          const stale = expand("~/.claude/settings.json");
+          const removed = existsSync(stale) ? removeJsonEntry(stale, "mcpServers", SERVER_KEY) : false;
+          return {
+            label: "MCP server in ~/.claude.json",
+            status,
+            path,
+            kind: "config",
+            note: removed
+              ? "Removed the stale `mcpServers.zeromind` an earlier install left in ~/.claude/settings.json, which Claude Code does not read."
+              : undefined,
+          };
+        },
+      },
+      {
+        label: `${SECRET_ENV} in ~/.claude/settings.json`,
+        run: () => {
+          const secret = installSecret(loadCache());
+          if (!secret) throw new Error("this machine is not linked; run `zeromind link` first");
+          const path = expand("~/.claude/settings.json");
+          const status = writeClaudeEnv(secret, path);
+          restrictToOwner(path);
+          return { label: `${SECRET_ENV} in ~/.claude/settings.json`, status, path, kind: "config" };
+        },
+      },
       {
         label: "marketplace plugin (one-shot equivalent)",
         run: () => ({
@@ -297,6 +414,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Cursor plugin: copy bundle to ~/.cursor/plugins/local/",
             status,
             path: dest,
+            kind: "bundle",
             note:
               status === "exists"
                 ? "Plugin already at this path — re-run with --force to refresh."
@@ -315,14 +433,19 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
               : join(ctx.cwd, ".cursor/rules/zeromind.mdc");
           writeOwnedFile(rulePath, cursorMdc(MANUAL), ctx.force);
           const mcpPath = expand("~/.cursor/mcp.json");
-          const status = editJsonEntry(mcpPath, "mcpServers", "zeromind", {
-            ...SERVER_SPEC,
-            env: ideEnv("cursor"),
-          });
+          // Cursor's HTTP form is the bare `url` + `headers` pair.
+          const status = editJsonEntry(
+            mcpPath,
+            "mcpServers",
+            SERVER_KEY,
+            urlHeaders(literalServer("cursor")),
+          );
+          restrictToOwner(mcpPath);
           return {
             label: "Manual fallback: rule + ~/.cursor/mcp.json",
             status,
             path: mcpPath,
+            kind: "config",
           };
         },
       },
@@ -357,6 +480,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Codex plugin: copy bundle to personal marketplace",
             status,
             path: dest,
+            kind: "bundle",
             note:
               status === "exists"
                 ? "Plugin already at this path — re-run with --force to refresh."
@@ -370,31 +494,40 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
         // browser. Belt-and-suspenders — Codex reads BOTH plugin
         // manifests AND config.toml entries.
         label: "Manual fallback: MCP server in ~/.codex/config.toml",
-        run: () => {
-          if (isOnPath("codex")) {
+        run: (ctx) => {
+          const s = literalServer("codex");
+          const path = expand("~/.codex/config.toml");
+          if (ctx.shell && isOnPath("codex") && codexAddCarriesHeaders()) {
             const r = tryShell("codex", [
               "mcp",
               "add",
-              "zeromind",
-              "--",
-              SERVER_SPEC.command,
-              ...SERVER_SPEC.args,
+              SERVER_KEY,
+              "--url",
+              s.url,
+              ...Object.entries(s.headers).flatMap(([k, v]) => ["--header", `${k}: ${v}`]),
             ]);
             if (r.ok) {
+              restrictToOwner(path);
               return {
-                label: "Manual fallback: `codex mcp add zeromind`",
+                label: "Manual fallback: `codex mcp add zeromind --url`",
                 status: "updated",
-                note: "Ran `codex mcp add` as the manual fallback.",
+                path,
+                kind: "config",
+                note: "Registered through the Codex CLI, which writes this file.",
               };
             }
           }
-          const path = expand("~/.codex/config.toml");
-          const body = `[mcp_servers.zeromind]\ncommand = "npx"\nargs = ["-y", "@origozero/zeromind"]\n\n[mcp_servers.zeromind.env]\nZEROMIND_IDE_NAME = "codex"\n`;
+          const headers = Object.entries(s.headers)
+            .map(([k, v]) => `"${k}" = "${v}"`)
+            .join(", ");
+          const body = `[mcp_servers.zeromind]\nurl = "${s.url}"\nhttp_headers = { ${headers} }\n`;
           const status = upsertTomlBlock(path, body);
+          restrictToOwner(path);
           return {
             label: "Manual fallback: MCP server in ~/.codex/config.toml",
             status,
             path,
+            kind: "config",
           };
         },
       },
@@ -442,6 +575,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Gemini extension: copy bundle to ~/.gemini/extensions/",
             status,
             path: dest,
+            kind: "bundle",
             note:
               status === "exists"
                 ? "Extension already at this path — re-run with --force to refresh."
@@ -455,14 +589,18 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
         label: "Manual fallback: MCP server in ~/.gemini/settings.json",
         run: () => {
           const path = expand("~/.gemini/settings.json");
-          const status = editJsonEntry(path, "mcpServers", "zeromind", {
-            ...SERVER_SPEC,
-            env: ideEnv("gemini-cli"),
+          // Gemini CLI names a streamable-HTTP server's address `httpUrl`.
+          const s = literalServer("gemini-cli");
+          const status = editJsonEntry(path, "mcpServers", SERVER_KEY, {
+            httpUrl: s.url,
+            headers: s.headers,
           });
+          restrictToOwner(path);
           return {
             label: "Manual fallback: MCP server in ~/.gemini/settings.json",
             status,
             path,
+            kind: "config",
           };
         },
       },
@@ -499,8 +637,11 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             ? expand("~/.config/opencode/opencode.jsonc")
             : join(ctx.cwd, "opencode.jsonc"),
         ["mcp"],
-        "opencode",
-        "opencode",
+        // OpenCode calls an HTTP server `remote`.
+        () => {
+          const s = literalServer("opencode");
+          return { type: "remote", url: s.url, headers: s.headers, enabled: true };
+        },
       ),
     ],
   },
@@ -517,12 +658,30 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
         (ctx) => join(ctx.cwd, ".clinerules/zeromind.md"),
         () => MANUAL,
       ),
+      editJsonMcpServerStep(
+        "MCP server in Cline's cline_mcp_settings.json",
+        () =>
+          join(
+            vscodeUserDir(),
+            "globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
+          ),
+        () => {
+          const s = literalServer("cline");
+          return {
+            type: "streamableHttp",
+            url: s.url,
+            headers: s.headers,
+            disabled: false,
+            autoApprove: [],
+          };
+        },
+      ),
       {
-        label: "MCP server: Cline settings UI",
+        label: "MCP server: Cline settings UI (JetBrains, or a VS Code variant)",
         run: () => ({
-          label: "MCP server: Cline settings UI",
+          label: "MCP server: Cline settings UI (JetBrains, or a VS Code variant)",
           status: "manual",
-          note: "Open Cline's MCP Servers UI (Command Palette → 'Cline: MCP Servers') and add:\n  { \"command\": \"npx\", \"args\": [\"-y\", \"@origozero/zeromind\"], \"env\": { \"ZEROMIND_IDE_NAME\": \"cline\" } }\nA Cline MCP Marketplace listing for one-click install is in dist-publishing/cline-marketplace/.",
+          note: `The step above writes VS Code's copy of cline_mcp_settings.json. On JetBrains, or a Code variant that stores it elsewhere, open Cline's MCP Servers UI (Command Palette → 'Cline: MCP Servers' → 'Configure MCP Servers') and add a streamableHttp server:\n${manualEntry("cline")}\nA Cline MCP Marketplace listing for one-click install is in dist-publishing/cline-marketplace/.`,
         }),
       },
     ],
@@ -547,13 +706,17 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
         label: "MCP server in ~/.continue/config.yaml",
         run: async () => {
           const path = expand("~/.continue/config.yaml");
+          // Continue's HTTP transport is `streamable-http`, and headers
+          // ride in `requestOptions`.
+          const s = literalServer("continue");
           const status = await upsertYamlListEntry(path, "mcpServers", {
-            name: "zeromind",
-            command: SERVER_SPEC.command,
-            args: SERVER_SPEC.args,
-            env: ideEnv("continue"),
+            name: SERVER_KEY,
+            type: "streamable-http",
+            url: s.url,
+            requestOptions: { headers: s.headers },
           });
-          return { label: "MCP server in ~/.continue/config.yaml", status, path };
+          restrictToOwner(path);
+          return { label: "MCP server in ~/.continue/config.yaml", status, path, kind: "config" };
         },
       },
     ],
@@ -574,7 +737,11 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
       editJsonMcpServerStep(
         "MCP server in ~/.codeium/windsurf/mcp_config.json",
         () => expand("~/.codeium/windsurf/mcp_config.json"),
-        "windsurf",
+        // Windsurf names a remote server's address `serverUrl`.
+        () => {
+          const s = literalServer("windsurf");
+          return { serverUrl: s.url, headers: s.headers };
+        },
       ),
     ],
   },
@@ -615,6 +782,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Zed extension: copy bundle to dev-extensions",
             status,
             path: dest,
+            kind: "bundle",
             note:
               status === "exists"
                 ? "Extension already at this path — re-run with --force to refresh."
@@ -631,19 +799,15 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
           const status = await editJsoncEntry(
             path,
             ["context_servers"],
-            "zeromind",
-            {
-              command: {
-                path: SERVER_SPEC.command,
-                args: SERVER_SPEC.args,
-                env: ideEnv("zed"),
-              },
-            },
+            SERVER_KEY,
+            urlHeaders(literalServer("zed")),
           );
+          restrictToOwner(path);
           return {
             label: "Manual fallback: MCP server in ~/.config/zed/settings.json",
             status,
             path,
+            kind: "config",
           };
         },
       },
@@ -660,7 +824,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
       {
         label: "skill via `openclaw skills install`",
         run: (ctx) => {
-          if (isOnPath("openclaw")) {
+          if (ctx.shell && isOnPath("openclaw")) {
             const r = tryShell("openclaw", [
               "skills",
               "install",
@@ -685,9 +849,21 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "skill: zeromind",
             status,
             path,
+            kind: "instructions",
             note: "`openclaw` CLI not on PATH — dropped the SKILL.md directly. Install the openclaw CLI to use `openclaw skills install` (and ClawHub for upgrades) in future.",
           };
         },
+      },
+      {
+        // openClaw's MCP entry point is unconfirmed — the skill is this
+        // harness's primary channel. Whichever config its build reads,
+        // the server it points at is the same one.
+        label: "MCP server: wherever openClaw reads MCP servers",
+        run: () => ({
+          label: "MCP server: wherever openClaw reads MCP servers",
+          status: "manual",
+          note: `openClaw's MCP config path is unconfirmed. If your build has one, add a streamable-HTTP server there:\n${manualEntry("openclaw")}\nThe ClawHub package in dist-publishing/clawhub/ carries the same entry with a \`\${${SECRET_ENV}}\` expansion.`,
+        }),
       },
     ],
   },
@@ -713,9 +889,21 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "register in .aider.conf.yml (`read:`)",
             status,
             path,
+            kind: "config",
             note: "Aider includes every line of CONVENTIONS.md in every request. If the file grows past ~200 lines, trim the ZeroMind block to keep latency reasonable.",
           };
         },
+      },
+      {
+        // Aider takes MCP servers on the command line, and an Aider that
+        // predates `--mcp-servers` errors on an unknown key in
+        // `.aider.conf.yml` — so this one is the user's to add.
+        label: "MCP server: `aider --mcp-servers`",
+        run: () => ({
+          label: "MCP server: `aider --mcp-servers`",
+          status: "manual",
+          note: `An Aider with MCP support takes the server as JSON on the command line:\n  aider --mcp-servers '{"mcpServers":{"zeromind":{"url":"${remoteUrl()}","headers":{"Authorization":"Bearer <this machine's install_secret from ${cachePath()}>","X-ZM-Harness":"aider"}}}}'\nWithout it, CONVENTIONS.md still reaches the agent; the zeromind.* tools do not.`,
+        }),
       },
     ],
   },
@@ -735,26 +923,19 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
       {
         label: "MCP server in VS Code user settings.json",
         run: async () => {
-          const home = homedir();
-          const candidates =
-            platform() === "win32"
-              ? [
-                  join(process.env.APPDATA ?? join(home, "AppData/Roaming"), "Code/User/settings.json"),
-                ]
-              : platform() === "darwin"
-                ? [join(home, "Library/Application Support/Code/User/settings.json")]
-                : [join(home, ".config/Code/User/settings.json")];
-          const path = candidates[0];
+          const path = join(vscodeUserDir(), "settings.json");
           const status = await editJsoncEntry(
             path,
             ["github.copilot.advanced", "mcp", "servers"],
-            "zeromind",
-            { ...SERVER_SPEC, env: ideEnv("copilot") },
+            SERVER_KEY,
+            literalServer("copilot"),
           );
+          restrictToOwner(path);
           return {
             label: "MCP server in VS Code user settings.json",
             status,
             path,
+            kind: "config",
             note: "VS Code Copilot agent mode reads MCP servers from this JSONC path. If you use a Code variant (Insiders / Cursor / VSCodium) the path differs; pass --copilot-settings to override, or wire it through the Copilot settings UI.",
           };
         },
@@ -775,23 +956,28 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
         label: "Extension entry in ~/.config/goose/config.yaml",
         run: async () => {
           const path = expand("~/.config/goose/config.yaml");
+          // Goose names a remote extension's address `uri`, under the
+          // `streamable_http` type.
+          const s = literalServer("goose");
           const status = await upsertYamlListEntry(path, "extensions", {
-            name: "zeromind",
+            name: SERVER_KEY,
             display_name: "ZeroMind",
             description:
               "ZeroMind — search/install published worlds + assets and drive the Zero engine in your browser.",
             enabled: true,
-            type: "stdio",
-            cmd: SERVER_SPEC.command,
-            args: SERVER_SPEC.args,
+            type: "streamable_http",
+            uri: s.url,
+            headers: s.headers,
             env_keys: [],
             timeout: 300,
             bundled: false,
           });
+          restrictToOwner(path);
           return {
             label: "Extension entry in ~/.config/goose/config.yaml",
             status,
             path,
+            kind: "config",
           };
         },
       },
@@ -801,49 +987,22 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
         // sharing / docs / one-click flows.
         label: "Generate `goose://extension` deeplink (for one-click install)",
         run: () => {
+          // A deeplink is made to be shared, so it carries the address and
+          // nothing else — each recipient adds their own bearer.
           const params = new URLSearchParams({
-            cmd: SERVER_SPEC.command,
-            id: "zeromind",
+            type: "streamable_http",
+            url: remoteUrl(),
+            id: SERVER_KEY,
             name: "ZeroMind",
             description:
               "Drive your browser-running Zero engine worlds via MCP.",
             timeout: "300",
           });
-          for (const a of SERVER_SPEC.args) params.append("arg", a);
           const deeplink = `goose://extension?${params.toString()}`;
           return {
             label: "Generate `goose://extension` deeplink",
             status: "manual",
-            note: `Share this URL for one-click install:\n  ${deeplink}\n(Recipients click it in their browser → Goose registers the extension.)`,
-          };
-        },
-      },
-      {
-        // Try the CLI subcommand as a third path (idempotent — Goose
-        // dedupes by name).
-        label: "MCP server: `goose mcp add zeromind` (if CLI on PATH)",
-        run: () => {
-          if (isOnPath("goose")) {
-            const r = tryShell("goose", [
-              "mcp",
-              "add",
-              "zeromind",
-              "--",
-              SERVER_SPEC.command,
-              ...SERVER_SPEC.args,
-            ]);
-            if (r.ok) {
-              return {
-                label: "MCP server: `goose mcp add zeromind`",
-                status: "updated",
-                note: "Ran `goose mcp add` (belt-and-suspenders alongside the config.yaml edit).",
-              };
-            }
-          }
-          return {
-            label: "MCP server: `goose mcp add zeromind`",
-            status: "skipped",
-            note: "`goose` CLI not on PATH. The config.yaml edit above is sufficient — no action needed.",
+            note: `Share this URL for one-click install:\n  ${deeplink}\n(Recipients click it in their browser → Goose registers the extension. Each then adds their own \`Authorization: Bearer <install_secret>\` and \`X-ZM-Harness: goose\` headers, which the config.yaml edit above already did for you.)`,
           };
         },
       },
@@ -870,7 +1029,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
       editJsonMcpServerStep(
         "MCP server in .junie/mcp/mcp.json",
         (ctx) => join(ctx.cwd, ".junie/mcp/mcp.json"),
-        "junie",
+        () => literalServer("junie"),
         "mcpServers",
       ),
     ],
@@ -887,12 +1046,18 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
         (ctx) => join(ctx.cwd, "AGENT.md"),
         () => `## ZeroMind\n\n${MANUAL}`,
       ),
+      editJsonMcpServerStep(
+        "MCP server in ~/.config/amp/settings.json",
+        () => expand("~/.config/amp/settings.json"),
+        () => urlHeaders(literalServer("amp")),
+        "amp.mcpServers",
+      ),
       {
-        label: "MCP server: Amp settings UI",
+        label: "MCP server: Amp settings UI (VS Code extension)",
         run: () => ({
-          label: "MCP server: Amp settings UI",
+          label: "MCP server: Amp settings UI (VS Code extension)",
           status: "manual",
-          note: "Add through Amp's MCP servers settings page:\n  command: npx\n  args: -y @origozero/zeromind\n  env: ZEROMIND_IDE_NAME=amp",
+          note: `The step above writes the Amp CLI's settings file. Amp's VS Code extension keeps its own \`amp.mcpServers\` in VS Code settings — add it through Amp's MCP servers settings page:\n${manualEntry("amp")}`,
         }),
       },
     ],
@@ -915,15 +1080,18 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
         label: "MCP server in ~/.hermes/config.yaml",
         run: async () => {
           const path = expand("~/.hermes/config.yaml");
-          const status = await upsertYamlMapEntry(path, "mcp_servers", "zeromind", {
-            command: SERVER_SPEC.command,
-            args: SERVER_SPEC.args,
-            env: { ZEROMIND_IDE_NAME: "hermes" },
+          const s = literalServer("hermes");
+          const status = await upsertYamlMapEntry(path, "mcp_servers", SERVER_KEY, {
+            type: "streamable_http",
+            url: s.url,
+            headers: s.headers,
           });
+          restrictToOwner(path);
           return {
             label: "MCP server in ~/.hermes/config.yaml",
             status,
             path,
+            kind: "config",
             note: "Once the upstream catalog manifest is merged into nousresearch/hermes-agent, this will be installable via `hermes mcp install zeromind` instead.",
           };
         },
@@ -948,6 +1116,7 @@ const HARNESSES: Record<Harness, HarnessSpec> = {
             label: "Plugin bundle: ~/.hermes/plugins/zeromind/",
             status,
             path: dest,
+            kind: "bundle",
             note:
               status === "exists"
                 ? "Plugin already at this path — re-run with --force to refresh."
@@ -974,6 +1143,8 @@ export const installHarness = async (opts: {
   scope?: Scope;
   cwd?: string;
   force?: boolean;
+  /** May a step run the harness's own CLI? Off, every step writes files. */
+  shell?: boolean;
 }): Promise<InstallReport> => {
   const spec = HARNESSES[opts.harness];
   if (!spec) throw new Error(`unknown harness: ${opts.harness}`);
@@ -983,17 +1154,18 @@ export const installHarness = async (opts: {
       `${spec.name}: ${scope} scope not supported (supported: ${spec.scopes.join(", ")})`,
     );
   }
-  const ctx: Ctx = { cwd: opts.cwd ?? process.cwd(), scope, force: opts.force ?? false };
+  const ctx: Ctx = {
+    cwd: opts.cwd ?? process.cwd(),
+    scope,
+    force: opts.force ?? false,
+    shell: opts.shell ?? true,
+  };
   const steps: StepResult[] = [];
   for (const step of spec.steps) {
     try {
       steps.push(await step.run(ctx));
     } catch (e) {
-      steps.push({
-        label: step.label,
-        status: "skipped",
-        note: `failed: ${(e as Error).message}`,
-      });
+      steps.push({ label: step.label, status: "failed", note: (e as Error).message });
     }
   }
   return {
@@ -1030,19 +1202,21 @@ const STATUS_GLYPH: Record<StepStatus, string> = {
   updated: "~",
   exists: "=",
   manual: "?",
-  skipped: "x",
+  skipped: "-",
+  failed: "!",
 };
 
 const HELP = `zeromind install <harness> [--global | --project] [--force] [--cwd <p>]
 zeromind install --list
 
 Native end-to-end install per harness. The command runs every step that
-harness needs — MCP server registration into the harness's own config,
+harness needs — the remote \`/mcp\` server into the harness's own config,
 agent instructions into the harness's discovery path, plus any auxiliary
-setup. Where the harness has a CLI subcommand for MCP registration
-(\`codex mcp add\`, \`goose mcp add\`, \`openclaw skills install\`) we shell
-out to it; otherwise we edit the config file directly. Steps that require
-a harness UI (JetBrains AI MCP picker, Amp settings, Cline MCP Servers UI)
+setup. This machine is linked first if it isn't already. Where the
+harness has a CLI subcommand that can carry the server's headers
+(\`codex mcp add --url\`, \`openclaw skills install\`) we shell out to it;
+otherwise we edit the config file directly. Steps that require a harness
+UI, or a harness whose MCP entry point is unconfirmed (openClaw, Aider),
 are printed as manual instructions at the end.
 
 Harnesses:
@@ -1091,6 +1265,15 @@ export const runInstallCli = async (argv: string[]): Promise<void> => {
       process.exit(1);
     }
   }
+  // Every entry the install writes carries this machine's install secret,
+  // so the link comes first when there isn't one yet.
+  if (!installSecret(loadCache())) {
+    const { linkMachine } = await import("./cli-link.js");
+    await linkMachine({
+      out: (line) => process.stdout.write(line + "\n"),
+      wait: (ms) => new Promise<void>((r) => setTimeout(r, ms)),
+    });
+  }
   const report = await installHarness({ harness, scope, cwd, force });
   process.stdout.write(
     `\nzeromind: installing into ${report.name} (${report.scope} scope)\n  channel: ${report.channel}\n\n`,
@@ -1100,15 +1283,24 @@ export const runInstallCli = async (argv: string[]): Promise<void> => {
     process.stdout.write(`  [${STATUS_GLYPH[s.status]}] ${s.label}`);
     if (s.path) process.stdout.write(`  →  ${s.path}`);
     process.stdout.write("\n");
-    if (s.note && (s.status === "manual" || s.status === "skipped")) {
+    if (s.note && (s.status === "manual" || s.status === "skipped" || s.status === "failed")) {
       manualNotes.push(`\n${s.label}:\n${s.note}`);
     }
   }
   process.stdout.write(
-    `\nLegend: + written  ~ updated  = exists (use --force)  ? manual step  x skipped\n`,
+    `\nLegend: + written  ~ updated  = exists (use --force)  ? manual step  - nothing to do  ! failed\n`,
   );
   if (manualNotes.length > 0) {
     process.stdout.write(`\nManual follow-ups:${manualNotes.join("\n")}\n`);
+  }
+  // A step that could not do its job is the command's answer, not a footnote:
+  // a script running this has only the exit code to read.
+  const failed = report.steps.filter((s) => s.status === "failed");
+  if (failed.length > 0) {
+    process.stderr.write(
+      `\nzeromind: ${failed.length} step(s) failed: ${failed.map((s) => s.label).join(", ")}\n`,
+    );
+    process.exitCode = 1;
   }
 };
 

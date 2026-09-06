@@ -36,3 +36,7 @@ PR to [`cursor/plugins`](https://github.com/cursor/plugins) — the official cur
 ## Upgrading
 
 Bump `version` in `.cursor-plugin/plugin.json` when the npm package version moves. Cursor refreshes plugins on startup; users running `npx @origozero/zeromind install cursor --force` get the latest bundle.
+
+## The install secret
+
+A published bundle never holds a secret, so this one names `${env:ZEROMIND_INSTALL_SECRET}` and Cursor expands it. Run `npx @origozero/zeromind link` once, then either export that variable, or run `npx @origozero/zeromind install cursor`, which writes the same entry with this machine's own `install_secret` in place of the expansion.

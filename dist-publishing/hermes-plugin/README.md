@@ -1,6 +1,6 @@
 # Hermes plugin
 
-Optional Python plugin that contributes ZeroMind **skills + a slash command + a context-injection hook** on top of the MCP server. **The MCP server itself is registered separately via `mcp_servers.zeromind` in `~/.hermes/config.yaml`** — that's Hermes' canonical channel for an external MCP server (per [the docs](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp)) and is what makes the tools (`auth_status`, `zeromind.search`, `world.connect`, `execute`, etc.) callable.
+Optional Python plugin that contributes ZeroMind **skills + a slash command + a context-injection hook** on top of the MCP server. **The MCP server itself is registered separately via `mcp_servers.zeromind` in `~/.hermes/config.yaml`** — that's Hermes' canonical channel for an external MCP server (per [the docs](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp)) and is what makes the tools (`zeromind.search`, `world.list`, `execute`, `capture`, etc.) callable.
 
 This plugin is the complement to that config entry.
 

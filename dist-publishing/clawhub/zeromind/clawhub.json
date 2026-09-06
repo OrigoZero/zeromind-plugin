@@ -1,20 +1,20 @@
 {
   "name": "zeromind",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "description": "Drive your browser-running Zero engine worlds from openClaw. ZeroMind is a shared library of published worlds + assets and a 3D engine you remote-control through Luau scripting, the engine VFS, and screenshots. The skill teaches openClaw to check ZeroMind first before building from scratch.",
   "author": "OrigoZero",
   "license": "MIT",
   "homepage": "https://github.com/OrigoZero/zeromind-plugin",
   "tags": ["3d", "engine", "game-dev", "zero", "origozero", "library", "discovery"],
   "requires": {
-    "binary": ["node", "npx"],
-    "minimumNodeVersion": "18"
+    "env": ["ZEROMIND_INSTALL_SECRET"]
   },
   "mcp": {
-    "command": "npx",
-    "args": ["-y", "@origozero/zeromind"],
-    "env": {
-      "ZEROMIND_IDE_NAME": "openclaw"
+    "type": "http",
+    "url": "https://origozero.ai/mcp",
+    "headers": {
+      "Authorization": "Bearer ${ZEROMIND_INSTALL_SECRET}",
+      "X-ZM-Harness": "openclaw"
     }
   }
 }

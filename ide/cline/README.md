@@ -16,15 +16,18 @@ npx @origozero/zeromind install cline   # writes .clinerules/zeromind.md
 
 ### 2. MCP server
 
-Open Cline's MCP settings (Command Palette → "Cline: MCP Servers" → "Configure MCP Servers") and add:
+`zeromind install cline` writes VS Code's copy of `cline_mcp_settings.json` for you. On JetBrains, or a Code variant that keeps it elsewhere, open Cline's MCP settings (Command Palette → "Cline: MCP Servers" → "Configure MCP Servers") and add:
 
 ```json
 {
   "mcpServers": {
     "zeromind": {
-      "command": "npx",
-      "args": ["-y", "@origozero/zeromind"],
-      "env": { "ZEROMIND_IDE_NAME": "cline" },
+      "type": "streamableHttp",
+      "url": "https://origozero.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer ins_sec_...",
+        "X-ZM-Harness": "cline"
+      },
       "disabled": false,
       "autoApprove": []
     }
@@ -32,8 +35,10 @@ Open Cline's MCP settings (Command Palette → "Cline: MCP Servers" → "Configu
 }
 ```
 
-Reload Cline. The first engine-related prompt triggers the one-time device-code link.
+The install secret is the `install_secret` in `~/.config/zero/session.json` (`%APPDATA%\zero\session.json` on Windows). `zeromind install <harness>` writes the whole entry for you after `zeromind link`.
+
+Reload Cline. If this machine has never been linked, the install runs `zeromind link` first — a one-time device-code approval in your browser.
 
 ## Troubleshooting
 
-**"status failed"** → Node.js isn't on VS Code's PATH. Install from nodejs.org, restart VS Code.
+**"status failed" / 401** → this machine is not linked, or its config holds a stale secret. Run `npx @origozero/zeromind link`, then re-run `npx @origozero/zeromind install <harness>` to rewrite the entry. Node.js is needed to run those two commands; the server itself is reached over HTTPS, not spawned locally.

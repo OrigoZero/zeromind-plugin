@@ -1,12 +1,52 @@
-import { describe, it, expect } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { describe, it, expect, beforeEach } from "vitest";
+import { spawn } from "node:child_process";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { platform, tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
 import { installHarness, listHarnesses, type Harness } from "../src/cli-install.js";
+import { updateCache } from "../src/config.js";
 
 const newTmp = (): string => mkdtempSync(join(tmpdir(), "zm-install-"));
 
+/** Every file a step touched — some steps install a plugin BUNDLE (a directory). */
+const collect = (p: string): string[] => {
+  try {
+    const st = statSync(p);
+    if (st.isFile()) return [p];
+    if (st.isDirectory()) return readdirSync(p).flatMap((c) => collect(join(p, c)));
+  } catch {
+    // A step can name a path it did not create.
+  }
+  return [];
+};
+
+const REMOTE_URL = "https://origozero.ai/mcp";
+
+/** Point every home-anchored config path at `dir`. `os.homedir()` reads
+ *  USERPROFILE on Windows and HOME elsewhere; APPDATA anchors VS Code's. */
+const useHome = (dir: string): void => {
+  process.env.HOME = dir;
+  process.env.USERPROFILE = dir;
+  process.env.APPDATA = join(dir, "AppData/Roaming");
+};
+
 describe("cli-install: per-harness full native install", () => {
+  // The installer writes this machine's own install secret into each
+  // harness's config, so every test runs against a linked cache of its own.
+  beforeEach(() => {
+    process.env.ZEROMIND_CONFIG_DIR = newTmp();
+    updateCache({ install_id: "inst_test", install_secret: "ins_sec_test" });
+  });
+
   it("lists every harness with at least one scope, a channel, and steps", () => {
     const harnesses = listHarnesses();
     const names = harnesses.map((h) => h.harness);
@@ -38,10 +78,10 @@ describe("cli-install: per-harness full native install", () => {
     }
   });
 
-  it("Claude install drops both bundled skills + adds the MCP server to ~/.claude/settings.json (one shot)", async () => {
+  it("Claude install drops both bundled skills + adds the MCP server to ~/.claude.json (one shot)", async () => {
     const cwd = newTmp();
-    process.env.HOME = cwd;
-    const r = await installHarness({ harness: "claude", scope: "project", cwd });
+    useHome(cwd);
+    const r = await installHarness({ harness: "claude", scope: "project", cwd, shell: false });
     const gettingStarted = r.steps.find((s) => s.label.includes("getting-started"))!;
     const library = r.steps.find((s) => s.label.includes("library"))!;
     expect(gettingStarted.status).toBe("written");
@@ -53,19 +93,79 @@ describe("cli-install: per-harness full native install", () => {
     expect(skill.startsWith("---\n")).toBe(true);
     expect(skill).toMatch(/zeromind\.search/);
 
-    const mcpStep = r.steps.find((s) => s.label.includes("settings.json"))!;
+    const mcpStep = r.steps.find((s) => s.label.startsWith("MCP server"))!;
     expect(mcpStep.status === "written" || mcpStep.status === "updated").toBe(true);
-    const settings = JSON.parse(readFileSync(mcpStep.path!, "utf8")) as {
-      mcpServers: { zeromind: { command: string; args: string[]; env: unknown } };
+    // Claude Code reads user-scope MCP servers from ~/.claude.json; the entry
+    // goes where the reader looks, not into settings.json.
+    expect(mcpStep.path).toBe(join(cwd, ".claude.json"));
+    const userConfig = JSON.parse(readFileSync(mcpStep.path!, "utf8")) as {
+      mcpServers: { zeromind: { type: string; url: string; headers: Record<string, string> } };
     };
-    expect(settings.mcpServers.zeromind.command).toBe("npx");
-    expect(settings.mcpServers.zeromind.args).toEqual(["-y", "@origozero/zeromind"]);
+    // Claude Code expands `${VAR}` from its own settings `env`, so the
+    // entry names the variable and the second step supplies the value.
+    expect(userConfig.mcpServers.zeromind).toEqual({
+      type: "http",
+      url: "https://origozero.ai/mcp",
+      headers: {
+        Authorization: "Bearer ${ZEROMIND_INSTALL_SECRET}",
+        "X-ZM-Harness": "claude-code",
+      },
+    });
+    const envStep = r.steps.find((s) => s.label.startsWith("ZEROMIND_INSTALL_SECRET"))!;
+    const settings = JSON.parse(readFileSync(envStep.path!, "utf8")) as {
+      env: Record<string, string>;
+      mcpServers?: unknown;
+    };
+    expect(envStep.path).toBe(join(cwd, ".claude/settings.json"));
+    expect(settings.env.ZEROMIND_INSTALL_SECRET).toBe("ins_sec_test");
+    expect(settings.mcpServers).toBeUndefined();
+  });
+
+  it("leaves ~/.claude.json untouched when the entry already says what it would write", async () => {
+    const cwd = newTmp();
+    useHome(cwd);
+    const first = await installHarness({ harness: "claude", scope: "project", cwd, shell: false });
+    const claudeJson = first.steps.find((s) => s.label.startsWith("MCP server"))!.path!;
+    const before = { bytes: readFileSync(claudeJson), at: statSync(claudeJson).mtimeMs };
+
+    const second = await installHarness({
+      harness: "claude",
+      scope: "project",
+      cwd,
+      force: true,
+      shell: false,
+    });
+
+    // Claude Code writes this file while it runs: an edit that changes
+    // nothing can only lose what the harness wrote in between.
+    const mcpStep = second.steps.find((s) => s.label.startsWith("MCP server"))!;
+    expect(mcpStep.status).toBe("exists");
+    expect(readFileSync(claudeJson).equals(before.bytes)).toBe(true);
+    expect(statSync(claudeJson).mtimeMs).toBe(before.at);
+  });
+
+  it("takes the entry an earlier install left where Claude Code does not read it", async () => {
+    const cwd = newTmp();
+    useHome(cwd);
+    mkdirSync(join(cwd, ".claude"), { recursive: true });
+    writeFileSync(
+      join(cwd, ".claude/settings.json"),
+      JSON.stringify({ mcpServers: { zeromind: { type: "http" }, other: { type: "http" } } }),
+    );
+    const r = await installHarness({ harness: "claude", scope: "project", cwd, shell: false });
+    const mcpStep = r.steps.find((s) => s.label.startsWith("MCP server"))!;
+    expect(mcpStep.note).toMatch(/stale/);
+    const settings = JSON.parse(readFileSync(join(cwd, ".claude/settings.json"), "utf8")) as {
+      mcpServers: Record<string, unknown>;
+    };
+    // Only ours goes; anything else in that map is not this installer's.
+    expect(Object.keys(settings.mcpServers)).toEqual(["other"]);
   });
 
   it("Cursor install copies the Cursor 3.0 plugin bundle to ~/.cursor/plugins/local/ + writes rule and mcp.json fallback", async () => {
     const cwd = newTmp();
-    process.env.HOME = cwd;
-    const r = await installHarness({ harness: "cursor", scope: "project", cwd });
+    useHome(cwd);
+    const r = await installHarness({ harness: "cursor", scope: "project", cwd, shell: false });
     // Native channel: the Cursor 3.0 plugin bundle.
     const pluginStep = r.steps.find((s) => s.label.includes("Cursor plugin"))!;
     expect(
@@ -82,9 +182,16 @@ describe("cli-install: per-harness full native install", () => {
     const fb = r.steps.find((s) => s.label.includes("Manual fallback"))!;
     expect(fb.status === "written" || fb.status === "updated").toBe(true);
     const cfg = JSON.parse(readFileSync(fb.path!, "utf8")) as {
-      mcpServers: { zeromind: { env: { ZEROMIND_IDE_NAME: string } } };
+      mcpServers: { zeromind: { url: string; headers: Record<string, string> } };
     };
-    expect(cfg.mcpServers.zeromind.env.ZEROMIND_IDE_NAME).toBe("cursor");
+    // Cursor's HTTP form is url + headers, with no `type` discriminator.
+    expect(cfg.mcpServers.zeromind).toEqual({
+      url: "https://origozero.ai/mcp",
+      headers: {
+        Authorization: "Bearer ins_sec_test",
+        "X-ZM-Harness": "cursor",
+      },
+    });
     // The fallback also wrote the rule alongside.
     const rulePath = join(cwd, ".cursor/rules/zeromind.mdc");
     const ruleBody = readFileSync(rulePath, "utf8");
@@ -94,8 +201,8 @@ describe("cli-install: per-harness full native install", () => {
 
   it("Hermes install writes mcp_servers.zeromind to ~/.hermes/config.yaml + drops the optional plugin bundle", async () => {
     const cwd = newTmp();
-    process.env.HOME = cwd;
-    const r = await installHarness({ harness: "hermes", cwd });
+    useHome(cwd);
+    const r = await installHarness({ harness: "hermes", cwd, shell: false });
     // Canonical channel: config.yaml MCP entry.
     const mcpStep = r.steps.find((s) => s.label.includes("config.yaml"))!;
     expect(mcpStep.status === "written" || mcpStep.status === "updated").toBe(true);
@@ -105,12 +212,20 @@ describe("cli-install: per-harness full native install", () => {
     // which crashes the CLI (issue #44).
     const YAML = await import("yaml");
     const cfg = YAML.parse(readFileSync(mcpStep.path!, "utf8")) as {
-      mcp_servers: Record<string, { command: string; args: string[]; env: unknown }>;
+      mcp_servers: Record<
+        string,
+        { type: string; url: string; headers: Record<string, string> }
+      >;
     };
     expect(Array.isArray(cfg.mcp_servers)).toBe(false);
-    expect(cfg.mcp_servers.zeromind.command).toBe("npx");
-    expect(cfg.mcp_servers.zeromind.args).toEqual(["-y", "@origozero/zeromind"]);
-    expect(cfg.mcp_servers.zeromind.env).toEqual({ ZEROMIND_IDE_NAME: "hermes" });
+    expect(cfg.mcp_servers.zeromind).toEqual({
+      type: "streamable_http",
+      url: "https://origozero.ai/mcp",
+      headers: {
+        Authorization: "Bearer ins_sec_test",
+        "X-ZM-Harness": "hermes",
+      },
+    });
     // The key carries the name — no redundant `name` field inside the entry.
     expect("name" in cfg.mcp_servers.zeromind).toBe(false);
     // Optional plugin bundle with skills + slash command + context hook.
@@ -128,7 +243,7 @@ describe("cli-install: per-harness full native install", () => {
 
   it("Hermes install self-heals a config an older build corrupted into the list shape, preserving other servers", async () => {
     const cwd = newTmp();
-    process.env.HOME = cwd;
+    useHome(cwd);
     const YAML = await import("yaml");
     const cfgPath = join(cwd, ".hermes/config.yaml");
     // Reproduce the 0.6.0 corruption: mcp_servers as a LIST, plus an
@@ -144,26 +259,27 @@ describe("cli-install: per-harness full native install", () => {
       }),
     );
 
-    const r = await installHarness({ harness: "hermes", cwd });
+    const r = await installHarness({ harness: "hermes", cwd, shell: false });
     const mcpStep = r.steps.find((s) => s.label.includes("config.yaml"))!;
     expect(mcpStep.status).toBe("updated");
 
     const cfg = YAML.parse(readFileSync(cfgPath, "utf8")) as {
-      mcp_servers: Record<string, { command: string; args: string[] }>;
+      mcp_servers: Record<string, { command?: string; url?: string }>;
     };
     // Healed into a mapping…
     expect(Array.isArray(cfg.mcp_servers)).toBe(false);
     // …with the unrelated server re-keyed and preserved…
     expect(cfg.mcp_servers.other.command).toBe("other-cmd");
     expect("name" in cfg.mcp_servers.other).toBe(false);
-    // …and the zeromind entry upgraded to the canonical args.
-    expect(cfg.mcp_servers.zeromind.args).toEqual(["-y", "@origozero/zeromind"]);
+    // …and the zeromind entry upgraded to the remote server.
+    expect(cfg.mcp_servers.zeromind.url).toBe("https://origozero.ai/mcp");
+    expect("command" in cfg.mcp_servers.zeromind).toBe(false);
   });
 
   it("Codex install copies the .codex-plugin bundle to the personal marketplace + writes config.toml fallback + AGENTS.md", async () => {
     const cwd = newTmp();
-    process.env.HOME = cwd;
-    const r = await installHarness({ harness: "codex", scope: "global", cwd });
+    useHome(cwd);
+    const r = await installHarness({ harness: "codex", scope: "global", cwd, shell: false });
     // Native channel: the Codex plugin bundle (skills + .mcp.json + .codex-plugin/plugin.json).
     const pluginStep = r.steps.find((s) => s.label.includes("personal marketplace"))!;
     expect(
@@ -185,7 +301,9 @@ describe("cli-install: per-harness full native install", () => {
     if (tomlStep.path) {
       const toml = readFileSync(tomlStep.path, "utf8");
       expect(toml).toMatch(/\[mcp_servers\.zeromind\]/);
-      expect(toml).toMatch(/@origozero\/zeromind/);
+      expect(toml).toMatch(/url = "https:\/\/origozero\.ai\/mcp"/);
+      expect(toml).toMatch(/"Authorization" = "Bearer ins_sec_test"/);
+      expect(toml).toMatch(/"X-ZM-Harness" = "codex"/);
     }
     // Complementary AGENTS.md for projects that want project-level context.
     const agentsStep = r.steps.find((s) => s.label.includes("AGENTS.md"))!;
@@ -197,12 +315,12 @@ describe("cli-install: per-harness full native install", () => {
 
   it("re-running Codex install is idempotent (one BEGIN block, user content preserved)", async () => {
     const cwd = newTmp();
-    process.env.HOME = cwd;
+    useHome(cwd);
     const agentsPath = join(cwd, "AGENTS.md");
     writeFileSync(agentsPath, "## project conventions\n- run tests\n");
-    await installHarness({ harness: "codex", scope: "project", cwd });
-    await installHarness({ harness: "codex", scope: "project", cwd });
-    await installHarness({ harness: "codex", scope: "project", cwd });
+    await installHarness({ harness: "codex", scope: "project", cwd, shell: false });
+    await installHarness({ harness: "codex", scope: "project", cwd, shell: false });
+    await installHarness({ harness: "codex", scope: "project", cwd, shell: false });
     const body = readFileSync(agentsPath, "utf8");
     expect((body.match(/<!-- BEGIN ZEROMIND -->/g) ?? []).length).toBe(1);
     expect((body.match(/<!-- END ZEROMIND -->/g) ?? []).length).toBe(1);
@@ -210,9 +328,71 @@ describe("cli-install: per-harness full native install", () => {
     expect(body).toMatch(/- run tests/);
   });
 
+  it("shell: false never runs the harness's own CLI, even when it is first on PATH", async () => {
+    // A child process resolves its own home directory, so a step that shells
+    // out writes where useHome() has no say — a Codex that grows `--header`
+    // would otherwise put a test's bearer in the developer's real
+    // ~/.codex/config.toml. `shell: false` is what keeps a run off that path.
+    //
+    // The fake `codex` is a copy of this very node binary, so it is genuinely
+    // spawnable on every platform (a .cmd/.sh stand-in is not: execFileSync
+    // refuses both without a shell). NODE_OPTIONS is inherited by children, so
+    // ANY spawn of it — the `--help` probe included — leaves the marker.
+    const cwd = newTmp();
+    useHome(cwd);
+    const binDir = newTmp();
+    const marker = join(binDir, "spawned");
+    const hook = join(binDir, "hook.cjs");
+    writeFileSync(hook, `require("fs").writeFileSync(${JSON.stringify(marker)}, "1");\n`);
+    copyFileSync(process.execPath, join(binDir, platform() === "win32" ? "codex.exe" : "codex"));
+    const path0 = process.env.PATH;
+    const nodeOptions0 = process.env.NODE_OPTIONS;
+    process.env.PATH = binDir + delimiter + (path0 ?? "");
+    process.env.NODE_OPTIONS = `--require ${JSON.stringify(hook)}`;
+    try {
+      const r = await installHarness({ harness: "codex", scope: "global", cwd, shell: false });
+      expect(existsSync(marker), "the install spawned a harness CLI").toBe(false);
+      const toml = r.steps.find((s) => s.label.includes("config.toml"))!;
+      expect(toml.path).toBe(join(cwd, ".codex/config.toml"));
+      const body = readFileSync(toml.path!, "utf8");
+      expect(body).toMatch(/url = "https:\/\/origozero\.ai\/mcp"/);
+      expect(body).toMatch(/"Authorization" = "Bearer ins_sec_test"/);
+    } finally {
+      process.env.PATH = path0;
+      if (nodeOptions0 === undefined) delete process.env.NODE_OPTIONS;
+      else process.env.NODE_OPTIONS = nodeOptions0;
+    }
+  });
+
+  it("shell: true does reach that CLI — the gate above is a gate", async () => {
+    // The inverse of the case above: with the same fake first on PATH and the
+    // shell allowed, the `codex mcp add --help` probe spawns it. (The probe
+    // finds no --header in a node binary's output, so the step still writes
+    // the file — what is asserted here is that the child ran at all.)
+    const cwd = newTmp();
+    useHome(cwd);
+    const binDir = newTmp();
+    const marker = join(binDir, "spawned");
+    const hook = join(binDir, "hook.cjs");
+    writeFileSync(hook, `require("fs").writeFileSync(${JSON.stringify(marker)}, "1");\n`);
+    copyFileSync(process.execPath, join(binDir, platform() === "win32" ? "codex.exe" : "codex"));
+    const path0 = process.env.PATH;
+    const nodeOptions0 = process.env.NODE_OPTIONS;
+    process.env.PATH = binDir + delimiter + (path0 ?? "");
+    process.env.NODE_OPTIONS = `--require ${JSON.stringify(hook)}`;
+    try {
+      await installHarness({ harness: "codex", scope: "global", cwd, shell: true });
+      expect(existsSync(marker), "the shell path never reached the CLI").toBe(true);
+    } finally {
+      process.env.PATH = path0;
+      if (nodeOptions0 === undefined) delete process.env.NODE_OPTIONS;
+      else process.env.NODE_OPTIONS = nodeOptions0;
+    }
+  });
+
   it("Gemini install merges MCP server JSON without nuking other entries", async () => {
     const cwd = newTmp();
-    process.env.HOME = cwd;
+    useHome(cwd);
     // Pre-write Gemini settings with an unrelated MCP server.
     const settingsPath = join(cwd, ".gemini/settings.json");
     const { mkdirSync } = await import("node:fs");
@@ -221,19 +401,24 @@ describe("cli-install: per-harness full native install", () => {
       settingsPath,
       JSON.stringify({ mcpServers: { other: { command: "other-cmd" } } }, null, 2),
     );
-    await installHarness({ harness: "gemini", scope: "global", cwd });
+    await installHarness({ harness: "gemini", scope: "global", cwd, shell: false });
     const after = JSON.parse(readFileSync(settingsPath, "utf8")) as {
-      mcpServers: { other: { command: string }; zeromind: { command: string } };
+      mcpServers: {
+        other: { command: string };
+        zeromind: { httpUrl: string; headers: Record<string, string> };
+      };
     };
     expect(after.mcpServers.other.command).toBe("other-cmd");
-    expect(after.mcpServers.zeromind.command).toBe("npx");
+    // Gemini CLI names a streamable-HTTP server's address `httpUrl`.
+    expect(after.mcpServers.zeromind.httpUrl).toBe("https://origozero.ai/mcp");
+    expect(after.mcpServers.zeromind.headers.Authorization).toBe("Bearer ins_sec_test");
   });
 
   it("Aider install adds CONVENTIONS.md to the .aider.conf.yml `read:` list (and is idempotent)", async () => {
     const cwd = newTmp();
-    process.env.HOME = cwd;
-    await installHarness({ harness: "aider", scope: "project", cwd });
-    await installHarness({ harness: "aider", scope: "project", cwd });
+    useHome(cwd);
+    await installHarness({ harness: "aider", scope: "project", cwd, shell: false });
+    await installHarness({ harness: "aider", scope: "project", cwd, shell: false });
     const yaml = readFileSync(join(cwd, ".aider.conf.yml"), "utf8");
     // CONVENTIONS.md should appear exactly once.
     expect((yaml.match(/CONVENTIONS\.md/g) ?? []).length).toBe(1);
@@ -243,8 +428,8 @@ describe("cli-install: per-harness full native install", () => {
 
   it("Zed install copies the extension bundle + falls back to context_server in settings.json", async () => {
     const cwd = newTmp();
-    process.env.HOME = cwd;
-    const r = await installHarness({ harness: "zed", scope: "project", cwd });
+    useHome(cwd);
+    const r = await installHarness({ harness: "zed", scope: "project", cwd, shell: false });
     // Native channel: the Zed extension bundle (extension.toml with context_servers.zeromind).
     const extStep = r.steps.find((s) => s.label.includes("Zed extension"))!;
     expect(
@@ -276,32 +461,19 @@ describe("cli-install: per-harness full native install", () => {
       "openclaw",
       "aider",
       "copilot",
+      "goose",
       "junie",
       "amp",
       "hermes",
     ];
     for (const h of harnesses) {
       const cwd = newTmp();
-      process.env.HOME = cwd;
-      const r = await installHarness({ harness: h, cwd });
+      useHome(cwd);
+      const r = await installHarness({ harness: h, cwd, shell: false });
       const filePaths = r.steps.map((s) => s.path).filter(Boolean) as string[];
       // Each harness ships some form of the operating manual (either the
       // canonical condensed text or the long-form skill content). Common
-      // to both: the find-before-build rule via `zeromind.search`. Some
-      // harnesses install plugin BUNDLES (directories); walk them shallow.
-      const { statSync, readdirSync } = await import("node:fs");
-      const collect = (p: string): string[] => {
-        try {
-          const st = statSync(p);
-          if (st.isFile()) return [p];
-          if (st.isDirectory()) {
-            return readdirSync(p).flatMap((c) => collect(join(p, c)));
-          }
-        } catch {
-          // ignore
-        }
-        return [];
-      };
+      // to both: the find-before-build rule via `zeromind.search`.
       const files = filePaths.flatMap(collect);
       const anyManualContent = files
         .map((p) => readFileSync(p, "utf8"))
@@ -310,10 +482,119 @@ describe("cli-install: per-harness full native install", () => {
     }
   });
 
+  it("every harness gets the remote /mcp entry and never an npx command", async () => {
+    for (const h of listHarnesses()) {
+      const cwd = newTmp();
+      useHome(newTmp());
+      const report = await installHarness({
+        harness: h.harness,
+        cwd,
+        scope: h.defaultScope,
+        force: true,
+        shell: false,
+      });
+      const wrote = report.steps.filter(
+        (s) => s.path && (s.status === "written" || s.status === "updated"),
+      );
+      // Which files are MCP configs is the step's own answer: an
+      // instructions step writes a harness's agent-facing channel (Goose's
+      // `.goosehints` has no `.md` to give it away), a config step writes an
+      // MCP entry, and a bundle carries both — inside one, only the manual's
+      // own `.md` is prose. A step that declares nothing fails here rather
+      // than slipping past the guard below.
+      for (const s of wrote) {
+        expect(s.kind, `${h.harness}: step '${s.label}' declares no kind`).toBeDefined();
+      }
+      const configs = wrote
+        .filter((s) => s.kind !== "instructions")
+        .flatMap((s) => collect(s.path!))
+        .filter((p) => !/\.(md|mdc)$/i.test(p));
+      const written = configs.map((p) => readFileSync(p, "utf8")).join("\n");
+      // A harness whose MCP entry point is unconfirmed (openClaw, Aider)
+      // carries the same server in the note the install prints instead.
+      const notes = report.steps
+        .filter((s) => s.status === "manual")
+        .map((s) => s.note ?? "")
+        .join("\n");
+      expect(
+        written.includes(REMOTE_URL) || notes.includes(REMOTE_URL),
+        `${h.harness}: no ${REMOTE_URL} entry written, and none in a manual note`,
+      ).toBe(true);
+      expect(written + notes, h.harness).toContain("X-ZM-Harness");
+      if (written.includes(REMOTE_URL)) {
+        // The bearer is either this machine's secret or the variable the
+        // harness expands to it — never absent.
+        expect(written, h.harness).toMatch(/ins_sec_test|ZEROMIND_INSTALL_SECRET/);
+      }
+      // No config the install writes, and no instruction it prints, spawns
+      // anything locally. An instructions file may name the `zeromind` CLI
+      // the agent asks the user to run, so it is written but not asserted on.
+      for (const p of configs) {
+        expect(readFileSync(p, "utf8"), `${h.harness}: ${p}`).not.toContain("npx");
+      }
+      expect(notes, h.harness).not.toContain("npx");
+    }
+  });
+
+  it("reports a step that could not do its job as failed, not skipped", async () => {
+    const cwd = newTmp();
+    const home = newTmp();
+    useHome(home);
+    // A settings.json that is a directory: the config edit tries and cannot.
+    mkdirSync(join(home, ".claude", "settings.json"), { recursive: true });
+    const report = await installHarness({
+      harness: "claude",
+      cwd,
+      scope: "project",
+      force: true,
+      shell: false,
+    });
+    const failed = report.steps.filter((s) => s.status === "failed");
+    expect(failed.length, "the settings.json steps should have failed").toBeGreaterThan(0);
+    expect(failed.every((s) => (s.note ?? "").length > 0)).toBe(true);
+    expect(report.steps.filter((s) => s.status === "skipped")).toEqual([]);
+    // The steps that could do their job still did.
+    expect(report.steps.filter((s) => s.status === "written").length).toBeGreaterThan(0);
+  });
+
+  it("exits 1 when a step failed", async () => {
+    const cwd = newTmp();
+    const home = newTmp();
+    mkdirSync(join(home, ".claude", "settings.json"), { recursive: true });
+    const configDir = newTmp();
+    writeFileSync(
+      join(configDir, "session.json"),
+      JSON.stringify({ install_id: "inst_test", install_secret: "ins_sec_test" }),
+    );
+    const child = spawn(
+      process.execPath,
+      [join(process.cwd(), "dist", "index.js"), "install", "claude", "--project", "--force", "--cwd", cwd],
+      {
+        env: {
+          ...process.env,
+          ZEROMIND_CONFIG_DIR: configDir,
+          HOME: home,
+          USERPROFILE: home,
+          APPDATA: join(home, "AppData/Roaming"),
+        },
+      },
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (c) => (stdout += String(c)));
+    child.stderr.on("data", (c) => (stderr += String(c)));
+    const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
+
+    expect(code).toBe(1);
+    expect(stderr).toMatch(/step\(s\) failed/);
+    expect(stdout).toContain("[!]");
+    expect(stdout + stderr).not.toContain("ins_sec_test");
+  });
+
   it("rejects unknown harnesses", async () => {
     const cwd = newTmp();
     await expect(
-      installHarness({ harness: "notahost" as Harness, cwd }),
+      installHarness({ harness: "notahost" as Harness, cwd, shell: false }),
     ).rejects.toThrow(/unknown harness/);
   });
 });

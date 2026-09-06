@@ -22,13 +22,17 @@ const readOr = (path: string, fallback: string): string =>
 export type JsonObject = Record<string, unknown>;
 
 /** Set a single-key entry inside a top-level object key (e.g.
- *  `mcpServers.zeromind = {...}`). Creates the parent key if missing. */
+ *  `mcpServers.zeromind = {...}`). Creates the parent key if missing.
+ *
+ *  An entry that already says what this would write leaves the file alone:
+ *  a harness edits its own config while it runs, and a read-modify-write
+ *  that changes nothing can only lose what it wrote in between. */
 export const editJsonEntry = (
   path: string,
   parentKey: string,
   entryKey: string,
   entry: unknown,
-): "written" | "updated" => {
+): "written" | "updated" | "exists" => {
   ensureDir(path);
   const existed = existsSync(path);
   let obj: JsonObject = {};
@@ -38,6 +42,7 @@ export const editJsonEntry = (
   }
   const parent = (obj[parentKey] as JsonObject | undefined) ?? {};
   const isUpdate = entryKey in parent;
+  if (isUpdate && JSON.stringify(parent[entryKey]) === JSON.stringify(entry)) return "exists";
   parent[entryKey] = entry;
   obj[parentKey] = parent;
   writeFileSync(path, JSON.stringify(obj, null, 2) + "\n");
@@ -69,6 +74,24 @@ export const editJsoncEntry = async (
   const out = applyEdits(text, edits);
   writeFileSync(path, out.endsWith("\n") ? out : out + "\n");
   return existed && isUpdate ? "updated" : "written";
+};
+
+/** Take one entry back out of a JSON config's parent map, and the map with it
+ *  when it is then empty. Answers whether anything was there. */
+export const removeJsonEntry = (path: string, parentKey: string, entryKey: string): boolean => {
+  if (!existsSync(path)) return false;
+  let json: JsonObject;
+  try {
+    json = JSON.parse(readFileSync(path, "utf8")) as JsonObject;
+  } catch {
+    return false;
+  }
+  const parent = json[parentKey] as JsonObject | undefined;
+  if (!parent || !(entryKey in parent)) return false;
+  delete parent[entryKey];
+  if (Object.keys(parent).length === 0) delete json[parentKey];
+  writeFileSync(path, JSON.stringify(json, null, 2) + "\n");
+  return true;
 };
 
 // ─── TOML (Codex ~/.codex/config.toml) ──────────────────────────────────

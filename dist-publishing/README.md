@@ -17,10 +17,12 @@ canonical one-click flow.
 Each subdirectory has a `README.md` with the exact submit / publish steps,
 and the package layout follows that registry's schema.
 
-These are NOT shipped to npm consumers — `dist-publishing/` is excluded
-from the `files` list in `package.json`. They're maintainer artifacts kept
-under version control so we can iterate on the manifests before
-submitting.
+`dist-publishing/` is in the `files` list in `package.json`, so these
+packages ship with the npm package: `zeromind install cursor` and
+`zeromind install codex` copy the bundle out of it, and the rest are
+maintainer artifacts kept beside them under version control. A bundle
+carrying skill or manual text is a byte-identical copy of `skills/` or
+`templates/manual.md` — re-copy it whenever either changes.
 
 ## Until each registry listing is live
 

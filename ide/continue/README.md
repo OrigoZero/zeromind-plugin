@@ -21,16 +21,18 @@ Add to `~/.continue/config.yaml`:
 ```yaml
 mcpServers:
   - name: zeromind
-    command: npx
-    args:
-      - -y
-      - "@origozero/zeromind"
-    env:
-      ZEROMIND_IDE_NAME: continue
+    type: streamable-http
+    url: https://origozero.ai/mcp
+    requestOptions:
+      headers:
+        Authorization: "Bearer ins_sec_..."
+        X-ZM-Harness: continue
 ```
 
-Reload Continue. The first engine-related prompt triggers the one-time device-code link.
+The install secret is the `install_secret` in `~/.config/zero/session.json` (`%APPDATA%\zero\session.json` on Windows). `zeromind install <harness>` writes the whole entry for you after `zeromind link`.
+
+Reload Continue. If this machine has never been linked, the install runs `zeromind link` first — a one-time device-code approval in your browser.
 
 ## Troubleshooting
 
-**"status failed"** → Node.js isn't on PATH. Install from nodejs.org, restart your editor.
+**"status failed" / 401** → this machine is not linked, or its config holds a stale secret. Run `npx @origozero/zeromind link`, then re-run `npx @origozero/zeromind install <harness>` to rewrite the entry. Node.js is needed to run those two commands; the server itself is reached over HTTPS, not spawned locally.

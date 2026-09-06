@@ -1,10 +1,10 @@
 name: zeromind
-version: 0.5.0
+version: 0.7.0
 schema: v1
 
-command: npx
-args:
-  - "-y"
-  - "@origozero/zeromind"
-env:
-  ZEROMIND_IDE_NAME: continue
+type: streamable-http
+url: https://origozero.ai/mcp
+requestOptions:
+  headers:
+    Authorization: "Bearer ${{ secrets.ZEROMIND_INSTALL_SECRET }}"
+    X-ZM-Harness: continue

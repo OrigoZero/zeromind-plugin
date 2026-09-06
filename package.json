@@ -1,7 +1,7 @@
 {
   "name": "@origozero/zeromind",
-  "version": "0.6.4",
-  "description": "ZeroMind IDE plugin — MCP server with first-class support for every MCP client (Claude Code, Cursor, Codex, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, …)",
+  "version": "0.7.0",
+  "description": "Links a machine to ZeroMind and points an agent harness at the ZeroMind MCP server at origozero.ai/mcp (Claude Code, Cursor, Codex, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, …)",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -18,8 +18,10 @@
     "LICENSE"
   ],
   "scripts": {
+    "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
+    "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src tools tests --ext .ts --no-error-on-unmatched-pattern",
@@ -30,16 +32,12 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@iarna/toml": "^2.2.5",
-    "@modelcontextprotocol/sdk": "^1.0.0",
     "jsonc-parser": "^3.3.1",
     "undici": "^6.0.0",
-    "ws": "^8.16.0",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@types/ws": "^8.5.10",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.56.0",

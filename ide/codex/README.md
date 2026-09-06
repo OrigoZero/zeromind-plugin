@@ -17,19 +17,16 @@ Re-running the command is idempotent — it replaces the existing ZeroMind block
 
 ### 2. MCP server
 
-```
-codex mcp add zeromind -- npx -y @origozero/zeromind
-```
-
-Or hand-edit `~/.codex/config.toml`:
+Hand-edit `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.zeromind]
-command = "npx"
-args = ["-y", "@origozero/zeromind"]
-
-[mcp_servers.zeromind.env]
-ZEROMIND_IDE_NAME = "codex"
+url = "https://origozero.ai/mcp"
+http_headers = { "Authorization" = "Bearer ins_sec_...", "X-ZM-Harness" = "codex" }
 ```
 
-Restart Codex. The first engine-related prompt triggers the one-time device-code link.
+`codex mcp add zeromind --url https://origozero.ai/mcp` registers the address, but the CLI has no `--header` flag, so it cannot carry the bearer or `X-ZM-Harness` — which is why `zeromind install codex` writes this file directly (mode 0600 off Windows). The shipped plugin bundle uses `env_http_headers = { "Authorization" = "ZEROMIND_INSTALL_SECRET_BEARER" }` instead, reading the whole header value from that variable.
+
+The install secret is the `install_secret` in `~/.config/zero/session.json` (`%APPDATA%\zero\session.json` on Windows). `zeromind install <harness>` writes the whole entry for you after `zeromind link`.
+
+Restart Codex. If this machine has never been linked, the install runs `zeromind link` first — a one-time device-code approval in your browser.

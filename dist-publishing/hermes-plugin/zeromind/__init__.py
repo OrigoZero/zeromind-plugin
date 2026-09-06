@@ -1,8 +1,8 @@
 """ZeroMind Hermes plugin.
 
 Hermes' canonical channel for an external MCP server is `mcp_servers.zeromind`
-in `~/.hermes/config.yaml` — that's what wires up the tools (auth_status,
-zeromind.search, world.connect, execute, capture, …). This plugin adds
+in `~/.hermes/config.yaml` — that's what wires up the tools (zeromind.search,
+world.list, execute, capture, …). This plugin adds
 the *complementary* surface: agent skills, a slash command, and a
 context-injection hook that primes the agent with the find-before-build
 rule at the start of each session.

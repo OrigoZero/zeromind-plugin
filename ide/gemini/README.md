@@ -27,16 +27,22 @@ Add to `~/.gemini/settings.json`:
 {
   "mcpServers": {
     "zeromind": {
-      "command": "npx",
-      "args": ["-y", "@origozero/zeromind"],
-      "env": { "ZEROMIND_IDE_NAME": "gemini-cli" }
+      "httpUrl": "https://origozero.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer ins_sec_...",
+        "X-ZM-Harness": "gemini-cli"
+      }
     }
   }
 }
 ```
 
-Restart Gemini CLI. The first engine-related prompt triggers the one-time device-code link.
+Gemini CLI names a streamable-HTTP server's address `httpUrl`. The shipped extension bundle carries `${ZEROMIND_INSTALL_SECRET}` in place of the secret, which Gemini CLI expands from your environment.
+
+The install secret is the `install_secret` in `~/.config/zero/session.json` (`%APPDATA%\zero\session.json` on Windows). `zeromind install <harness>` writes the whole entry for you after `zeromind link`.
+
+Restart Gemini CLI. If this machine has never been linked, the install runs `zeromind link` first — a one-time device-code approval in your browser.
 
 ## Troubleshooting
 
-**"status failed"** → Node.js isn't on PATH. Install from nodejs.org, restart Gemini CLI.
+**"status failed" / 401** → this machine is not linked, or its config holds a stale secret. Run `npx @origozero/zeromind link`, then re-run `npx @origozero/zeromind install <harness>` to rewrite the entry. Node.js is needed to run those two commands; the server itself is reached over HTTPS, not spawned locally.

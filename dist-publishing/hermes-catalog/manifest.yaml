@@ -1,6 +1,6 @@
 name: zeromind
 display_name: ZeroMind
-description: "Drive your browser-running Zero engine worlds — search and install published assets, iterate the connected world with execute / capture / VFS tools."
+description: "Drive your browser-running Zero engine worlds — search and install published assets, iterate the world you have open with execute / capture / VFS tools."
 author: OrigoZero
 homepage: https://github.com/OrigoZero/zeromind-plugin
 license: MIT
@@ -12,11 +12,11 @@ keywords:
   - origozero
 
 server:
-  command: npx
-  args:
-    - "-y"
-    - "@origozero/zeromind"
-  env:
-    ZEROMIND_IDE_NAME: hermes
+  type: streamable_http
+  url: https://origozero.ai/mcp
+  headers:
+    Authorization: "Bearer ${ZEROMIND_INSTALL_SECRET}"
+    X-ZM-Harness: hermes
 
-requires_env: []
+requires_env:
+  - ZEROMIND_INSTALL_SECRET
