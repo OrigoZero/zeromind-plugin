@@ -183,6 +183,20 @@ export const buildServer = (state: MockState): Server =>
             id: body.id,
             result: { content: [{ type: "text", text }], isError },
           });
+        // The owner's live worlds, in the shape `world.list` serves them:
+        // the listing `zeromind open` resolves a name against.
+        if (tool === "world.list") {
+          const worlds = [...state.worlds.values()]
+            .filter((w) => w.owner_user_id === install.user_id && !w.deleted_at)
+            .map((w) => ({
+              guid: w.guid,
+              name: w.name,
+              visibility: w.is_public ? "public" : "private",
+              default_branch: "main",
+              branches: ["main"],
+            }));
+          return answer(JSON.stringify({ worlds }, null, 2));
+        }
         if (tool === "world.connect") {
           if (state.connectRefusal) return answer(state.connectRefusal, true);
           const wanted = String(args.world ?? "");

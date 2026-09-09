@@ -1,5 +1,5 @@
 name: zeromind
-version: "0.7.0"
+version: "0.7.1"
 description: "ZeroMind — the shared library of published Zero engine worlds + assets, plus the engine you drive remotely. Contributes a skill and a slash command alongside the zeromind MCP server."
 author: OrigoZero
 provides_skills:

@@ -32,7 +32,7 @@ Writing everything yourself when a drop-in existed is the single biggest waste o
 | `zeromind.install` | Install content into the world your engine calls reach — add a world as a library, or install an asset's content at a path. |
 | `zeromind.engage` | Contribute back: vote, comment, review, bookmark, follow, report. |
 
-`search`, `inspect`, and `engage` are pure REST against the ZeroMind backend — **they need no open world at all.** You can scout ZeroMind before the engine is ever open. **`preview` and `install` are the exceptions**: both act on a live engine, so the world has to be open (`world.launch` opens it). If either reports the target is ambiguous, `session.list` shows your engines and `session.connect` pins one; an agent running inside an engine is already bound to it and has no connect tool. All five authenticate with this machine's ZeroMind link; a `401` / `invalid_token` means the machine is not linked yet — the `zeromind-getting-started` skill has the one-time `npx -y @origozero/zeromind link` step.
+`search`, `inspect`, and `engage` are pure REST against the ZeroMind backend — **they need no open world at all.** You can scout ZeroMind before the engine is ever open. **`preview` and `install` are the exceptions**: both act on a live engine, so the world has to be open. `world.launch` answers where a world opens; `npx -y @origozero/zeromind open <name-or-guid>` in a shell is what opens it on this machine. If either reports the target is ambiguous, `session.list` shows your engines and `session.connect` pins one; an agent running inside an engine is already bound to it and has no connect tool. All five authenticate with this machine's ZeroMind link; a `401` / `invalid_token` means the machine is not linked yet — the `zeromind-getting-started` skill has the one-time `npx -y @origozero/zeromind link` step.
 
 **You never download content to this client.** Content is only operable inside the engine, so there is no "fetch the bytes here" step — you find and vet content (metadata only), then `zeromind.install` hands the engine the id and the engine pulls every byte from ZeroMind itself.
 
@@ -184,7 +184,7 @@ User: "build me a destructible voxel terrain"
                                         # → ranked hits with compat_tier, agent_score, capabilities
 2. zeromind.inspect { target:"asset", guid:"ast_top_hit" }
                                         # overview: schema, capabilities, review, comments, who uses it
-3. world.launch { guid:"<the user's world>" }   # only if nobody has it open yet
+3. npx -y @origozero/zeromind open "<the user's world>"   # in a shell, only if nobody has it open yet
 4. zeromind.install { guid:"ast_top_hit" }       # engine pulls + lays it down — outcome A/C
    # or, for a reusable dependency:  zeromind.install { world:"wld_lib" }   (outcome A/B)
 5. capture to verify → adapt with edit_file/execute if it's a base (outcome C) → bash "zm add . && zm commit -m '...' && zm push"

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // `zeromind` — links this machine to ZeroMind once, writes the `/mcp` server
-// entry into an agent harness's own config, and uploads local files into a
-// world. Every tool an agent then uses comes from https://origozero.ai/mcp;
-// nothing runs here.
+// entry into an agent harness's own config, uploads local files into a world,
+// and opens a world here on this machine. Every tool an agent then uses comes
+// from https://origozero.ai/mcp; nothing runs here.
 const argv = process.argv.slice(2);
 const command = argv[0];
 const run = async (): Promise<void> => {
@@ -14,6 +14,11 @@ const run = async (): Promise<void> => {
   if (command === "upload") {
     const { runUploadCli } = await import("./cli-upload.js");
     await runUploadCli(argv.slice(1));
+    return;
+  }
+  if (command === "open") {
+    const { runOpenCli } = await import("./cli-open.js");
+    await runOpenCli(argv.slice(1));
     return;
   }
   const { runLinkCli } = await import("./cli-link.js");
