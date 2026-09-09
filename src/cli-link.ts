@@ -107,6 +107,7 @@ zeromind status                      what this machine is linked as
 zeromind unlink                      revoke this machine's link (unlink, then link, is how a machine is re-linked)
 zeromind install <harness>           write the remote /mcp server entry into a harness (links first if needed)
 zeromind upload <path> --world <w>   copy a file or folder into a world's engine VFS
+zeromind open <world> [--play]       open a world on this machine — desktop engine, or a browser tab
 `;
 
 export const runLinkCli = async (argv: string[]): Promise<void> => {

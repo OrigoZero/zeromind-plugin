@@ -8,7 +8,7 @@ What the agent gets, once linked: the ZeroMind library (search, inspect, preview
 
 ## Prerequisites
 
-**Node.js 18 or newer**, on your PATH, to run `zeromind link`, `zeromind install` and `zeromind upload`. Your harness then talks to `https://origozero.ai/mcp` over HTTPS and spawns nothing locally.
+**Node.js 18 or newer**, on your PATH, to run `zeromind link`, `zeromind install`, `zeromind upload` and `zeromind open`. Your harness then talks to `https://origozero.ai/mcp` over HTTPS and spawns nothing locally.
 
 - **macOS:** `brew install node` (or download from https://nodejs.org)
 - **Linux:** your distro's package manager, or https://nodejs.org / [nvm](https://github.com/nvm-sh/nvm)
@@ -88,6 +88,16 @@ npx -y @origozero/zeromind upload <path> --world <name-or-guid> [--to <vfs dir>]
 
 Copies a file — or a folder, its relative layout preserved — from this machine into the world's engine VFS, under `/source` unless `--to` says otherwise. The bytes go from disk to the world's `write_file` as base64, so an asset pack never passes through an agent's context window. Ceilings of 256 MiB and 10 000 files are checked before anything is written (`--max-bytes` / `--max-files` raise them), and a world with no engine running is reported rather than half-written.
 
+## Opening a world on this machine
+
+```
+npx -y @origozero/zeromind open <world guid | name | https url | zero:// url> [--play | --edit] [--native | --browser] [--dry-run]
+```
+
+Every tool an agent calls is served by ZeroMind, which has no browser tab and no engine process on your machine: `world.open` and `world.launch` answer **where** a world opens, and this command is what opens it **here**. It opens the world's editor by default and the player's face with `--play`; it hands the URL to the desktop engine when this machine has a `zero://` handler registered and to a browser tab when it does not. `--native` / `--browser` decide it outright and are remembered in `open.json` beside `session.json`, so later calls with neither flag follow what you chose. `--dry-run` prints the target and the URL and changes nothing.
+
+A guid or a URL is opened without a single network call. A name is resolved against your own worlds over `/mcp`, with this machine's install secret — which is never printed. No engine is contacted at all.
+
 ## Pointing at a local / self-hosted ZeroMind
 
 Two environment variables move the whole CLI to another backend:
@@ -147,9 +157,9 @@ Maintainers: `package.json` `version` is the source of truth — keep `.claude-p
 
 ## Status
 
-0.7.0 — the plugin runs no MCP server of its own. It links a machine, writes the remote `/mcp` entry into sixteen harnesses, uploads local files into a world, and ships the two skills. The tool surface is ZeroMind's, served live at `https://origozero.ai/mcp`; the tests drive the CLI end to end against the bundled mock ZeroMind server in [`tools/mock-zeromind/`](tools/mock-zeromind/).
+0.7.1 — the plugin runs no MCP server of its own. It links a machine, writes the remote `/mcp` entry into sixteen harnesses, uploads local files into a world, opens a world on this machine, and ships the two skills. The tool surface is ZeroMind's, served live at `https://origozero.ai/mcp`; the tests drive the CLI end to end against the bundled mock ZeroMind server in [`tools/mock-zeromind/`](tools/mock-zeromind/).
 
-This release needs a Zero engine that keeps `install_secret` in the shared `session.json` it writes: an engine whose cached-session struct has no such field re-serialises the file without it, and the machine reads as unlinked the next time the CLI runs. 0.7.0 therefore ships after that engine release.
+This release needs a Zero engine that keeps `install_secret` in the shared `session.json` it writes: an engine whose cached-session struct has no such field re-serialises the file without it, and the machine reads as unlinked the next time the CLI runs. 0.7.1 therefore ships after that engine release.
 
 ## Development
 

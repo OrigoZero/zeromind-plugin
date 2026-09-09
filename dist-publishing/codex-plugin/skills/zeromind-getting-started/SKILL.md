@@ -62,13 +62,21 @@ in a shell, open the URL it prints, and enter the code. Then they restart the ID
 
 Engine calls — `execute`, `capture`, `guides`, the VFS tools, `bash` — act on a world's running engine: the browser tab the user has open. **You do not open a session first.** Make the call; if it reports the target is ambiguous, `session.list` shows your engines and `session.connect` pins one. An agent running inside an engine is already bound to that engine and its world, and has no connect tool at all.
 
-A world with nobody in it has no engine to drive: `world.launch` opens it at `https://origozero.ai/edit/<guid>` in the user's browser (`world.open_in_browser` opens a tab on the machine you are running on). If the tab doesn't come up, relay the URL and let the user open it.
+A world with nobody in it has no engine to drive, and opening one is two steps. `world.open` / `world.launch` **answer where it opens** — a browser URL and a `zero://` deep link for the desktop engine — because they run on ZeroMind's servers, which have no tab and no engine process on this machine. **Opening it here is a shell command:**
+
+```
+npx -y @origozero/zeromind open <guid>
+```
+
+It opens the desktop engine when this machine has a `zero://` handler and a browser tab when it does not (`--native` / `--browser` choose, and what you choose is remembered; `--play` opens the world as a player sees it; `--dry-run` prints the URL and opens nothing). It takes a world's name as readily as its guid. Then `session.connect` once the engine is live — or relay the URL and let the user open it.
+
+An agent running **inside** an engine is already in its world and never needs any of this.
 
 ## The seamless flow
 
 1. **`zeromind.search`** — check whether the thing the user wants (or parts of it) already exists before building. See STEP 0 above and the `zeromind-library` skill. Inspect a hit, then `zeromind.install` a drop-in / parts / base into the world you are working in.
 2. **`world.list`** — find by name, or `world.create({name: "..."})` for a new one. Worlds are persistent multiplayer 3D containers; everything you build lives inside one.
-3. **`world.launch`** — if nobody has the world open, this opens it in the user's browser and the WASM engine boots there. A world the user already has open needs nothing.
+3. **`world.launch`** — if nobody has the world open, this answers where it opens; `npx -y @origozero/zeromind open <guid>` in your shell is the step that opens it on this machine, then `session.connect` once the engine is live. A world the user already has open needs nothing.
 4. **`guides {}`** (no args) — returns the **guide index** (the README is listed first); then **read the README** with `guides { path: "readme" }`. **Do this every time you start work on a world.** The README is the highest-signal orientation for the live engine: the core ideas, the survey-first working rhythm, and the index of core-system and topic guides. It opens with the one rule that breaks the most builds — **the world is ALWAYS multiplayer:** give players their body/camera/input through the scene's PlayerPrototype, never a hand-rolled player rig (which passes single-peer testing, then breaks the instant a second player joins).
 5. **Iterate** with `execute` / `read_file` / `write_file` / `edit_file` / `capture` / `bash`. When you installed a base from ZeroMind (outcome C, via `zeromind.install`), read + adapt the installed files here (`read_file` / `edit_file` under `/source/<name>`).
 6. **Publish** when ready: `bash({command: "zm add . && zm commit -m 'describe the change' && zm push"})` — add stages, commit checkpoints, push publishes. Then give the world a face with `edit_world_metadata` (title, description, README body, tags, visibility) and `set_world_cover` (captures the current viewport by default) — a published world nobody can recognise or search for is barely published. Finally `zeromind.engage` to vote/comment on content you used.
@@ -229,9 +237,9 @@ A single connected session can handle dozens of iterations. If you find yourself
 
 Most user prompts will be one of these shapes — translate to the standard flow. **For anything that involves building, `zeromind.search` comes first** (see STEP 0):
 
-- **"make me a [game/scene/world] that does X"** → `zeromind.search({q: "X"})` first. Then `world.create`, `world.launch`, `zeromind.install` what fits, and `execute` to assemble + fill the gaps.
+- **"make me a [game/scene/world] that does X"** → `zeromind.search({q: "X"})` first. Then `world.create`, `npx -y @origozero/zeromind open <guid>` to open it, `zeromind.install` what fits, and `execute` to assemble + fill the gaps.
 - **"add a [feature/system/mechanic]"** → `zeromind.search({q: "[feature]", kind: "module"})` first — `zeromind.install` a module/component if one exists, then wire it in. Only hand-write it if nothing usable turns up.
-- **"open my [name]"** → `world.list` → find by name → `world.launch`.
+- **"open my [name]"** → `npx -y @origozero/zeromind open "[name]"` in your shell — it resolves the name against the user's worlds itself.
 - **"delete my [name]"** → `world.delete({name})` — a reversible soft-delete (recoverable via `world.trash` → `world.restore` for ~30 days, then purged). Confirm with the user first unless they were explicit; you can't delete worlds you don't own.
 - **"add a [thing]"** to an open world → `execute` to spawn/configure, `capture` to verify, then `zm add . && zm commit -m '...' && zm push` once happy.
 - **"what does my world look like?"** → `capture()` and show them.
@@ -243,7 +251,7 @@ Most user prompts will be one of these shapes — translate to the standard flow
 
 - `401` / `invalid_token` — this machine is not linked; see **Linking this machine** above.
 - an ambiguous target — more than one of your engines could serve the call. `session.list` shows them, `session.connect` pins one.
-- `no_active_session` — no engine is running for that world; the user hasn't opened the tab. `world.launch` opens it; relay the URL if it doesn't come up.
+- `no_active_session` — no engine is running for that world; nobody has it open. `world.launch` says where it opens, `npx -y @origozero/zeromind open <guid>` opens it on this machine, and `session.connect` waits for the engine; relay the URL if it doesn't come up.
 - `forbidden` — you're trying to drive a session that doesn't belong to the linked user.
 - `lsp.strict: refusing to execute — N error diagnostic(s) found.` — fix the diagnostics in the response's `diagnostics` field, then re-execute. Don't disable strict mode.
 

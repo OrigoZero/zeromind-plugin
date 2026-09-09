@@ -1,6 +1,6 @@
 {
   "name": "zeromind",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "ZeroMind for Gemini CLI — drive your browser-running Zero engine worlds, search and install published assets, and iterate via execute/capture/VFS tools.",
   "mcpServers": {
     "zeromind": {

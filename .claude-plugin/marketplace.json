@@ -9,7 +9,7 @@
     {
       "name": "zeromind",
       "description": "ZeroMind for Claude Code: the `zeromind` MCP server at origozero.ai/mcp (content discovery, worlds, and the engine tools of the world you have open) plus the skills that teach the agent to check ZeroMind first. Link this machine once with `npx -y @origozero/zeromind link`.",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "source": "./",
       "author": {
         "name": "OrigoZero"

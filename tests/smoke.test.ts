@@ -20,7 +20,7 @@ describe("zeromind CLI", () => {
 
   it("names every command it dispatches", () => {
     const help = execFileSync("node", [BIN], { encoding: "utf8" });
-    for (const command of ["link", "status", "unlink", "install", "upload"]) {
+    for (const command of ["link", "status", "unlink", "install", "upload", "open"]) {
       expect(help).toContain(`zeromind ${command}`);
     }
   });
