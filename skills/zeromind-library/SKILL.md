@@ -47,18 +47,20 @@ Pick a `scope` for the lens you need (default `assets`):
 | `both` | Quick combined worlds + assets (BM25). | a fast first look |
 | `feed` | Browse hot / new / top with **no query**. | "what good content is there?" |
 | `similar` | Neighbours of a known `asset_guid`. | "more like this one" |
-| `top_by_kind` | The best assets of one `kind`. | "show me the top shaders" |
+| `top_by_kind` | The best assets of one `assetType`. | "show me the top shaders" |
 | `kinds` / `capabilities` / `schemas` | Browse the taxonomy. | orienting in an unfamiliar area |
 
 ```
-zeromind.search { "q": "voxel terrain greedy mesher", "kind": "module" }
+zeromind.search { "q": "voxel terrain greedy mesher", "assetType": "module" }
 zeromind.search { "scope": "worlds", "q": "kart racing game" }
-zeromind.search { "scope": "top_by_kind", "kind": "shader", "limit": 10 }
+zeromind.search { "scope": "top_by_kind", "assetType": "shader", "limit": 10 }
 zeromind.search { "scope": "feed", "sort": "top", "window": "month" }
 zeromind.search { "scope": "similar", "asset_guid": "ast_…" }
 ```
 
-Filters AND-combine: `kind` (case-insensitive; comma-separate for a family like `tool,toolbox` on `assets`/`worlds`), `conforms_to`, `provides_schema`. There are no keyword tag/lang/license filters: describe what you want in `q` and let the embedding match it. Sort with `sort` (`hot|top|popular|new|similar`). Page with `limit` + `offset`.
+Filters AND-combine: `assetType` (case-insensitive; comma-separate for a family like `tool,toolbox` on `assets`/`worlds`), `conforms_to`, `provides_schema`. There are no keyword tag/lang/license filters: describe what you want in `q` and let the embedding match it. Sort with `sort` (`hot|top|popular|new|similar`). Page with `limit` + `offset`.
+
+`zeromind.search` also takes `from` and `mode`, choosing where it searches and how. Left off, `from` defaults to `"all"` (every public world, semantic only — keyword is refused there). Two scopes need no guessing at names: `from: "owned"` with `scope: "worlds"` and `mode: "keyword"` finds one of the worlds the linked user owns or maintains by what it holds (a scene, an asset, a phrase in its README), and each hit says which entries matched — an owned scope past 200 worlds says so on the answer (`owned_worlds_capped`). `from: "bound"` searches the world the engine has open, answered by that world's engine: `mode: "keyword"` reads its files, unpushed and private ones included; `mode: "semantic"` covers what ZeroMind may embed there — the builtin library, installed libraries and imported assets, and the world itself when public — and says `private_world` when the world's own content is out of its reach. `match` picks whether a hit must match what a thing IS (`identity`) or what it DOES (`capability`) in every mode and every `from`.
 
 **Semantic search.** When you pass `q`, the backend embeds it and runs a vector similarity search over the indexed content (symbol-level chunks of every asset), so conceptually-related results surface even when they don't share your exact words — "inventory grid" finds "item storage backpack". The response's `ranking.mode` tells you what actually ran: `semantic` (embedder online), `bm25` (keyword fallback when no embedder is configured), or `structured` (no query — pure filter/sort). `scope: "similar"` is pure-embedding nearest-neighbour against a seed asset's chunks. Each hit's `matched_chunks` are the snippets that matched — read them as live usage examples. Control them with `include_matched_chunks` (default true) and `chunks_per_hit` (1–10, default 3); raise `chunks_per_hit` when you want more example code per hit.
 
@@ -180,7 +182,7 @@ zeromind.engage { "action": "report", "target": "asset", "guid": "ast_…", "rea
 ```
 User: "build me a destructible voxel terrain"
 
-1. zeromind.search { q: "destructible voxel terrain", kind: "module" }
+1. zeromind.search { q: "destructible voxel terrain", assetType: "module" }
                                         # → ranked hits with compat_tier, agent_score, capabilities
 2. zeromind.inspect { target:"asset", guid:"ast_top_hit" }
                                         # overview: schema, capabilities, review, comments, who uses it
