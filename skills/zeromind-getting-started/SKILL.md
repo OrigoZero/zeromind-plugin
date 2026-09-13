@@ -23,10 +23,12 @@ Run `zeromind.search` before you write a line of Luau. There are three winning o
 Only build from scratch when search genuinely turns up nothing usable — and then publish the result so the next agent gets outcome A.
 
 ```
-zeromind.search { "q": "<what the user asked for>", "kind": "<module|component|shader|scene|…>" }
+zeromind.search { "q": "<what the thing does or looks like>", "assetType": "<module|component|shader|scene|…>" }
 ```
 
 The ZeroMind tools — `zeromind.search` (find), `zeromind.inspect` (vet), `zeromind.preview` (see the exact tree an install would write — every file and dependency with its destination path, size and reason — writing nothing), `zeromind.install` (bring into the world), `zeromind.engage` (vote/comment/review/give back). `search`, `inspect`, and `engage` are pure REST and need **no open world** — you can scout before you ever open the engine; `zeromind.preview` and `zeromind.install` act on the world your engine calls reach (the engine fetches the bytes — you never download content or hand-write guids into `execute()`). Reach for `preview` before `install` when a hit might pull in more than you expect. **The dedicated `zeromind-library` skill is the full reference for this — read it whenever a request might be served by existing content (i.e. almost always).** Treat "did I check ZeroMind?" as a hard gate before any from-scratch work.
+
+`zeromind.search` reaches three places, chosen by `from`. Left off (`from: "all"`) it searches everything published, semantically only — keyword mode is refused there. `from: "owned"` searches the worlds the linked user owns or maintains — with `scope: "worlds"` and `mode: "keyword"` it finds one of those worlds by what is in it (a scene, an asset, a phrase in its README) when the name is forgotten, and each hit says which entries matched; an owned scope past 200 worlds says so on the answer (`owned_worlds_capped`). `from: "bound"` searches the world this conversation has open, answered by that world's engine: `mode: "keyword"` reads the world's own files, unpushed and private ones included; `mode: "semantic"` covers what ZeroMind may embed — the builtin library, installed libraries and imported assets, and the world itself when it is public — and says `private_world` when the world's own content is out of its reach. `match` picks whether a hit must match what a thing IS (`identity`) or what it DOES (`capability`) in both modes, on every `from`. In the engine itself, this is the same search as `discovery.search` — the module `guides` and `search_tools` also call for their own queries.
 
 `zeromind.help` orients you across the whole toolset, and `zeromind.issue` files a bug or piece of feedback about ZeroMind itself — reach for it when the platform misbehaves rather than working around it silently.
 
@@ -42,7 +44,7 @@ The ZeroMind tools — `zeromind.search` (find), `zeromind.inspect` (vet), `zero
 
   **Three surfaces reach the same registry — use whichever you already hold:**
   - **`bash`** ships `zero`: `zero` lists every toolbox, `zero <toolbox>` its tools, `zero <toolbox> <tool> --help` one tool's arguments and types, `zero <toolbox> <tool> [args]` runs it, `zero --search <query>` (short: `-k`) keyword-searches. **`--help` answers at every level** (`zero --help`, `zero <toolbox> --help`, `zero <toolbox> <tool> --help`), so you go from "what exists" to a correct call without leaving the shell. Arguments are named (`--fov 60`) or positional; a value that reads as JSON is passed as JSON.
-  - **MCP**: `search_tools` (no args lists the toolboxes; `query` searches across them) → `use_tool { toolbox, tool, args }`, with `describe_tool` for one tool's full schema when you know the name and need the exact arguments.
+  - **MCP**: `search_tools` (no args lists the toolboxes; `query` searches across them — by what a tool does, semantically, or by its words with `mode: "keyword"`) → `use_tool { toolbox, tool, args }`, with `describe_tool` for one tool's full schema when you know the name and need the exact arguments.
   - **Luau**: `tools.use("<toolbox>", "<tool>", ...)` from inside `execute`.
 
   **If your harness defers MCP tool schemas, load `search_tools` and `use_tool` before you start** — otherwise you'll hold `execute` and nothing else, and rebuild by hand what a tool already does. `zero` inside `bash` needs no extra schema load, so it is the cheapest way in when only `bash` is loaded.
@@ -126,7 +128,7 @@ Mode flips are cheap and reversible; there's no rebuild step. Play → `capture`
 guides {}                                    -- no args: returns the engine README (mental model + index)
 guides { "path": "core/getting-started" }    -- a specific guide (core/<name> or topics/<name>)
 guides { "path": "types/shader" }            -- an asset type's own reference (its property contract)
-guides { "query": "raycast" }                -- ranked full-text search across README + every guide
+guides { "query": "cast a ray and read what it hit" }   -- search across README, every guide and every asset type's reference; semantic by default, keyword with mode:"keyword"
 guides { "list": true }                      -- enumerate every available guide path
 ```
 
@@ -143,7 +145,7 @@ bash { "command": "man -l" }                 -- list every available manual entr
 
 For namespace-shaped sections (`man -s api world` lists `world/name`, `world/guid`, `world/participants`, ...), `man` falls back to a directory listing when the topic has no leaf — drill from `world` to `world/participants` without guessing the path. Same fallback for bare VFS directories: `man /zero/source/` lists everything under it.
 
-**When you don't know the right topic name:** `guides({query: "..."})` first, then `bash { "command": "man -k <pattern>" }` to find it, then drill in. `guides { list: true }` enumerates what actually exists.
+**When you don't know the right topic name:** `guides { query }` first, describing what you are trying to do rather than guessing a word the guide might use; it matches by meaning, and `mode: "keyword"` matches the words instead. Then `bash { "command": "man -k <pattern>" }` to find it, then drill in. `guides { list: true }` enumerates what actually exists.
 
 Hand-authored guides may contain occasional stale references. **`lsp.*` + live `_G` introspection are generated from the live registry and are more authoritative than any guide.** If something documented in a topic doesn't exist when you probe `_G` or `lsp.describe`, the guide is out of date.
 
@@ -238,7 +240,7 @@ A single connected session can handle dozens of iterations. If you find yourself
 Most user prompts will be one of these shapes — translate to the standard flow. **For anything that involves building, `zeromind.search` comes first** (see STEP 0):
 
 - **"make me a [game/scene/world] that does X"** → `zeromind.search({q: "X"})` first. Then `world.create`, `npx -y @origozero/zeromind open <guid>` to open it, `zeromind.install` what fits, and `execute` to assemble + fill the gaps.
-- **"add a [feature/system/mechanic]"** → `zeromind.search({q: "[feature]", kind: "module"})` first — `zeromind.install` a module/component if one exists, then wire it in. Only hand-write it if nothing usable turns up.
+- **"add a [feature/system/mechanic]"** → `zeromind.search({q: "[feature]", assetType: "module"})` first — `zeromind.install` a module/component if one exists, then wire it in. Only hand-write it if nothing usable turns up.
 - **"open my [name]"** → `npx -y @origozero/zeromind open "[name]"` in your shell — it resolves the name against the user's worlds itself.
 - **"delete my [name]"** → `world.delete({name})` — a reversible soft-delete (recoverable via `world.trash` → `world.restore` for ~30 days, then purged). Confirm with the user first unless they were explicit; you can't delete worlds you don't own.
 - **"add a [thing]"** to an open world → `execute` to spawn/configure, `capture` to verify, then `zm add . && zm commit -m '...' && zm push` once happy.
