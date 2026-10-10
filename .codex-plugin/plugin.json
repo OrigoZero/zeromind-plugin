@@ -19,5 +19,5 @@
     "wasm"
   ],
   "skills": "./skills",
-  "mcpServers": "./.mcp.json"
+  "mcpServers": "./dist-publishing/codex-plugin/.mcp.json"
 }

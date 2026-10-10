@@ -1,11 +1,13 @@
 {
   "name": "zeromind",
   "version": "0.7.1",
-  "description": "Drive your browser-running Zero engine worlds from Cursor — search and install published assets, iterate the world you have open with execute / capture / VFS tools. Bundles two agent skills and the MCP server.",
+  "description": "ZeroMind for Cursor: connects Cursor to the ZeroMind MCP server at origozero.ai/mcp. The agent writes and runs Luau in the Zero engine, edits the world's files, runs the world, takes screenshots and publishes a game that plays in a browser tab. Link the machine once with `zeromind link` from the `@origozero/zeromind` npm package.",
   "author": {
     "name": "OrigoZero",
     "email": "support@origozero.ai"
   },
+  "homepage": "https://origozero.ai/mcp-server",
+  "repository": "https://github.com/OrigoZero/zeromind-plugin",
   "license": "MIT",
   "keywords": ["zeromind", "origozero", "3d", "engine", "game-dev"]
 }

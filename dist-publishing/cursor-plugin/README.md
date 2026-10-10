@@ -31,7 +31,7 @@ Team / Enterprise admins: Dashboard → Settings → Plugins → Import → past
 
 ## Submit to the public marketplace
 
-PR to [`cursor/plugins`](https://github.com/cursor/plugins) — the official curated repo also serves as the marketplace catalog.
+Submit the repository link at [cursor.com/marketplace/publish](https://cursor.com/marketplace/publish). Cursor reads `.cursor-plugin/marketplace.json` at the repo root, which lists this directory as the `zeromind` plugin, and the Cursor team reviews each submission and each update.
 
 ## Upgrading
 

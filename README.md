@@ -153,7 +153,7 @@ Plain `http://` issuers work end to end: auth is a Bearer header on every reques
 - **The artifacts `zeromind install <harness>` wrote** — instruction blocks, skills, the MCP entry — refresh by re-running the install command.
 - **The Claude Code bundle** (skills + `.mcp.json`) updates through `/plugin`.
 
-Maintainers: `package.json` `version` is the source of truth — keep `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` in lockstep with it.
+Maintainers: `package.json` `version` is the source of truth. `tests/directory-manifests.test.ts` fails when a manifest it names carries a different one.
 
 ## Status
 
@@ -172,13 +172,30 @@ npm run lint
 
 The canonical agent operating manual lives in [`templates/manual.md`](templates/manual.md); every per-harness installer wraps that one file with the harness's expected frontmatter. Adding a harness is one entry in [`src/cli-install.ts`](src/cli-install.ts) plus an `ide/<harness>/README.md`.
 
+### Directory manifests
+
+Four plugin directories read a manifest from the root of this repository:
+
+| Directory | Root file | What it loads |
+|---|---|---|
+| Claude Code marketplace | `.claude-plugin/marketplace.json`, `.claude-plugin/plugin.json` | `skills/`, `.mcp.json` |
+| Gemini CLI extensions gallery | `gemini-extension.json` | `skills/`, `templates/manual.md` as the context file |
+| Codex plugins | `.codex-plugin/plugin.json` | `skills/`, `dist-publishing/codex-plugin/.mcp.json` |
+| Cursor Marketplace | `.cursor-plugin/marketplace.json` | the bundle in `dist-publishing/cursor-plugin/` |
+
+Nothing generates these files or the bundles under [`dist-publishing/`](dist-publishing/README.md). `tests/directory-manifests.test.ts` runs in CI and fails when a root manifest and its bundle disagree, when a path one of them names does not resolve, or when a bundle's copy of `skills/` differs from the original.
+
 ## Releasing
 
-1. Bump `version` in `package.json` (and the two `.claude-plugin` manifests).
+1. Bump `version` in `package.json` and in every manifest `tests/directory-manifests.test.ts` checks against it.
 2. `git tag vX.Y.Z && git push --tags` — the publish workflow runs.
 
 Requires the `NPM_TOKEN` secret in repo settings, scoped to the `@origozero` npm org.
 
+## Security
+
+[SECURITY.md](SECURITY.md) says how to report a vulnerability.
+
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).

@@ -2,7 +2,7 @@ name: zeromind
 display_name: ZeroMind
 description: "Drive your browser-running Zero engine worlds — search and install published assets, iterate the world you have open with execute / capture / VFS tools."
 author: OrigoZero
-homepage: https://github.com/OrigoZero/zeromind-plugin
+homepage: https://origozero.ai/mcp-server
 license: MIT
 keywords:
   - 3d
