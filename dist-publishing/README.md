@@ -7,10 +7,11 @@ canonical one-click flow.
 
 | Harness | Registry | Package | Submit |
 |---|---|---|---|
-| Codex | [Codex Plugin Directory](https://developers.openai.com/codex/plugins) (curated by OpenAI; 3rd-party submissions "coming soon") | [`codex-plugin/`](./codex-plugin/) | Add this repo as a personal/repo marketplace via Codex `/plugins` UI; submit to OpenAI's curated directory once open |
+| Codex | [Codex plugins](https://developers.openai.com/plugins/build/plugins) | [`codex-plugin/`](./codex-plugin/), mirrored by `.codex-plugin/plugin.json` at the repo root | `codex plugin marketplace add OrigoZero/zeromind-plugin`; the public directory takes submissions through OpenAI's portal |
 | Cline | [Cline MCP Marketplace](https://github.com/cline/mcp-marketplace) | [`cline-marketplace/zeromind.json`](./cline-marketplace/zeromind.json) | PR to `cline/mcp-marketplace` |
 | openClaw | [ClawHub](https://github.com/openclaw/clawhub) | [`clawhub/zeromind/`](./clawhub/zeromind/) | `clawhub skill publish` from the package dir |
-| Gemini CLI | [Gemini Extensions](https://github.com/google-gemini/gemini-cli/blob/main/docs/extension.md) | [`gemini-extension/zeromind/`](./gemini-extension/zeromind/) | Tag the repo + announce; users install via `gemini extensions install` |
+| Gemini CLI | [Gemini CLI extensions gallery](https://geminicli.com/docs/extensions/releasing/) | [`gemini-extension/zeromind/`](./gemini-extension/zeromind/), mirrored by `gemini-extension.json` at the repo root | The gallery crawls public repos with the `gemini-cli-extension` topic and a root manifest; users run `gemini extensions install https://github.com/OrigoZero/zeromind-plugin` |
+| Cursor | [Cursor Marketplace](https://cursor.com/docs/reference/plugins) | [`cursor-plugin/`](./cursor-plugin/), listed by `.cursor-plugin/marketplace.json` at the repo root | Submit the repository link at [cursor.com/marketplace/publish](https://cursor.com/marketplace/publish) |
 | Zed | [Zed extensions](https://zed.dev/extensions) | [`zed-extension/`](./zed-extension/) | PR to `zed-industries/extensions` |
 | Continue | [Continue Hub](https://hub.continue.dev/) | [`continue-hub/`](./continue-hub/) | Publish blocks via the Continue Hub web UI as `OrigoZero/zeromind-rule` + `OrigoZero/zeromind-mcp` |
 
@@ -23,6 +24,11 @@ packages ship with the npm package: `zeromind install cursor` and
 maintainer artifacts kept beside them under version control. A bundle
 carrying skill or manual text is a byte-identical copy of `skills/` or
 `templates/manual.md` — re-copy it whenever either changes.
+
+The Gemini, Codex and Cursor directories read a manifest from the repo
+root, not from here. Those root files point back into `skills/`,
+`templates/` and these bundles, and `tests/directory-manifests.test.ts`
+fails when a root manifest and its bundle disagree.
 
 ## Until each registry listing is live
 

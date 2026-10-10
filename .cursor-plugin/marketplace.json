@@ -1,0 +1,12 @@
+{
+  "name": "zeromind",
+  "owner": {
+    "name": "OrigoZero"
+  },
+  "plugins": [
+    {
+      "name": "zeromind",
+      "source": "dist-publishing/cursor-plugin"
+    }
+  ]
+}

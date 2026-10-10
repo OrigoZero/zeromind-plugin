@@ -11,26 +11,25 @@
 ## Install for end users
 
 ```
-gemini extensions install https://github.com/OrigoZero/zeromind-plugin --path dist-publishing/gemini-extension/zeromind
+gemini extensions install https://github.com/OrigoZero/zeromind-plugin
 ```
 
-…or for a published release tag:
-
-```
-gemini extensions install OrigoZero/zeromind-plugin@v0.5.0:dist-publishing/gemini-extension/zeromind
-```
-
-(The exact syntax depends on Gemini CLI's release — check the extension
-docs.) Once installed, the MCP server is wired and `GEMINI.md` is loaded
-automatically; no manual `~/.gemini/settings.json` edit.
+Gemini CLI installs a repository from its root, so that command reads the
+`gemini-extension.json` at the root of this repo. It is this bundle's
+manifest with one difference: its `contextFileName` is `templates/manual.md`,
+the file `GEMINI.md` here is a copy of. Add `--ref <tag>` to pin a release.
+Once installed, the MCP server is wired and the context file is loaded; no
+manual `~/.gemini/settings.json` edit.
 
 ## Updating
 
 When `@origozero/zeromind` releases a new version:
 
-1. Bump `version` in `zeromind/gemini-extension.json`.
+1. Bump `version` in `zeromind/gemini-extension.json` and in the root `gemini-extension.json`.
 2. Refresh `zeromind/GEMINI.md` from `templates/manual.md`.
-3. Tag and push — users running `gemini extensions update zeromind` pick it up.
+3. Tag and push. Users running `gemini extensions update zeromind` pick it up.
+
+`tests/directory-manifests.test.ts` fails if the two manifests or the two context files differ.
 
 ## Until the extension is published
 
