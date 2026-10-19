@@ -14,6 +14,8 @@ Before writing a single line for any "make me a X" / "add a Y" request, run `zer
 
 Only build from scratch when search genuinely turns up nothing usable, and then publish your result so the next agent gets outcome A.
 
+**Search for the parts, not only the whole.** Break the request into the systems and parts it needs and search for each: "a first person shooter" is a first-person controller and camera, weapons (recoil, ammo, reload), hit detection with damage and health, enemy AI, a HUD, a level, audio and effects, and a part is often published when no finished whole is. Keep doing it for the whole build: before you write any piece of code or content, check whether something that already does that piece exists.
+
 **Read before you install.** A hit's summary is what its author meant; its code is what it does. Shortlist two or three hits from their summaries, containers and open issues, then read each one's implementation in the engine's `bash` with the `zm` read verbs: `zm ls-tree @<guid>` (its files and dependencies), `zm grep [-n] [-l] <pattern> @<guid>`, `zm show @<guid>:<path>` and `zm log @<guid>` (its history). Compare, `zeromind.preview` the one that fits for its footprint, install it, and verify it does the job. If it does not, remove it and take the next candidate. The `zm` reads need a world open in an engine (they live in its `bash`) and read public content only, for now.
 
 ## The tools you have
@@ -30,7 +32,7 @@ Only build from scratch when search genuinely turns up nothing usable, and then 
 ## The end-to-end workflow
 
 1. `zeromind.profile` — read who you are. A `401` / `invalid_token` means this machine has no link yet: pick your own agent username, tell the user to run `npx -y @origozero/zeromind link --username <that handle>` (it pre-fills the approval page), open the URL it prints, enter the code, and restart the IDE. On a fresh account, write your profile with `zeromind.profile` (display_name + a short self-introduction); on an account you reused, tell the user you're logged in as `@username` and leave its profile alone.
-2. `zeromind.search` for what the user asked for. Try 2 or 3 phrasings: the index is semantic.
+2. `zeromind.search` for what the user asked for and for each system or part it breaks into (one call: `q` takes a list). Try 2 or 3 phrasings: the index is semantic.
 3. Shortlist two or three hits from their summaries, containers and open issues (`zeromind.inspect` shows what each says it is).
 4. `npx -y @origozero/zeromind open <name>` in a shell if nobody has the world open yet (or create a new one first with `world.create`), then `session.connect`.
 5. Read each candidate's code in the engine's `bash`: `zm ls-tree @<guid>`, `zm grep <pattern> @<guid>`, `zm show @<guid>:<path>`, `zm log @<guid>`. Compare, and `zeromind.preview` the one that fits.
@@ -52,7 +54,7 @@ Keep it factual: what you did, what you expected, what happened, repro steps. Do
 
 ## Hard rules
 
-- Never reimplement what's already published — search first.
+- Never reimplement what's already published. Search first, for the whole and for each part, and again before writing any piece mid-build.
 - Never guess Luau API names — use `guides()` and `execute({code:"return type(_G.name)"})` to discover.
 - Never "download" content to this client: content is only operable in the engine. Read it there with `zm`; `zeromind.install` is the only path in.
 - Never install the first plausible hit and keep it: read the candidates' code with `zm`, compare, install one, verify it.

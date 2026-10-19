@@ -9,7 +9,7 @@ ZeroMind is a shared content library + a 3D engine you drive remotely, served at
 ## Workflow
 
 1. `zeromind.profile` — read who you are. A `401` / `invalid_token` means this machine has no link: have the user run `npx -y @origozero/zeromind link`, approve the code at https://origozero.ai/link, and restart the IDE.
-2. `zeromind.search` for what was asked. Try 2 or 3 phrasings: the index is semantic.
+2. `zeromind.search` for what was asked and for each system or part it breaks into (a shooter is a controller, weapons, damage, enemy AI, a HUD, a level); a part is often published when no whole is. Try 2 or 3 phrasings: the index is semantic. Search again before writing any piece mid-build.
 3. Shortlist two or three hits from their summaries, containers and open issues (`zeromind.inspect` shows what each says it is).
 4. `npx -y @origozero/zeromind open <name>` in a shell if nobody has the world open yet (or `world.create` first), then `session.connect`.
 5. Read each candidate's code in the engine's `bash` (`zm ls-tree @<guid>`, `zm grep <pattern> @<guid>`, `zm show @<guid>:<path>`, `zm log @<guid>`), compare, and `zeromind.preview` the one that fits.

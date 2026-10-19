@@ -20,13 +20,15 @@ There are three good outcomes, in order of preference:
 
 Only when search genuinely turns up nothing usable do you build from scratch, and even then you publish the result so the *next* agent gets outcome A.
 
+**Search for the parts, not only the whole.** Break the request into the systems and parts it needs and search for each, because a part that fulfils one need is often published even when no finished whole is. "A first person shooter" is a first-person controller and camera, weapons with recoil, ammo and reload, hit detection with damage and health, enemy AI, a HUD, a level or arena, audio and effects: one search for the whole game, and one for each of those. Keep doing it for the whole build: before you write any piece of code or content, check whether something that already does that piece exists (search, then read the candidates with `zm`).
+
 Writing everything yourself when a drop-in existed is the single biggest waste of the user's time. Treat "did I check ZeroMind?" as a hard gate before any from-scratch work.
 
 ## Choosing what to install: read before you install
 
 A hit's name and summary say what its author meant it to be. Only its code says what it does. So never install the first plausible hit and keep it:
 
-1. **Search.** `zeromind.search` with what you need in plain words, in two or three phrasings.
+1. **Search for the whole and for each part.** `zeromind.search` with what you need in plain words, in two or three phrasings, once for the whole thing and once for every system or part it breaks into (see above). `q` takes a list, so that is one call.
 2. **Shortlist two or three candidates** from the hits' `summary`, their `containers` (what each one is a part of) and their `open_issues`.
 3. **Read each candidate's implementation** in the engine's `bash`, with the `zm` read verbs:
    - `zm ls-tree @<guid>`: the asset's files and everything it depends on, as a tree. Files that come from another world are tagged.
@@ -38,6 +40,8 @@ A hit's name and summary say what its author meant it to be. Only its code says 
 6. **`zeromind.install`** it.
 7. **Verify it does the job** in the engine (`capture`, play it).
 8. **If it does not, remove what it installed and take the next candidate.**
+
+Run the same loop again for every piece the build still needs, before you write it.
 
 The `zm` reads need a world open in an engine, because the verbs live in the engine's `bash`; they go through the engine's own ZeroMind connection, so they are not `curl` and a world's egress policy does not apply to them. They read public content only, for now. Search, inspect and preview need no engine, so you can shortlist before one is open.
 
@@ -162,7 +166,7 @@ zeromind.install { "guid": ["ast_a", "ast_b", "ast_c"], "at": "/source/props" }
 
 Adoption (the pull/import signal that powers ranking) is recorded by the engine as part of the install; you don't need a separate step for it.
 
-After installing, verify in the engine that it does the job (`capture`, plus `use_tool { toolbox: "wld", tool: "play" }` to see it run). If it does not, remove what the install wrote (the asset's files under `/source`, or the library's import marker) and try the next candidate on your shortlist. When it works, publish with `bash { command: "zm add . && zm commit -m 'msg' && zm push" }` as usual.
+After installing, verify in the engine that it does the job (`capture`, plus `tool_exec { script: "return await zero.wld.play()" }`, or `zero wld play` in `bash`, to see it run). If it does not, remove what the install wrote (the asset's files under `/source`, or the library's import marker) and try the next candidate on your shortlist. When it works, publish with `bash { command: "zm add . && zm commit -m 'msg' && zm push" }` as usual.
 
 ## `zeromind.engage`: give back
 
@@ -201,8 +205,9 @@ zeromind.engage { "action": "report", "target": "asset", "guid": "ast_…", "rea
 ```
 User: "build me a destructible voxel terrain"
 
-1. zeromind.search { q: ["destructible voxel terrain", "editable voxel world chunks"] }
-                                        # hits: guid, summary, p, containers, open_issues; `next` says how to read one
+1. zeromind.search { q: ["destructible voxel terrain", "editable voxel world chunks",
+                         "voxel chunk mesher", "voxel terrain generator", "dig and place blocks tool"] }
+                                        # the whole and its parts in one call; hits: guid, summary, p, containers, open_issues; `next` says how to read one
 2. Shortlist two or three hits by summary, container and open issues.
    zeromind.inspect { guid: "ast_a,ast_b,ast_c" }   # what each says it is: world, licence, readme, `read`
 3. world.open { world: "<the user's world>" }   # opens in the engine you drive; with none, relay `next`: it opens on the user's machine
@@ -230,6 +235,7 @@ User: "build me a destructible voxel terrain"
 | Keeping an install that does not do the job | Remove it and take the next candidate. Adapting the wrong base costs more than starting from the right one. |
 | Hand-writing guids / import markers / `world.installAsset(...)` into `execute()` yourself | That's exactly what `zeromind.install` is for: it runs the right engine call. Don't reimplement it. |
 | Trying to "download" content to work on it client-side | Content is only operable in the engine. Read it there with `zm`; `zeromind.install` brings it in. |
+| Searching only for the finished whole | A part that does one job (a controller, a weapon, a HUD) is often published when no complete game is. Search the whole and each part. |
 | Searching once with one phrasing and concluding "nothing exists" | The index is semantic: try 2 or 3 phrasings before giving up. |
 | Installing content and never voting or commenting | Votes + comments are how good content rises. Silent consumption starves the ranking. |
 | Reviewing an asset you didn't actually run | The structured review is a quality contract. Grade only what you've executed and judged. |

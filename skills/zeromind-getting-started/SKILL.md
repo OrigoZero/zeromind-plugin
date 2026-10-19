@@ -22,6 +22,8 @@ Run `zeromind.search` before you write a line of Luau. There are three winning o
 
 Only build from scratch when search genuinely turns up nothing usable, and then publish the result so the next agent gets outcome A.
 
+**Search for the parts, not only the whole.** Break the request into the systems and parts it needs and search for each: "a first person shooter" is a first-person controller and camera, weapons (recoil, ammo, reload), hit detection with damage and health, enemy AI, a HUD, a level, audio and effects, and a part is often published when no finished whole is. Keep doing it for the whole build: before you write any piece of code or content, check whether something that already does that piece exists.
+
 **Read before you install.** A hit's summary is what its author meant; its code is what it does. Shortlist two or three hits from their summaries, containers and open issues, then read each one's implementation in the engine's `bash` with the `zm` read verbs: `zm ls-tree @<guid>` (its files and dependencies), `zm grep [-n] [-l] <pattern> @<guid>`, `zm show @<guid>:<path>` and `zm log @<guid>` (its history). Compare, `zeromind.preview` the one that fits for its footprint, install it, and verify it does the job. If it does not, remove it and take the next candidate. The `zm` reads need a world open in an engine (they live in its `bash`) and read public content only, for now.
 
 ```
@@ -46,10 +48,10 @@ The ZeroMind tools: `zeromind.search` (find), `zeromind.inspect` (what a hit say
 
   **Three surfaces reach the same registry — use whichever you already hold:**
   - **`bash`** ships `zero`: `zero` lists every toolbox, `zero <toolbox>` its tools, `zero <toolbox> <tool> --help` one tool's arguments and types, `zero <toolbox> <tool> [args]` runs it, `zero --search <query>` (short: `-k`) keyword-searches. **`--help` answers at every level** (`zero --help`, `zero <toolbox> --help`, `zero <toolbox> <tool> --help`), so you go from "what exists" to a correct call without leaving the shell. Arguments are named (`--fov 60`) or positional; a value that reads as JSON is passed as JSON.
-  - **MCP**: `search_tools` (no args lists the toolboxes; `query` searches across them) → `use_tool { toolbox, tool, args }`, with `describe_tool` for one tool's full schema when you know the name and need the exact arguments.
+  - **MCP**: `search_tools` (no args lists the toolboxes; `query` searches across them) → `tool_exec { script }`, a JavaScript script run against the engine's tool catalogue (`return await zero.<toolbox>.<tool>(...args)`; one script can loop over and combine several calls), with `describe_tool` for one tool's full schema when you know the name and need the exact arguments.
   - **Luau**: `tools.use("<toolbox>", "<tool>", ...)` from inside `execute`.
 
-  **If your harness defers MCP tool schemas, load `search_tools` and `use_tool` before you start** — otherwise you'll hold `execute` and nothing else, and rebuild by hand what a tool already does. `zero` inside `bash` needs no extra schema load, so it is the cheapest way in when only `bash` is loaded.
+  **If your harness defers MCP tool schemas, load `search_tools` and `tool_exec` before you start** — otherwise you'll hold `execute` and nothing else, and rebuild by hand what a tool already does. `zero` inside `bash` needs no extra schema load, so it is the cheapest way in when only `bash` is loaded.
 - **Generic over specific.** When you build content, ask whether the underlying capability is generic. Don't accumulate one-off features.
 
 ## Linking this machine (once)
@@ -266,8 +268,8 @@ Most user prompts will be one of these shapes — translate to the standard flow
 | Hand-writing an operation in `execute`/`bash` without checking the tool registry first (`zero`, or `search_tools`) | It may already be a packaged tool — one call instead of reconstructing (and debugging) the Luau yourself. |
 | Concluding a capability does not exist because no TOOL matched | A system's ops, node types and templates live in that system's own registry, not the tool registry. Ask `agent_skill`, its `guides`, and its own toolbox before deciding you have to build it. |
 | Working a multi-step engine job out from first principles without listing `agent_skill` | A skill is the already-correct path for a whole job, and it carries the assets/guides/tools that job runs through. Listing costs one call. |
-| Working from `execute` alone because it was the only tool schema your harness loaded | Load `search_tools`/`use_tool`, or reach the same registry through `zero` in `bash`. Holding one tool is not evidence that one tool is the surface. |
-| Calling a toolbox as if it were a Luau global (`wld.play()`, `sc.spawn()`) | Toolboxes are not globals. Use `use_tool { toolbox, tool, args }` over MCP, `tools.use("<toolbox>", "<tool>", ...)` in Luau, or `zero <toolbox> <tool>` in `bash`. |
+| Working from `execute` alone because it was the only tool schema your harness loaded | Load `search_tools`/`tool_exec`, or reach the same registry through `zero` in `bash`. Holding one tool is not evidence that one tool is the surface. |
+| Calling a toolbox as if it were a Luau global (`wld.play()`, `sc.spawn()`) | Toolboxes are not globals. Use `tool_exec { script: "return await zero.wld.play()" }` over MCP, `tools.use("<toolbox>", "<tool>", ...)` in Luau, or `zero <toolbox> <tool>` in `bash`. |
 | Reading a shader's or component's source to learn what fields it accepts | The property contract is documented — `guides { path: "types/<kind>" }` for the asset kind, `man <component>` for a component. Read source only when the doc and the runtime disagree. |
 | Guessing function names instead of reading the README / `lsp.*` / `man` / the API source when the area is unfamiliar | Hallucinated APIs waste time and break user trust. The README + `lsp.*` are the highest-signal index. |
 | Same-frame screenshot reasoning | Multiple seconds pass between `execute` and `capture`. "Deferred mutation" / "next frame" excuses are wrong. |
