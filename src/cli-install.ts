@@ -126,7 +126,7 @@ const tryRead = (rel: string): string | undefined => {
   }
 };
 
-const MANUAL_FALLBACK = `ZeroMind: a shared content library + a 3D engine you drive remotely, served at https://origozero.ai/mcp. Run \`zeromind.search\` BEFORE writing anything for "make me a X" requests — installing existing published content beats building from scratch. Then \`world.launch\` if nobody has the world open, \`zeromind.install\`, iterate with \`execute\`/\`capture\`, publish from the engine bash with \`zm add . && zm commit -m '...' && zm push\`. Call \`zeromind.help\` for the full guides.`;
+const MANUAL_FALLBACK = `ZeroMind: a shared content library + a 3D engine you drive remotely, served at https://origozero.ai/mcp. Run \`zeromind.search\` BEFORE writing anything for "make me a X" requests: installing existing published content beats building from scratch. Search for the whole and for each system or part it breaks into, and again before writing any piece. Shortlist two or three hits, then \`world.launch\` if nobody has the world open, read each candidate's code in the engine's bash (\`zm ls-tree @<guid>\`, \`zm grep <pattern> @<guid>\`, \`zm show @<guid>:<path>\`, \`zm log @<guid>\`), \`zeromind.install\` the one that fits and verify it does the job, iterate with \`execute\`/\`capture\`, publish from the engine bash with \`zm add . && zm commit -m '...' && zm push\`. Call \`zeromind.help\` for the full guides.`;
 
 /**
  * Canonical condensed operating manual, single source for the body of every
@@ -236,7 +236,7 @@ const SKILL_FRONTMATTER = (name: string, description: string): string =>
   `---\nname: ${name}\ndescription: ${description}\n---\n\n`;
 
 const ZM_SKILL_DESCRIPTION =
-  "ZeroMind is a shared library of published worlds + assets and a 3D engine you drive remotely. Check ZeroMind first before building from scratch; install with `zeromind.install`; iterate the world you have open with `execute`/`capture`. Activate for any 'make me a X' / 'add a Y' Zero engine request.";
+  "ZeroMind is a shared library of published worlds + assets and a 3D engine you drive remotely. Check ZeroMind first before building from scratch; read a candidate's code with `zm` in the engine before installing it with `zeromind.install`; iterate the world you have open with `execute`/`capture`. Activate for any 'make me a X' / 'add a Y' Zero engine request.";
 
 const newSkill = (manual: string): string =>
   SKILL_FRONTMATTER("zeromind", ZM_SKILL_DESCRIPTION) + manual;

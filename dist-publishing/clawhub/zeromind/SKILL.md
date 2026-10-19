@@ -16,17 +16,23 @@ Treat the engine accordingly: **no shortcuts, no "for now" solutions, no stubs**
 
 Run `zeromind.search` before you write a line of Luau. There are three winning outcomes:
 
-- **A — Drop-in solution:** exactly what's asked for, marked `compatible`. Install it, done.
-- **B — Reusable parts:** several published pieces cover big chunks — install them and write only the glue.
-- **C — A base to modify:** the closest match is a strong starting point — install it and adapt instead of starting empty.
+- **A: Drop-in solution:** what's asked for, and its code shows it does the job. Install it and check that it works.
+- **B: Reusable parts:** several published pieces cover big chunks. Install them and write only the glue.
+- **C: A base to modify:** the closest match is a strong starting point. Install it and adapt instead of starting empty.
 
-Only build from scratch when search genuinely turns up nothing usable — and then publish the result so the next agent gets outcome A.
+Only build from scratch when search genuinely turns up nothing usable, and then publish the result so the next agent gets outcome A.
+
+**Search for the parts, not only the whole.** Break the request into the systems and parts it needs and search for each: "a first person shooter" is a first-person controller and camera, weapons (recoil, ammo, reload), hit detection with damage and health, enemy AI, a HUD, a level, audio and effects, and a part is often published when no finished whole is. Keep doing it for the whole build: before you write any piece of code or content, check whether something that already does that piece exists.
+
+**Read before you install.** A hit's summary is what its author meant; its code is what it does. Shortlist two or three hits from their summaries, containers and open issues, then read each one's implementation in the engine's `bash` with the `zm` read verbs: `zm ls-tree @<guid>` (its files and dependencies), `zm grep [-n] [-l] <pattern> @<guid>`, `zm show @<guid>:<path>` and `zm log @<guid>` (its history). Compare, `zeromind.preview` the one that fits for its footprint, install it, and verify it does the job. If it does not, remove it and take the next candidate. The `zm` reads need a world open in an engine (they live in its `bash`) and read public content only, for now.
 
 ```
-zeromind.search { "q": "<what the user asked for>", "kind": "<module|component|shader|scene|…>" }
+zeromind.search { "q": "<what the user asked for, in plain words>" }
 ```
 
-The ZeroMind tools — `zeromind.search` (find), `zeromind.inspect` (vet), `zeromind.preview` (see the exact tree an install would write — every file and dependency with its destination path, size and reason — writing nothing), `zeromind.install` (bring into the world), `zeromind.engage` (vote/comment/review/give back). `search`, `inspect`, and `engage` are pure REST and need **no open world** — you can scout before you ever open the engine; `zeromind.preview` and `zeromind.install` act on the world your engine calls reach (the engine fetches the bytes — you never download content or hand-write guids into `execute()`). Reach for `preview` before `install` when a hit might pull in more than you expect. **The dedicated `zeromind-library` skill is the full reference for this — read it whenever a request might be served by existing content (i.e. almost always).** Treat "did I check ZeroMind?" as a hard gate before any from-scratch work.
+Describe what the thing is or does and leave the type to search: it decides which asset types your words are about and says which in `types`. Name an `assetType` only when the task itself fixes the type (a `material` for a renderer, a `shader` to compile), because setting it replaces that step and a wrong guess returns nothing.
+
+The ZeroMind tools: `zeromind.search` (find), `zeromind.inspect` (what a hit says it is, from its metadata), `zeromind.preview` (the exact tree an install would write, every file and dependency with its destination path, size and reason, writing nothing), `zeromind.install` (bring into the world), `zeromind.engage` (vote/comment/review/give back). `search`, `inspect`, `preview` and `engage` are pure REST and need **no open world**: you can shortlist, and read the exact tree an install would lay down, before you ever open the engine. A candidate's code you read in the engine with `zm`. `zeromind.install` acts on the world your engine calls reach (the engine fetches the bytes; you never download content or hand-write guids into `execute()`). **The dedicated `zeromind-library` skill is the full reference for this — read it whenever a request might be served by existing content (i.e. almost always).** Treat "did I check ZeroMind?" as a hard gate before any from-scratch work.
 
 `zeromind.help` orients you across the whole toolset, and `zeromind.issue` files a bug or piece of feedback about ZeroMind itself — reach for it when the platform misbehaves rather than working around it silently.
 
@@ -42,10 +48,10 @@ The ZeroMind tools — `zeromind.search` (find), `zeromind.inspect` (vet), `zero
 
   **Three surfaces reach the same registry — use whichever you already hold:**
   - **`bash`** ships `zero`: `zero` lists every toolbox, `zero <toolbox>` its tools, `zero <toolbox> <tool> --help` one tool's arguments and types, `zero <toolbox> <tool> [args]` runs it, `zero --search <query>` (short: `-k`) keyword-searches. **`--help` answers at every level** (`zero --help`, `zero <toolbox> --help`, `zero <toolbox> <tool> --help`), so you go from "what exists" to a correct call without leaving the shell. Arguments are named (`--fov 60`) or positional; a value that reads as JSON is passed as JSON.
-  - **MCP**: `search_tools` (no args lists the toolboxes; `query` searches across them) → `use_tool { toolbox, tool, args }`, with `describe_tool` for one tool's full schema when you know the name and need the exact arguments.
+  - **MCP**: `search_tools` (no args lists the toolboxes; `query` searches across them) → `tool_exec { script }`, a JavaScript script run against the engine's tool catalogue (`return await zero.<toolbox>.<tool>(...args)`; one script can loop over and combine several calls), with `describe_tool` for one tool's full schema when you know the name and need the exact arguments.
   - **Luau**: `tools.use("<toolbox>", "<tool>", ...)` from inside `execute`.
 
-  **If your harness defers MCP tool schemas, load `search_tools` and `use_tool` before you start** — otherwise you'll hold `execute` and nothing else, and rebuild by hand what a tool already does. `zero` inside `bash` needs no extra schema load, so it is the cheapest way in when only `bash` is loaded.
+  **If your harness defers MCP tool schemas, load `search_tools` and `tool_exec` before you start** — otherwise you'll hold `execute` and nothing else, and rebuild by hand what a tool already does. `zero` inside `bash` needs no extra schema load, so it is the cheapest way in when only `bash` is loaded.
 - **Generic over specific.** When you build content, ask whether the underlying capability is generic. Don't accumulate one-off features.
 
 ## Linking this machine (once)
@@ -74,7 +80,7 @@ An agent running **inside** an engine is already in its world and never needs an
 
 ## The seamless flow
 
-1. **`zeromind.search`** — check whether the thing the user wants (or parts of it) already exists before building. See STEP 0 above and the `zeromind-library` skill. Inspect a hit, then `zeromind.install` a drop-in / parts / base into the world you are working in.
+1. **`zeromind.search`** — check whether the thing the user wants (or parts of it) already exists before building. See STEP 0 above and the `zeromind-library` skill. Shortlist two or three hits, read each one's code with `zm` in the engine's `bash` once a world is open, then `zeromind.install` the drop-in / parts / base that fits into the world you are working in and verify it.
 2. **`world.list`** — find by name, or `world.create({name: "..."})` for a new one. Worlds are persistent multiplayer 3D containers; everything you build lives inside one.
 3. **`world.launch`** — if nobody has the world open, this answers where it opens; `npx -y @origozero/zeromind open <guid>` in your shell is the step that opens it on this machine, then `session.connect` once the engine is live. A world the user already has open needs nothing.
 4. **`guides {}`** (no args) — returns the **guide index** (the README is listed first); then **read the README** with `guides { path: "readme" }`. **Do this every time you start work on a world.** The README is the highest-signal orientation for the live engine: the core ideas, the survey-first working rhythm, and the index of core-system and topic guides. It opens with the one rule that breaks the most builds — **the world is ALWAYS multiplayer:** give players their body/camera/input through the scene's PlayerPrototype, never a hand-rolled player rig (which passes single-peer testing, then breaks the instant a second player joins).
@@ -237,8 +243,8 @@ A single connected session can handle dozens of iterations. If you find yourself
 
 Most user prompts will be one of these shapes — translate to the standard flow. **For anything that involves building, `zeromind.search` comes first** (see STEP 0):
 
-- **"make me a [game/scene/world] that does X"** → `zeromind.search({q: "X"})` first. Then `world.create`, `npx -y @origozero/zeromind open <guid>` to open it, `zeromind.install` what fits, and `execute` to assemble + fill the gaps.
-- **"add a [feature/system/mechanic]"** → `zeromind.search({q: "[feature]", kind: "module"})` first — `zeromind.install` a module/component if one exists, then wire it in. Only hand-write it if nothing usable turns up.
+- **"make me a [game/scene/world] that does X"** → `zeromind.search({q: "X"})` first. Then `world.create`, `npx -y @origozero/zeromind open <guid>` to open it, shortlist the hits, read each candidate's code with `zm` in the engine's `bash`, `zeromind.install` the one that fits, and `execute` to assemble + fill the gaps.
+- **"add a [feature/system/mechanic]"** → `zeromind.search({q: "[feature]"})` first. Read the candidates with `zm`, `zeromind.install` the module/component that does the job, then wire it in. Only hand-write it if nothing usable turns up.
 - **"open my [name]"** → `npx -y @origozero/zeromind open "[name]"` in your shell — it resolves the name against the user's worlds itself.
 - **"delete my [name]"** → `world.delete({name})` — a reversible soft-delete (recoverable via `world.trash` → `world.restore` for ~30 days, then purged). Confirm with the user first unless they were explicit; you can't delete worlds you don't own.
 - **"add a [thing]"** to an open world → `execute` to spawn/configure, `capture` to verify, then `zm add . && zm commit -m '...' && zm push` once happy.
@@ -262,8 +268,8 @@ Most user prompts will be one of these shapes — translate to the standard flow
 | Hand-writing an operation in `execute`/`bash` without checking the tool registry first (`zero`, or `search_tools`) | It may already be a packaged tool — one call instead of reconstructing (and debugging) the Luau yourself. |
 | Concluding a capability does not exist because no TOOL matched | A system's ops, node types and templates live in that system's own registry, not the tool registry. Ask `agent_skill`, its `guides`, and its own toolbox before deciding you have to build it. |
 | Working a multi-step engine job out from first principles without listing `agent_skill` | A skill is the already-correct path for a whole job, and it carries the assets/guides/tools that job runs through. Listing costs one call. |
-| Working from `execute` alone because it was the only tool schema your harness loaded | Load `search_tools`/`use_tool`, or reach the same registry through `zero` in `bash`. Holding one tool is not evidence that one tool is the surface. |
-| Calling a toolbox as if it were a Luau global (`wld.play()`, `sc.spawn()`) | Toolboxes are not globals. Use `use_tool { toolbox, tool, args }` over MCP, `tools.use("<toolbox>", "<tool>", ...)` in Luau, or `zero <toolbox> <tool>` in `bash`. |
+| Working from `execute` alone because it was the only tool schema your harness loaded | Load `search_tools`/`tool_exec`, or reach the same registry through `zero` in `bash`. Holding one tool is not evidence that one tool is the surface. |
+| Calling a toolbox as if it were a Luau global (`wld.play()`, `sc.spawn()`) | Toolboxes are not globals. Use `tool_exec { script: "return await zero.wld.play()" }` over MCP, `tools.use("<toolbox>", "<tool>", ...)` in Luau, or `zero <toolbox> <tool>` in `bash`. |
 | Reading a shader's or component's source to learn what fields it accepts | The property contract is documented — `guides { path: "types/<kind>" }` for the asset kind, `man <component>` for a component. Read source only when the doc and the runtime disagree. |
 | Guessing function names instead of reading the README / `lsp.*` / `man` / the API source when the area is unfamiliar | Hallucinated APIs waste time and break user trust. The README + `lsp.*` are the highest-signal index. |
 | Same-frame screenshot reasoning | Multiple seconds pass between `execute` and `capture`. "Deferred mutation" / "next frame" excuses are wrong. |
