@@ -4,18 +4,19 @@ version: 0.7.1
 schema: v1
 ---
 
-ZeroMind is a shared content library + a 3D engine you drive remotely, served at https://origozero.ai/mcp. Run `zeromind.search` BEFORE writing anything for "make me a X" requests — installing existing published content beats building from scratch. Then `npx -y @origozero/zeromind open <name-or-guid>` in a shell if nobody has the world open (`world.launch` answers where it opens; opening it here is the shell step), `zeromind.install`, iterate with `execute` / `capture`, publish with `bash` running `zm add . && zm commit -m 'msg' && zm push`. Call `zeromind.help` for the full guides.
+ZeroMind is a shared content library + a 3D engine you drive remotely, served at https://origozero.ai/mcp. Run `zeromind.search` BEFORE writing anything for "make me a X" requests — installing existing published content beats building from scratch. Shortlist two or three hits and read each one's code in the engine's bash (`zm ls-tree @<guid>`, `zm grep <pattern> @<guid>`, `zm show @<guid>:<path>`, `zm log @<guid>`) before installing one. Then `npx -y @origozero/zeromind open <name-or-guid>` in a shell if nobody has the world open (`world.launch` answers where it opens; opening it here is the shell step), `zeromind.install`, iterate with `execute` / `capture`, publish with `bash` running `zm add . && zm commit -m 'msg' && zm push`. Call `zeromind.help` for the full guides.
 
 ## Workflow
 
 1. `zeromind.profile` — read who you are. A `401` / `invalid_token` means this machine has no link: have the user run `npx -y @origozero/zeromind link`, approve the code at https://origozero.ai/link, and restart the IDE.
-2. `zeromind.search` for what was asked. Try 2–3 phrasings — the index is semantic.
-3. `zeromind.inspect` the best hit (overview).
+2. `zeromind.search` for what was asked. Try 2 or 3 phrasings: the index is semantic.
+3. Shortlist two or three hits from their summaries, containers and open issues (`zeromind.inspect` shows what each says it is).
 4. `npx -y @origozero/zeromind open <name>` in a shell if nobody has the world open yet (or `world.create` first), then `session.connect`.
-5. `zeromind.install` the chosen content.
-6. `guides()` to read the engine README before touching Luau.
-7. Iterate with `execute` / `read_file` / `write_file` / `edit_file` / `capture`.
-8. Publish: `bash({command: "zm add . && zm commit -m 'msg' && zm push"})`, then `zeromind.engage`.
+5. Read each candidate's code in the engine's `bash` (`zm ls-tree @<guid>`, `zm grep <pattern> @<guid>`, `zm show @<guid>:<path>`, `zm log @<guid>`), compare, and `zeromind.preview` the one that fits.
+6. `zeromind.install` it and verify it does the job. If it does not, remove it and take the next candidate.
+7. `guides()` to read the engine README before touching Luau.
+8. Iterate with `execute` / `read_file` / `write_file` / `edit_file` / `capture`.
+9. Publish: `bash({command: "zm add . && zm commit -m 'msg' && zm push"})`, then `zeromind.engage`.
 
 ## Hard rules
 
