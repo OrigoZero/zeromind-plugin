@@ -59,7 +59,7 @@ async function jsonRequest<T>(url: string, init: Parameters<typeof fetch>[1] = {
   if (!response.ok) {
     await response.body?.cancel();
     throw new Error(
-      `OAuth request failed (${response.status}); run zero login if authorization expired.`,
+      `OAuth request failed (${response.status}); run zero login --force if authorization expired.`,
     );
   }
   return (await response.json()) as T;
@@ -90,6 +90,19 @@ function withTokens(login: Omit<Login, "access_token" | "expires_at">, tokens: T
   };
 }
 
+async function refreshLogin(stored: Login): Promise<Login> {
+  if (!stored.refresh_token) throw new Error("Sign-in expired; run zero login.");
+  const tokens = await tokenForm(stored.metadata.token_endpoint, {
+    grant_type: "refresh_token",
+    refresh_token: stored.refresh_token,
+    client_id: stored.client_id,
+    resource: stored.resource,
+  });
+  const updated = withTokens(stored, tokens);
+  saveState(FILE, updated);
+  return updated;
+}
+
 export async function login(
   options: {
     open?: (url: string) => Promise<void>;
@@ -103,6 +116,17 @@ export async function login(
     const base = issuer();
     const out = options.out ?? ((s: string) => process.stderr.write(s + "\n"));
     const previous = readState<Login>(FILE);
+    if (
+      !options.force &&
+      !options.scope &&
+      previous?.issuer === base &&
+      previous.expires_at <= Date.now() + 60_000 &&
+      previous.refresh_token
+    ) {
+      await refreshLogin(previous);
+      out("Signed in. Existing authorization refreshed.");
+      return;
+    }
     if (
       !options.force &&
       !options.scope &&
@@ -244,15 +268,7 @@ export async function cliBearer(): Promise<string> {
     const stored = readState<Login>(FILE);
     if (stored?.issuer === issuer()) {
       if (stored.expires_at > Date.now() + 60_000) return stored.access_token;
-      if (!stored.refresh_token) throw new Error("Sign-in expired; run zero login.");
-      const tokens = await tokenForm(stored.metadata.token_endpoint, {
-        grant_type: "refresh_token",
-        refresh_token: stored.refresh_token,
-        client_id: stored.client_id,
-        resource: stored.resource,
-      });
-      const updated = withTokens(stored, tokens);
-      saveState(FILE, updated);
+      const updated = await refreshLogin(stored);
       return updated.access_token;
     }
     const linked = installSecret(loadCache());

@@ -66,15 +66,15 @@ it("authorizes with PKCE, ignores a wrong-state callback, rotates once for concu
         }
       } else {
         refreshes++;
-        if (fields.get("refresh_token") !== "refresh1") {
+        if (fields.get("refresh_token") !== `refresh${refreshes}`) {
           res.writeHead(400).end("{}");
           return;
         }
       }
       res.end(
         JSON.stringify({
-          access_token: refreshes ? "access2" : "access1",
-          refresh_token: refreshes ? "refresh2" : "refresh1",
+          access_token: `access${refreshes + 1}`,
+          refresh_token: `refresh${refreshes + 1}`,
           token_type: "Bearer",
           expires_in: 3600,
         }),
@@ -109,8 +109,18 @@ it("authorizes with PKCE, ignores a wrong-state callback, rotates once for concu
   saveState("cli-oauth.json", { ...stored, expires_at: 0 });
   expect(await Promise.all([cliBearer(), cliBearer()])).toEqual(["access2", "access2"]);
   expect(refreshes).toBe(1);
+  const rotated = JSON.parse(readFileSync(join(directory, "cli-oauth.json"), "utf8"));
+  saveState("cli-oauth.json", { ...rotated, expires_at: 0 });
+  await login({
+    out: (s) => output.push(s),
+    open: async () => {
+      throw new Error("A valid refresh grant should reuse authorization");
+    },
+  });
+  expect(await cliBearer()).toBe("access3");
+  expect(refreshes).toBe(2);
   await logout();
-  expect(revoked).toEqual(["refresh2", "access2"]);
+  expect(revoked).toEqual(["refresh3", "access3"]);
   expect(output.join("\n")).not.toContain("access1");
   expect(output.join("\n")).not.toContain("refresh1");
 });

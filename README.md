@@ -11,6 +11,15 @@ npm install -g @origozero/zeromind
 zero login
 ```
 
+In Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`.
+From a built source checkout, invoke `node dist/index.js` in place of `zero`,
+and `node dist/shell.js` in place of `zero-shell`:
+
+```sh
+node dist/index.js --help
+node dist/index.js --context my-agent sessions
+```
+
 Use a distinct context name for each agent. Reuse that name across commands:
 
 ```sh

@@ -34,12 +34,29 @@ export function saveState(name: string, value: unknown): void {
 /** Serialize credential rotation across CLI processes. */
 export async function credentialLock<T>(work: () => Promise<T>): Promise<T> {
   mkdirSync(cacheDir(), { recursive: true, mode: 0o700 });
-  const release = await lock(statePath("cli-credentials"), {
-    realpath: false,
-    stale: 30_000,
-    update: 10_000,
-    retries: { retries: 40, minTimeout: 100, maxTimeout: 1000 },
-  });
+  const started = Date.now();
+  let release: () => Promise<void>;
+  let announced = false;
+  for (;;) {
+    try {
+      release = await lock(statePath("cli-credentials"), {
+        realpath: false,
+        stale: 30_000,
+        update: 10_000,
+        retries: 0,
+      });
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ELOCKED") throw error;
+      if (Date.now() - started > 30_000)
+        throw new Error("Another CLI authentication operation is active; retry when it finishes.");
+      if (!announced && Date.now() - started > 2000) {
+        process.stderr.write("Waiting for another Zero CLI authentication operation...\n");
+        announced = true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
   try {
     return await work();
   } finally {
