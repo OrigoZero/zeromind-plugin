@@ -12,6 +12,7 @@ zero logout                              revoke the CLI's OAuth authorization
 zero --context <agent> sessions           list engines, worlds and branches
 zero --context <agent> connect --session <id>
 zero --context <agent> connect --world <world> --branch <branch>
+zero --context <agent> disconnect         release this context's engine connection
 zero --context <agent> tools              list hosted operations and schemas
 zero --context <agent> call <tool> --input '<json>'
 zero --context <agent> bash -c '<command>' run in the engine's shell
@@ -148,6 +149,10 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
       if (args.length) throw new Error("Usage: zero sessions");
       tool = "session.list";
       break;
+    case "disconnect":
+      if (args.length) throw new Error("Usage: zero disconnect");
+      tool = "world.disconnect";
+      break;
     case "tools":
       if (args.length) throw new Error("Usage: zero tools");
       break;
@@ -196,6 +201,10 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
     }
     const result = await client.callTool(tool, input);
     if (result.isError) throw new Error(result.text);
+    if (command !== "call") {
+      process.stdout.write(JSON.stringify(data(result), null, 2) + "\n");
+      return;
+    }
     process.stdout.write(
       JSON.stringify(
         { content: result.content, structuredContent: result.structuredContent },

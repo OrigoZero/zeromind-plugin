@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { cacheDir } from "./config.js";
+import { lock } from "proper-lockfile";
 
 export const statePath = (name: string): string => join(cacheDir(), name);
 
@@ -33,25 +34,16 @@ export function saveState(name: string, value: unknown): void {
 /** Serialize credential rotation across CLI processes. */
 export async function credentialLock<T>(work: () => Promise<T>): Promise<T> {
   mkdirSync(cacheDir(), { recursive: true, mode: 0o700 });
-  const path = statePath("cli-auth.lock");
-  const deadline = Date.now() + 30_000;
-  for (;;) {
-    try {
-      writeFileSync(path, String(process.pid), { flag: "wx", mode: 0o600 });
-      break;
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
-      if (Date.now() >= deadline)
-        throw new Error(
-          `Authentication is busy; retry after the other login finishes. Lock: ${path}`,
-        );
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  }
+  const release = await lock(statePath("cli-credentials"), {
+    realpath: false,
+    stale: 30_000,
+    update: 10_000,
+    retries: { retries: 40, minTimeout: 100, maxTimeout: 1000 },
+  });
   try {
     return await work();
   } finally {
-    unlinkSync(path);
+    await release();
   }
 }
 

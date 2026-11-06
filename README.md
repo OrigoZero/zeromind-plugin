@@ -24,6 +24,7 @@ zero --context my-agent bash -c 'zm status'
 select one explicitly with `connect --session <id>`. The hosted service owns
 selection and permissions; the context preserves the caller identity and engine
 pin between CLI processes. A disappeared engine is reported by the server.
+Release the context's connection when finished with `zero --context my-agent disconnect`.
 
 Set `ZERO_CONTEXT` to omit `--context`. Codex's `CODEX_THREAD_ID` is used when
 present and no explicit context was supplied. Different contexts keep separate
@@ -47,10 +48,17 @@ shell script from host stdin:
 printf 'pwd\nls /zero/source\n' | zero --context my-agent bash -s
 ```
 
-This command interface accepts complete commands and scripts. Interactive TTY
+For a harness that accepts a custom shell executable, choose `zero-shell`, set
+`ZERO_CONTEXT` to the context connected above, and disable login-shell mode. Its
+ordinary `-c` calls then execute in the selected engine:
+
+```sh
+ZERO_CONTEXT=my-agent zero-shell -c 'pwd; ls /zero/source'
+```
+
+The adapter accepts `-c <command>` and `-s` (a script on stdin). Interactive TTY
 attachment, streaming command stdin, and remote cancellation require an adapter
-to those engine facilities; this release does not advertise a replacement login
-shell. The existing `open` command opens the local browser or native handler and
+to those engine facilities. The existing `open` command opens the local browser or native handler and
 reports that handoff; use `sessions` and `connect` to select the ready engine.
 
 OAuth requests `read write` by default. To publish, authorize the corresponding

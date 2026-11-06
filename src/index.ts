@@ -14,6 +14,7 @@ const run = async (): Promise<void> => {
       "logout",
       "sessions",
       "connect",
+      "disconnect",
       "tools",
       "call",
       "bash",
