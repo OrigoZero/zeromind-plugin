@@ -5,7 +5,8 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "zeromind": "dist/index.js"
+    "zeromind": "dist/index.js",
+    "zero": "dist/index.js"
   },
   "files": [
     "dist/",

@@ -1,11 +1,28 @@
 #!/usr/bin/env node
-// `zeromind` — links this machine to ZeroMind once, writes the `/mcp` server
-// entry into an agent harness's own config, uploads local files into a world,
-// and opens a world here on this machine. Every tool an agent then uses comes
-// from https://origozero.ai/mcp; nothing runs here.
+// `zero` and `zeromind` connect shell callers and agent harnesses to hosted
+// ZeroMind, and open worlds and transfer files from this machine.
 const argv = process.argv.slice(2);
 const command = argv[0];
 const run = async (): Promise<void> => {
+  if (
+    !command ||
+    [
+      "--help",
+      "-h",
+      "--context",
+      "login",
+      "logout",
+      "sessions",
+      "connect",
+      "tools",
+      "call",
+      "bash",
+    ].includes(command)
+  ) {
+    const { runRemoteCli } = await import("./cli-remote.js");
+    await runRemoteCli(argv);
+    return;
+  }
   if (command === "install") {
     const { runInstallCli } = await import("./cli-install.js");
     await runInstallCli(argv.slice(1));
@@ -21,8 +38,12 @@ const run = async (): Promise<void> => {
     await runOpenCli(argv.slice(1));
     return;
   }
-  const { runLinkCli } = await import("./cli-link.js");
-  await runLinkCli(argv);
+  if (["link", "status", "unlink"].includes(command)) {
+    const { runLinkCli } = await import("./cli-link.js");
+    await runLinkCli(argv);
+    return;
+  }
+  throw new Error(`Unknown command: ${command}. Run zero --help.`);
 };
 // A failure is reported and the exit code set, never `process.exit()`: on
 // Windows, exiting the process while a socket is still closing aborts it with

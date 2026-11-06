@@ -12,13 +12,20 @@ import { VERSION } from "./zeromind-client.js";
 export const PROTOCOL_VERSION = "2025-06-18";
 
 /** What a tool answered: its text content, and whether it refused. */
-export type ToolOutcome = { text: string; isError: boolean };
+export type ToolOutcome = {
+  text: string;
+  isError: boolean;
+  content?: unknown[];
+  structuredContent?: unknown;
+};
 
 type JsonRpcMessage = {
   id?: number | string;
   result?: {
     content?: Array<{ type: string; text?: string }>;
     isError?: boolean;
+    structuredContent?: unknown;
+    tools?: unknown[];
   };
   error?: { code: number; message: string };
 };
@@ -53,6 +60,7 @@ export class McpHttpClient {
     private readonly url: string,
     private readonly bearer: string,
     private readonly harness = "zeromind-cli",
+    private readonly conversation?: string,
   ) {}
 
   private headers(): Record<string, string> {
@@ -76,7 +84,7 @@ export class McpHttpClient {
     });
     if (res.status === 401) {
       throw new Error(
-        `${this.url} rejected this machine's credential (401); run \`zeromind link\` and try again`,
+        `${this.url} rejected this machine's credential (401); run \`zeromind login\` or \`zeromind link\` and try again`,
       );
     }
     if (!res.ok) throw new Error(`${this.url} answered ${res.status}: ${await res.text()}`);
@@ -91,6 +99,7 @@ export class McpHttpClient {
       id,
       method: "initialize",
       params: {
+        ...(this.conversation ? { _meta: { threadId: this.conversation } } : {}),
         protocolVersion: PROTOCOL_VERSION,
         capabilities: {},
         clientInfo: { name: "zeromind-cli", version: VERSION },
@@ -118,7 +127,11 @@ export class McpHttpClient {
       jsonrpc: "2.0",
       id,
       method: "tools/call",
-      params: { name, arguments: args },
+      params: {
+        name,
+        arguments: args,
+        ...(this.conversation ? { _meta: { threadId: this.conversation } } : {}),
+      },
     });
     const message = await readMessage(res, id);
     if (message.error) return { text: message.error.message, isError: true };
@@ -126,6 +139,24 @@ export class McpHttpClient {
       .map((part) => part.text)
       .filter((part): part is string => typeof part === "string")
       .join("\n");
-    return { text, isError: message.result?.isError === true };
+    return {
+      text,
+      isError: message.result?.isError === true,
+      content: message.result?.content,
+      structuredContent: message.result?.structuredContent,
+    };
+  }
+
+  async listTools(): Promise<unknown[]> {
+    const id = this.nextId++;
+    const res = await this.post({
+      jsonrpc: "2.0",
+      id,
+      method: "tools/list",
+      params: this.conversation ? { _meta: { threadId: this.conversation } } : {},
+    });
+    const message = await readMessage(res, id);
+    if (message.error) throw new Error(message.error.message);
+    return message.result?.tools ?? [];
   }
 }

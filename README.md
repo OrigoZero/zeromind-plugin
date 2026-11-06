@@ -1,6 +1,63 @@
 # @origozero/zeromind
 
-`@origozero/zeromind` is two things: a **declaration of the remote ZeroMind MCP server** (`https://origozero.ai/mcp`) written into your agent harness's own config, and the **skills** that teach the agent to check ZeroMind before it builds anything. Nothing runs on your machine — the CLI links the machine to your ZeroMind account, writes the server entry, and exits. Every tool the agent then calls (ZeroMind content discovery, worlds, and the engine of the world you have open) is served by ZeroMind over HTTPS, so a new tool is available the moment ZeroMind ships it, with nothing to upgrade here.
+`@origozero/zeromind` connects your agent to ZeroMind through its shell or its MCP integration. The `zero` and `zeromind` commands call the hosted server at `https://origozero.ai/mcp`, which authenticates the caller and routes operations to the selected engine. Worlds, branches, files, and shell execution live in that engine, whether it runs in a browser, on this computer, or elsewhere. The package also installs harness configuration and the skills that teach agents to use ZeroMind.
+
+## Use your agent's shell
+
+Install the CLI and approve its browser sign-in once:
+
+```sh
+npm install -g @origozero/zeromind
+zero login
+```
+
+Use a distinct context name for each agent. Reuse that name across commands:
+
+```sh
+zero --context my-agent sessions
+zero --context my-agent connect --world "My World" --branch feature
+zero --context my-agent bash -c 'pwd; ls /zero/source'
+zero --context my-agent bash -c 'zm status'
+```
+
+`sessions` names each engine, its world and branch. When several engines match,
+select one explicitly with `connect --session <id>`. The hosted service owns
+selection and permissions; the context preserves the caller identity and engine
+pin between CLI processes. A disappeared engine is reported by the server.
+
+Set `ZERO_CONTEXT` to omit `--context`. Codex's `CODEX_THREAD_ID` is used when
+present and no explicit context was supplied. Different contexts keep separate
+shell directories, variables and selected engines. `zero tools` returns the
+hosted tool catalogue and schemas; `zero call` reaches every operation it lists:
+
+```sh
+zero --context my-agent tools
+zero --context my-agent call world.list
+zero --context my-agent call read_file --input '{"path":"/zero/source/main.luau"}'
+```
+
+Generic calls print the MCP content blocks and structured content as JSON,
+including images and other non-text results. `bash -c` instead writes the engine
+shell's stdout and stderr to the corresponding host streams and returns its exit
+status. The CLI uses the engine's shell API through hosted `execute` to retain
+those fields, and follows promoted work with hosted `wait`. `bash -s` reads a
+shell script from host stdin:
+
+```sh
+printf 'pwd\nls /zero/source\n' | zero --context my-agent bash -s
+```
+
+This command interface accepts complete commands and scripts. Interactive TTY
+attachment, streaming command stdin, and remote cancellation require an adapter
+to those engine facilities; this release does not advertise a replacement login
+shell. The existing `open` command opens the local browser or native handler and
+reports that handoff; use `sessions` and `connect` to select the ready engine.
+
+OAuth requests `read write` by default. To publish, authorize the corresponding
+scope with `zero login --scope 'read write publish'`. Tokens refresh automatically
+and are stored separately from the engine's machine-link cache. `zero logout`
+revokes the CLI's OAuth tokens. Existing `/link` credentials also work with these
+commands. The open and upload commands reuse OAuth sign-in when present.
 
 Each supported harness (Claude Code, Cursor, Codex CLI, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, openClaw, JetBrains Junie, Sourcegraph Amp, GitHub Copilot, Block Goose, Aider) gets its onboarding through that harness's own native channel — skills, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/*.mdc`, `.clinerules`, `CONVENTIONS.md`, `.goosehints` — plus the MCP entry in the config file that harness reads. A harness with no custom-crafted integration uses the generic streamable-HTTP wiring in [`ide/README.md`](ide/README.md#generic-mcp-fallback).
 
