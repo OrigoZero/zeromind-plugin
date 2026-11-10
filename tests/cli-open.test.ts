@@ -170,7 +170,7 @@ describe("zeromind open", () => {
     const child = spawn(
       process.execPath,
       [join(process.cwd(), "dist", "index.js"), "open", "No Such World"],
-      { env: { ...process.env, ZEROMIND_CONFIG_DIR: configDir } },
+      { env: { ...process.env, ZERO_CONTEXT: "open-test", ZEROMIND_CONFIG_DIR: configDir } },
     );
     let stdout = "";
     let stderr = "";

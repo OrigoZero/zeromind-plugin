@@ -12,10 +12,11 @@
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { cacheDir, installSecret, loadCache } from "./config.js";
+import { cacheDir } from "./config.js";
 import { McpHttpClient } from "./mcp-client.js";
 import { remoteUrl } from "./server-spec.js";
 import { issuer } from "./zeromind-client.js";
+import { cliBearer } from "./cli-agent.js";
 
 /** Which face of the world opens: its editor, or the game as a player sees it. */
 export type OpenMode = "edit" | "play";
@@ -351,8 +352,7 @@ export const runOpenCli = async (
   const resolveWorld =
     deps.resolveWorld ??
     (async (name: string) => {
-      const secret = installSecret(loadCache());
-      if (!secret) throw new Error("this machine is not linked; run `zeromind link` first");
+      const secret = await cliBearer();
       client = new McpHttpClient(remoteUrl(), secret);
       await client.initialize();
       return resolveWorldName(name, client);

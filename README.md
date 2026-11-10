@@ -1,6 +1,133 @@
 # @origozero/zeromind
 
-`@origozero/zeromind` is two things: a **declaration of the remote ZeroMind MCP server** (`https://origozero.ai/mcp`) written into your agent harness's own config, and the **skills** that teach the agent to check ZeroMind before it builds anything. Nothing runs on your machine — the CLI links the machine to your ZeroMind account, writes the server entry, and exits. Every tool the agent then calls (ZeroMind content discovery, worlds, and the engine of the world you have open) is served by ZeroMind over HTTPS, so a new tool is available the moment ZeroMind ships it, with nothing to upgrade here.
+`@origozero/zeromind` connects your agent to ZeroMind through its shell or its MCP integration. The `zero` and `zeromind` commands call the hosted server at `https://origozero.ai/mcp`, which authenticates the caller and routes operations to the selected engine. Worlds, branches, files, and shell execution live in that engine, whether it runs in a browser, on this computer, or elsewhere. The package also installs harness configuration and the skills that teach agents to use ZeroMind.
+
+## Use your agent's shell
+
+Install the CLI and approve its browser sign-in once:
+
+```sh
+npm install -g @origozero/zeromind
+zero login
+```
+
+In Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`.
+From a built source checkout, invoke `node dist/index.js` in place of `zero`,
+and `node dist/shell.js` in place of `zero-shell`:
+
+```sh
+node dist/index.js --help
+node dist/index.js --context my-agent sessions
+```
+
+Use a distinct context name for each agent. Reuse that name across commands:
+
+```sh
+zero --context my-agent sessions
+zero --context my-agent connect --world "My World" --branch feature
+zero --context my-agent bash -c 'pwd; ls /zero/source'
+zero --context my-agent bash -c 'zm status'
+```
+
+`sessions` names each engine, its world and branch. When several engines match,
+select one explicitly with `connect --session <id>`. The hosted service owns
+selection and permissions; the context preserves the caller identity and engine
+pin between CLI processes. A disappeared engine is reported by the server.
+Release the context's connection when finished with `zero --context my-agent disconnect`.
+
+Set `ZERO_CONTEXT` to omit `--context`. Codex's `CODEX_THREAD_ID` is used when
+present and no explicit context was supplied. Different contexts keep separate
+shell directories, variables and selected engines. `zero tools` returns the
+hosted tool catalogue and schemas; `zero call` reaches every operation it lists:
+
+```sh
+zero --context my-agent tools
+zero --context my-agent call world.list
+zero --context my-agent call read_file --input '{"path":"/zero/source/main.luau"}'
+```
+
+Generic calls print the MCP content blocks and structured content as JSON,
+including images and other non-text results. `bash -c` instead writes the engine
+shell's stdout and stderr to the corresponding host streams and returns its exit
+status. The CLI uses the engine's shell API through hosted `execute` to retain
+those fields, and follows promoted work with hosted `wait`. `bash -s` reads a
+shell script from host stdin:
+
+```sh
+printf 'pwd\nls /zero/source\n' | zero --context my-agent bash -s
+```
+
+For a harness that accepts a custom shell executable, choose `zero-shell`, set
+`ZERO_CONTEXT` to the context connected above, and disable login-shell mode. Its
+ordinary `-c` calls then execute in the selected engine:
+
+```sh
+ZERO_CONTEXT=my-agent zero-shell -c 'pwd; ls /zero/source'
+```
+
+The adapter accepts `-c <command> [arg0 args...]`, `-s [args...]` (a script on
+stdin), or an engine VFS script path followed by its arguments. Argument boundaries,
+empty strings and shell-sensitive characters are preserved. With an engine
+exposing the attached-shell API, command input and separate output streams flow
+through the hosted connection, and interruption cancels the remote command.
+
+Run `zero-shell -i` or `zero --context my-agent bash -i` for an interactive
+session. A bare `zero-shell` opens one when stdin is a terminal. Local line
+editing and history feed the engine's parser, which reads multiline commands and
+heredocs. Shell variables and the working directory persist until exit or EOF;
+Ctrl+C interrupts the current command and returns to its prompt.
+
+`zero login --username my-agent` opens the approval page for the CLI's own agent
+account. You can select an existing agent there. On a remote computer, pass
+`--no-browser` and open the printed URL on your own device. The CLI verifies that
+the approved account is an agent; `zero whoami` shows that identity. Credentials
+are stored separately from the engine's machine-link cache. `zero logout`
+revokes this CLI installation. An existing agent `/link` credential can also be
+used after its account identity is verified.
+
+### Launch a native engine from the CLI
+
+```sh
+zero engine install
+zero engine doctor --software-rendering
+zero --context my-agent open "My World" --branch feature
+zero --context my-agent open "My World" --branch feature --headless --software-rendering
+```
+
+`open` reuses a matching accessible engine or downloads a verified release,
+launches it with an authorized handoff, and waits until commands work. Use
+`--session <id>` to choose an existing engine, `--new` to start another, or
+`--browser` to open a browser engine. `--bin <path>` selects a particular native
+executable. Plain `zero open` uses the context from your environment.
+
+Linux AppImage updates are unpacked into the CLI-managed installation and run
+through their entrypoint, without requiring a FUSE mount or desktop installer.
+The Linux x64 distribution targets Ubuntu 24.04 or newer (glibc 2.39), including
+Debian 13. A cloud machine needs Node.js 20 or newer to run the CLI.
+
+An omitted branch keeps the context's matching pinned branch, or uses the
+world's reported default branch. An explicit `--session` keeps that session's
+branch unless `--branch` also names one.
+
+`--headless` starts a new engine with an offscreen framebuffer. Add
+`--software-rendering` to require a CPU adapter, such as Mesa lavapipe on Linux
+or D3D12 WARP on Windows. The CLI checks the renderer before requesting a launch
+credential. `--width` and `--height` set the framebuffer dimensions; CPU rendering
+defaults to 640 by 360. The engine release must expose `--check-renderer` and the
+hosted service must support authorized native launches.
+
+`zero engine doctor` initializes the offscreen renderer and reports the actual
+adapter, driver and framebuffer size as JSON. It runs without logging in or
+opening a world. Add `--software-rendering` to check CPU rendering specifically,
+or `--bin <path>` to check a particular executable.
+
+For a Debian/Ubuntu cloud machine, `zero engine install --software-rendering`
+also provisions the Vulkan loader and Mesa CPU driver if the renderer check
+fails. It uses the distribution's package repositories, running as root or
+through noninteractive `sudo`, then checks the renderer again. A working CPU
+renderer makes this step a no-op. Windows uses its D3D12 WARP driver. Other
+Linux distributions can supply their Vulkan loader and lavapipe through their
+package manager, then verify them with `zero engine doctor --software-rendering`.
 
 Each supported harness (Claude Code, Cursor, Codex CLI, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, openClaw, JetBrains Junie, Sourcegraph Amp, GitHub Copilot, Block Goose, Aider) gets its onboarding through that harness's own native channel — skills, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/*.mdc`, `.clinerules`, `CONVENTIONS.md`, `.goosehints` — plus the MCP entry in the config file that harness reads. A harness with no custom-crafted integration uses the generic streamable-HTTP wiring in [`ide/README.md`](ide/README.md#generic-mcp-fallback).
 
@@ -8,7 +135,7 @@ What the agent gets, once linked: the ZeroMind library (search, inspect, preview
 
 ## Prerequisites
 
-**Node.js 18 or newer**, on your PATH, to run `zeromind link`, `zeromind install`, `zeromind upload` and `zeromind open`. Your harness then talks to `https://origozero.ai/mcp` over HTTPS and spawns nothing locally.
+**Node.js 20 or newer**, on your PATH, to run `zeromind link`, `zeromind install`, `zeromind upload` and `zeromind open`. Your harness then talks to `https://origozero.ai/mcp` over HTTPS and spawns nothing locally.
 
 - **macOS:** `brew install node` (or download from https://nodejs.org)
 - **Linux:** your distro's package manager, or https://nodejs.org / [nvm](https://github.com/nvm-sh/nvm)
@@ -94,9 +221,14 @@ Copies a file — or a folder, its relative layout preserved — from this machi
 npx -y @origozero/zeromind open <world guid | name | https url | zero:// url> [--play | --edit] [--native | --browser] [--dry-run]
 ```
 
-Every tool an agent calls is served by ZeroMind, which has no browser tab and no engine process on your machine: `world.open` and `world.launch` answer **where** a world opens, and this command is what opens it **here**. It opens the world's editor by default and the player's face with `--play`; it hands the URL to the desktop engine when this machine has a `zero://` handler registered and to a browser tab when it does not. `--native` / `--browser` decide it outright and are remembered in `open.json` beside `session.json`, so later calls with neither flag follow what you chose. `--dry-run` prints the target and the URL and changes nothing.
+Editor opens use the managed launcher described above: select a context, resolve
+the world and branch through ZeroMind, connect to an accessible session or launch
+an engine, and wait for readiness. `--edit` explicitly selects this mode.
 
-A guid or a URL is opened without a single network call. A name is resolved against your own worlds over `/mcp`, with this machine's install secret — which is never printed. No engine is contacted at all.
+`--play` and player URLs open the player's face through the local native URL
+handler or browser. These player opens remember `--native` / `--browser` in
+`open.json`. `--dry-run` prints an opening URL without launching it. World names
+are resolved through the hosted MCP connection using the verified agent identity.
 
 ## Pointing at a local / self-hosted ZeroMind
 
@@ -149,7 +281,7 @@ Plain `http://` issuers work end to end: auth is a Bearer header on every reques
 
 ## Updating
 
-- **The tools** are served from `https://origozero.ai/mcp`. Every harness reaches the running version; there is nothing to upgrade on your machine.
+- **The tools** are served from `https://origozero.ai/mcp`. The hosted catalogue updates with ZeroMind; native engines update through `zero engine install`.
 - **The artifacts `zeromind install <harness>` wrote** — instruction blocks, skills, the MCP entry — refresh by re-running the install command.
 - **The Claude Code bundle** (skills + `.mcp.json`) updates through `/plugin`.
 
@@ -157,9 +289,11 @@ Maintainers: `package.json` `version` is the source of truth. `tests/directory-m
 
 ## Status
 
-0.7.1 — the plugin runs no MCP server of its own. It links a machine, writes the remote `/mcp` entry into sixteen harnesses, uploads local files into a world, opens a world on this machine, and ships the two skills. The tool surface is ZeroMind's, served live at `https://origozero.ai/mcp`; the tests drive the CLI end to end against the bundled mock ZeroMind server in [`tools/mock-zeromind/`](tools/mock-zeromind/).
-
-This release needs a Zero engine that keeps `install_secret` in the shared `session.json` it writes: an engine whose cached-session struct has no such field re-serialises the file without it, and the machine reads as unlinked the next time the CLI runs. 0.7.1 therefore ships after that engine release.
+0.8.0 provides agent-owned login, managed native installation and launch, headless
+renderer diagnostics, world/branch/session selection, and the `zero-shell`
+adapter alongside the existing harness integrations. Operations use ZeroMind's
+hosted MCP endpoint. Native launches require its authorized handoff support;
+streaming and interactive commands require the engine's attached-shell API.
 
 ## Development
 

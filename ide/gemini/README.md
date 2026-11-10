@@ -4,7 +4,7 @@
 
 ## Prerequisite
 
-**Node.js 18+** on PATH. https://nodejs.org if needed; restart your terminal after install.
+**Node.js 20+** on PATH. https://nodejs.org if needed; restart your terminal after install.
 
 ## Install
 

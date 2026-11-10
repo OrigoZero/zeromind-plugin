@@ -1,11 +1,13 @@
 {
   "name": "@origozero/zeromind",
-  "version": "0.7.1",
-  "description": "Links a machine to ZeroMind and points an agent harness at the ZeroMind MCP server at origozero.ai/mcp (Claude Code, Cursor, Codex, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, …)",
+  "version": "0.8.0",
+  "description": "Use Zero worlds from your agent's shell or MCP connector. Agent login, native engine installation, headless rendering, branch selection and remote shell execution.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "zeromind": "dist/index.js"
+    "zeromind": "dist/index.js",
+    "zero": "dist/index.js",
+    "zero-shell": "dist/shell.js"
   },
   "files": [
     "dist/",
@@ -29,15 +31,19 @@
     "prepublishOnly": "npm run build"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
     "jsonc-parser": "^3.3.1",
+    "proper-lockfile": "^4.1.2",
     "undici": "^6.0.0",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.0",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@types/proper-lockfile": "^4.1.4",
+    "@types/yauzl": "^3.4.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.56.0",

@@ -8,9 +8,9 @@
 import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
-import { installSecret, loadCache } from "./config.js";
 import { McpHttpClient } from "./mcp-client.js";
 import { remoteUrl } from "./server-spec.js";
+import { cliBearer } from "./cli-agent.js";
 
 /** Total bytes one upload may move (256 MiB), across a whole folder. */
 export const DEFAULT_MAX_BYTES = 256 * 1024 * 1024;
@@ -175,8 +175,7 @@ export const runUploadCli = async (argv: string[]): Promise<void> => {
   if (!localPath) throw new Error(`a path to upload is required\n\n${HELP}`);
   if (!world) throw new Error(`--world <name-or-guid> is required\n\n${HELP}`);
 
-  const secret = installSecret(loadCache());
-  if (!secret) throw new Error("this machine is not linked; run `zeromind link` first");
+  const secret = await cliBearer();
   const client = new McpHttpClient(remoteUrl(), secret);
   try {
     await client.initialize();
