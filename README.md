@@ -102,6 +102,8 @@ executable. Plain `zero open` uses the context from your environment.
 
 Linux AppImage updates are unpacked into the CLI-managed installation and run
 through their entrypoint, without requiring a FUSE mount or desktop installer.
+The Linux x64 distribution targets Ubuntu 24.04 or newer (glibc 2.39), including
+Debian 13. A cloud machine needs Node.js 20 or newer to run the CLI.
 
 An omitted branch keeps the context's matching pinned branch, or uses the
 world's reported default branch. An explicit `--session` keeps that session's
