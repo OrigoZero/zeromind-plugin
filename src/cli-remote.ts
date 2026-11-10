@@ -24,6 +24,7 @@ zero --context <agent> open <world> [--branch <branch>] [--native|--browser]
   --headless [--software-rendering]       start an offscreen native engine, optionally on CPU
   --width <pixels> --height <pixels>      headless framebuffer size
 zero engine install [--version <version>] install a verified native release
+  --software-rendering                   verify CPU rendering; provision Debian/Ubuntu drivers if needed
 zero engine status                       show the CLI-managed native installation
 zero engine doctor [--software-rendering] test the installed offscreen renderer without login
 zero --context <agent> tools              list hosted operations and schemas

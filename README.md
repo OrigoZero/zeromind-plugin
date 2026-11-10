@@ -112,6 +112,14 @@ adapter, driver and framebuffer size as JSON. It runs without logging in or
 opening a world. Add `--software-rendering` to check CPU rendering specifically,
 or `--bin <path>` to check a particular executable.
 
+For a Debian/Ubuntu cloud machine, `zero engine install --software-rendering`
+also provisions the Vulkan loader and Mesa CPU driver if the renderer check
+fails. It uses the distribution's package repositories, running as root or
+through noninteractive `sudo`, then checks the renderer again. A working CPU
+renderer makes this step a no-op. Windows uses its D3D12 WARP driver. Other
+Linux distributions can supply their Vulkan loader and lavapipe through their
+package manager, then verify them with `zero engine doctor --software-rendering`.
+
 Each supported harness (Claude Code, Cursor, Codex CLI, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, openClaw, JetBrains Junie, Sourcegraph Amp, GitHub Copilot, Block Goose, Aider) gets its onboarding through that harness's own native channel — skills, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/*.mdc`, `.clinerules`, `CONVENTIONS.md`, `.goosehints` — plus the MCP entry in the config file that harness reads. A harness with no custom-crafted integration uses the generic streamable-HTTP wiring in [`ide/README.md`](ide/README.md#generic-mcp-fallback).
 
 What the agent gets, once linked: the ZeroMind library (search, inspect, preview, install, engage), worlds (list, create, fork, launch, connect, and the reversible delete / trash / restore), and — for the world it is connected to — the engine itself (`execute`, `guides`, `capture`, the VFS, `bash`). `tools/list` on `https://origozero.ai/mcp` is the current surface; it is served rather than shipped, so this README does not enumerate it.

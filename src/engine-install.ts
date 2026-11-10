@@ -307,7 +307,7 @@ export async function installEngine(
 export async function runEngineCli(args: string[]): Promise<void> {
   const [command, ...rest] = args;
   const usage =
-    "Usage: zero engine install [--version <version>] | status | doctor [--software-rendering] [--bin <path>]";
+    "Usage: zero engine install [--version <version>] [--software-rendering] | status | doctor [--software-rendering] [--bin <path>]";
   if (!command || command === "--help" || command === "-h") {
     process.stdout.write(usage + "\n");
     return;
@@ -338,12 +338,20 @@ export async function runEngineCli(args: string[]): Promise<void> {
     );
     return;
   }
-  if (
-    command !== "install" ||
-    (rest.length !== 0 && (rest.length !== 2 || rest[0] !== "--version"))
-  ) {
-    throw new Error(usage);
+  if (command !== "install") throw new Error(usage);
+  let version: string | undefined;
+  let softwareRendering = false;
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] === "--software-rendering") softwareRendering = true;
+    else if (rest[i] === "--version" && rest[i + 1] && !rest[i + 1].startsWith("--"))
+      version = rest[++i];
+    else throw new Error(usage);
   }
-  const result = await installEngine({ version: rest[1] });
-  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  const result = await installEngine({ version });
+  const renderer = softwareRendering
+    ? await (await import("./software-rendering.js")).setupSoftwareRendering(result.binary)
+    : undefined;
+  process.stdout.write(
+    JSON.stringify({ ...result, ...(renderer ? { renderer } : {}) }, null, 2) + "\n",
+  );
 }
