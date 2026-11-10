@@ -134,8 +134,8 @@ opening a world. Add `--software-rendering` to check CPU rendering specifically,
 or `--bin <path>` to check a particular executable.
 
 For a Debian/Ubuntu cloud machine, `zero engine install --software-rendering`
-also provisions the Vulkan loader and Mesa CPU driver if the renderer check
-fails. It uses the distribution's package repositories, running as root or
+also provisions the engine's runtime libraries, Vulkan loader and Mesa CPU
+driver if the renderer check fails. It uses the distribution's package repositories, running as root or
 through noninteractive `sudo`, then checks the renderer again. A working CPU
 renderer makes this step a no-op. Windows uses its D3D12 WARP driver. Other
 Linux distributions can supply their Vulkan loader and lavapipe through their
