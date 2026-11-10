@@ -1,7 +1,7 @@
 {
   "name": "@origozero/zeromind",
-  "version": "0.7.1",
-  "description": "Links a machine to ZeroMind and points an agent harness at the ZeroMind MCP server at origozero.ai/mcp (Claude Code, Cursor, Codex, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, …)",
+  "version": "0.8.0",
+  "description": "Use Zero worlds from your agent's shell or MCP connector. Agent login, native engine installation, headless rendering, branch selection and remote shell execution.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

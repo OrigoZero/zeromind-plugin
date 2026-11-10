@@ -1,6 +1,6 @@
 {
   "name": "zeromind",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "ZeroMind for Cursor: connects Cursor to the ZeroMind MCP server at origozero.ai/mcp. The agent writes and runs Luau in the Zero engine, edits the world's files, runs the world, takes screenshots and publishes a game that plays in a browser tab. Link the machine once with `zeromind link` from the `@origozero/zeromind` npm package.",
   "author": {
     "name": "OrigoZero",

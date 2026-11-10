@@ -4,6 +4,14 @@
 const argv = process.argv.slice(2);
 const command = argv[0];
 const run = async (): Promise<void> => {
+  if (command === "--version" || command === "-v") {
+    const { readFileSync } = await import("node:fs");
+    const metadata = JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+    ) as { version: string };
+    process.stdout.write(metadata.version + "\n");
+    return;
+  }
   if (command === "engine") {
     const { runEngineCli } = await import("./engine-install.js");
     await runEngineCli(argv.slice(1));
