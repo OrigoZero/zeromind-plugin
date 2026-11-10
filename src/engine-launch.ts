@@ -119,7 +119,7 @@ export function nativeLaunchArgs(options: OpenOptions, launchUrl: string): strin
 const runExecutable = promisify(execFile);
 
 /** Each engine establishes its own portable-application location. */
-function engineEnvironment(): NodeJS.ProcessEnv {
+export function engineEnvironment(): NodeJS.ProcessEnv {
   return { ...process.env, APPIMAGE: undefined, APPDIR: undefined };
 }
 
