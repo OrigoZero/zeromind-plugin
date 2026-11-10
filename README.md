@@ -100,6 +100,10 @@ launches it with an authorized handoff, and waits until commands work. Use
 `--browser` to open a browser engine. `--bin <path>` selects a particular native
 executable. Plain `zero open` uses the context from your environment.
 
+An omitted branch keeps the context's matching pinned branch, or uses the
+world's reported default branch. An explicit `--session` keeps that session's
+branch unless `--branch` also names one.
+
 `--headless` starts a new engine with an offscreen framebuffer. Add
 `--software-rendering` to require a CPU adapter, such as Mesa lavapipe on Linux
 or D3D12 WARP on Windows. The CLI checks the renderer before requesting a launch

@@ -16,6 +16,53 @@ const answer = (value: unknown) => ({
   isError: false,
 });
 
+it("uses the reported default branch while preserving a context pin or explicit session", async () => {
+  const connected: Record<string, unknown>[] = [];
+  let pinned: string | undefined;
+  const rows = [session, { ...session, session_id: "trunk-engine", branch: "trunk" }];
+  const client = {
+    callTool: async (name: string, args: Record<string, unknown>) => {
+      if (name === "world.list")
+        return answer({ worlds: [{ guid: world, name: "Project", default_branch: "trunk" }] });
+      if (name === "session.list") return answer({ sessions: rows, pinned });
+      if (name === "session.connect") {
+        connected.push(args);
+        return answer({ connected: true });
+      }
+      if (name === "execute") return answer({ result: true });
+      throw new Error(`Unexpected ${name}`);
+    },
+  };
+  await openEngine(client, { world });
+  expect(connected.pop()).toEqual({ session: "trunk-engine", world, branch: "trunk" });
+  pinned = session.session_id;
+  await openEngine(client, { world });
+  expect(connected.pop()).toEqual({ session: session.session_id, world, branch: "feature" });
+  await openEngine(client, { world, session: "trunk-engine" });
+  expect(connected.pop()).toEqual({ session: "trunk-engine", world });
+});
+
+it("sends a renamed default branch to a new native launch", async () => {
+  let requested: Record<string, unknown> | undefined;
+  const client = {
+    callTool: async (name: string, args: Record<string, unknown>) => {
+      if (name === "world.list")
+        return answer({ worlds: [{ guid: world, name: "Project", default_branch: "trunk" }] });
+      if (name === "session.list") return answer({ sessions: [] });
+      if (name === "world.disconnect") return answer({ disconnected: true });
+      if (name === "world.launch") {
+        requested = args;
+        return { text: "launch refused by fixture", isError: true };
+      }
+      throw new Error(`Unexpected ${name}`);
+    },
+  };
+  await expect(openEngine(client, { world, bin: process.execPath })).rejects.toThrow(
+    "launch refused by fixture",
+  );
+  expect(requested).toEqual({ guid: world, native: true, branch: "trunk" });
+});
+
 it("launches an offscreen CPU renderer with explicit framebuffer dimensions and intact branch arguments", () => {
   const launch = "zero://launch?world=world&handoff=private";
   expect(

@@ -19,8 +19,9 @@ type Session = {
   claimed_by_another: boolean;
 };
 type Caller = Pick<McpHttpClient, "callTool">;
+type ListedWorld = { guid: string; name: string; default_branch?: string };
 type HostedData = Record<string, unknown> & {
-  worlds?: Array<{ guid: string; name: string }>;
+  worlds?: ListedWorld[];
   sessions?: Session[];
   pinned?: string | { session_id?: string } | null;
   open?: { native?: string; browser?: string };
@@ -226,10 +227,7 @@ export async function openEngine(
     throw new Error("Choose an existing --session or launch a new executable");
   if (options.browser && options.bin) throw new Error("--bin selects a native executable");
   const createNew = options.newSession || Boolean(options.bin) || options.headless;
-  const worlds = toolData(await client.callTool("world.list", {})).worlds as Array<{
-    guid: string;
-    name: string;
-  }>;
+  const worlds = toolData(await client.callTool("world.list", {})).worlds as ListedWorld[];
   const matches = worlds.filter(
     (world) => world.guid === options.world || world.name === options.world,
   );
@@ -241,15 +239,25 @@ export async function openEngine(
     throw new Error(`World not found: ${options.world}`);
   const listed = toolData(await client.callTool("session.list", {}));
   const sessions = (listed.sessions ?? []) as Session[];
-  const candidates = sessions.filter(
+  const available = sessions.filter(
     (s) =>
       s.drivable &&
       !s.claimed_by_another &&
       s.world_guid === world &&
-      (!options.branch || s.branch === options.branch) &&
       (!options.native || s.kind === "native") &&
       (!options.browser || s.kind === "browser"),
   );
+  const pinned = typeof listed.pinned === "string" ? listed.pinned : listed.pinned?.session_id;
+  if (!options.branch && !options.session) {
+    const branch =
+      available.find((s) => s.session_id === pinned)?.branch ?? matches[0]?.default_branch;
+    if (branch !== undefined) {
+      if (typeof branch !== "string" || !branch)
+        throw new Error("The world listing returned an invalid branch");
+      options = { ...options, branch };
+    }
+  }
+  const candidates = available.filter((s) => !options.branch || s.branch === options.branch);
   const named = options.session
     ? sessions.find((s) => s.session_id === options.session)
     : undefined;
@@ -260,7 +268,6 @@ export async function openEngine(
     ((options.native && named.kind !== "native") || (options.browser && named.kind !== "browser"))
   )
     throw new Error("The named session does not match the requested engine kind");
-  const pinned = typeof listed.pinned === "string" ? listed.pinned : listed.pinned?.session_id;
   const existing =
     named ??
     candidates.find((s) => s.session_id === pinned) ??
