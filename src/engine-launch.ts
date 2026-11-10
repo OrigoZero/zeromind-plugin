@@ -116,6 +116,46 @@ export function nativeLaunchArgs(options: OpenOptions, launchUrl: string): strin
 
 const runExecutable = promisify(execFile);
 
+/** Stop the process tree created by a launch that failed to become ready. */
+export async function stopLaunchedEngine(child: ReturnType<typeof spawn>): Promise<void> {
+  if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise<void>((resolveExit) => child.once("exit", () => resolveExit()));
+  if (process.platform === "win32") {
+    await runExecutable("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+      windowsHide: true,
+      timeout: 10000,
+    }).catch((error) => {
+      if (child.exitCode === null && child.signalCode === null) throw error;
+    });
+  } else {
+    try {
+      process.kill(-child.pid, "SIGTERM");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+    }
+    const timer = setTimeout(() => {
+      try {
+        process.kill(-child.pid!, "SIGKILL");
+      } catch {
+        /* The owned process group may already have exited. */
+      }
+    }, 5000);
+    timer.unref();
+    try {
+      await exited;
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+    return;
+  }
+  await exited;
+}
+
 /** Exercise the requested renderer before issuing a short-lived launch credential. */
 export async function checkHeadlessRenderer(binary: string, options: OpenOptions): Promise<void> {
   if (!options.headless) return;
@@ -272,49 +312,72 @@ export async function openEngine(
   }
   const before = new Set(sessions.map((s) => s.session_id));
   const deadline = Date.now() + (options.timeoutMs ?? 180000);
-  while (Date.now() < deadline) {
-    const now = toolData(await client.callTool("session.list", {}));
-    const appeared = (now.sessions as Session[]).filter(
-      (s) =>
-        !before.has(s.session_id) &&
-        s.world_guid === world &&
-        s.drivable &&
-        !s.claimed_by_another &&
-        (!binary || s.kind === "native") &&
-        (!options.branch || s.branch === options.branch || options.browser),
-    );
-    if (appeared.length > 1)
-      throw new Error("Multiple new engines appeared; choose the intended session explicitly");
-    if (appeared[0]) {
-      let result = toolData(
-        await client.callTool("session.connect", {
-          session: appeared[0].session_id,
-          world,
-          ...(options.branch && !options.browser ? { branch: options.branch } : {}),
-        }),
+  let interrupted = false;
+  const interruptLaunch = () => {
+    interrupted = true;
+  };
+  process.on("SIGINT", interruptLaunch);
+  process.on("SIGTERM", interruptLaunch);
+  try {
+    while (Date.now() < deadline) {
+      if (interrupted) throw new Error("Engine launch interrupted");
+      const now = toolData(await client.callTool("session.list", {}));
+      const appeared = (now.sessions as Session[]).filter(
+        (s) =>
+          !before.has(s.session_id) &&
+          s.world_guid === world &&
+          s.drivable &&
+          !s.claimed_by_another &&
+          (!binary || s.kind === "native") &&
+          (!options.branch || s.branch === options.branch || options.browser),
       );
-      if (!result.connected) throw new Error("The new engine did not connect");
-      if (options.branch && appeared[0].branch !== options.branch) {
-        result = toolData(
-          await client.callTool("world.open", {
-            world,
-            branch: options.branch,
+      if (appeared.length > 1)
+        throw new Error("Multiple new engines appeared; choose the intended session explicitly");
+      if (appeared[0]) {
+        let result = toolData(
+          await client.callTool("session.connect", {
             session: appeared[0].session_id,
+            world,
+            ...(options.branch && !options.browser ? { branch: options.branch } : {}),
           }),
         );
-        if (!result.switched || result.branch !== options.branch)
-          throw new Error("The engine did not confirm the requested branch");
+        if (!result.connected) throw new Error("The new engine did not connect");
+        if (options.branch && appeared[0].branch !== options.branch) {
+          result = toolData(
+            await client.callTool("world.open", {
+              world,
+              branch: options.branch,
+              session: appeared[0].session_id,
+            }),
+          );
+          if (!result.switched || result.branch !== options.branch)
+            throw new Error("The engine did not confirm the requested branch");
+        }
+        const ready = toolData(await client.callTool("execute", { code: "return true" }));
+        if (ready.result !== true)
+          throw new Error("The engine connected but did not confirm command readiness");
+        log("Engine connected and ready.");
+        return { ...result, ...(logfile ? { log: logfile } : {}) };
       }
-      const ready = toolData(await client.callTool("execute", { code: "return true" }));
-      if (ready.result !== true)
-        throw new Error("The engine connected but did not confirm command readiness");
-      log("Engine connected and ready.");
-      return { ...result, ...(logfile ? { log: logfile } : {}) };
+      if (ended) throw new Error(`Native engine stopped during launch (${ended}). Log: ${logfile}`);
+      await new Promise((resolveWait) => setTimeout(resolveWait, 1000));
     }
-    if (ended) throw new Error(`Native engine stopped during launch (${ended}). Log: ${logfile}`);
-    await new Promise((resolveWait) => setTimeout(resolveWait, 1000));
+    throw new Error(
+      `Engine readiness timed out.${logfile ? ` Inspect ${logfile}.` : " Check the browser's boot status."}`,
+    );
+  } catch (error) {
+    if (child) {
+      try {
+        await stopLaunchedEngine(child);
+      } catch (cleanupError) {
+        throw new Error(
+          `${(error as Error).message}\nCould not stop the launched engine (${child.pid}): ${(cleanupError as Error).message}`,
+        );
+      }
+    }
+    throw error;
+  } finally {
+    process.removeListener("SIGINT", interruptLaunch);
+    process.removeListener("SIGTERM", interruptLaunch);
   }
-  throw new Error(
-    `Engine readiness timed out.${logfile ? ` Inspect ${logfile}; the launched process is left available for diagnosis.` : " Check the browser's boot status."}`,
-  );
 }
