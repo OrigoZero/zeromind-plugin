@@ -11,6 +11,15 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
+it("shows setup help successfully without a connection", () => {
+  const result = spawnSync(process.execPath, ["dist/index.js", "bash-env", "--help"], {
+    encoding: "utf8",
+  });
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain('BASH_ENV="$(zero bash-env)"');
+  expect(result.stderr).toBe("");
+});
+
 function invoke(args: string[], input = "") {
   const root = mkdtempSync(join(tmpdir(), "zero bash bridge "));
   roots.push(root);
