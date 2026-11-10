@@ -28,10 +28,11 @@ export async function streamShell(
   input: Readable,
   stdout: Writable,
   stderr: Writable,
+  interactive = false,
 ): Promise<number | undefined> {
   const started = value(
     await client.callTool("execute", {
-      code: `local start = rawget(shell, "start"); if type(start) == "function" then return {handle=start(${luauString(command)})} else return {legacy=true} end`,
+      code: `local start = rawget(shell, "start"); if type(start) == "function" then return {handle=start(${luauString(command)}, ${interactive ? "true" : "false"})} else return {legacy=true} end`,
     }),
   ) as { handle?: string; legacy?: boolean };
   if (started.legacy) return undefined;
@@ -42,13 +43,19 @@ export async function streamShell(
   let finished = false,
     inputFailure: Error | undefined,
     signal: Promise<unknown> | undefined;
-  const interrupt = () => {
-    signal ??= execute(`return shell.interrupt(${handle})`).catch((error) => {
-      inputFailure = error as Error;
-    });
+  const interrupt = (number: number) => {
+    signal ??= execute(`return shell.interrupt(${handle}, ${number})`)
+      .catch((error) => {
+        inputFailure = error as Error;
+      })
+      .finally(() => {
+        signal = undefined;
+      });
   };
-  process.on("SIGINT", interrupt);
-  process.on("SIGTERM", interrupt);
+  const interruptCommand = () => interrupt(2);
+  const terminateShell = () => interrupt(15);
+  process.on("SIGINT", interruptCommand);
+  process.on("SIGTERM", terminateShell);
   // A paused input bounds host-side queued bytes while the engine applies backpressure.
   input.pause();
   const send = async (chunk: Buffer, eof: boolean) => {
@@ -99,8 +106,8 @@ export async function streamShell(
     input.destroy();
     await inputDone;
     await signal;
-    process.removeListener("SIGINT", interrupt);
-    process.removeListener("SIGTERM", interrupt);
+    process.removeListener("SIGINT", interruptCommand);
+    process.removeListener("SIGTERM", terminateShell);
     await execute(`shell.close(${handle}); return true`);
   }
 }

@@ -5,7 +5,7 @@ import { runRemoteCli } from "./cli-remote.js";
 const args = process.argv.slice(2);
 if (args[0] === "--help" || args[0] === "-h") {
   process.stdout.write(
-    `zero-shell -c '<command>'\nzero-shell -s\n\nRuns commands in the engine selected by ZERO_CONTEXT (or CODEX_THREAD_ID).\nSign in with zero login and select a session with zero connect first.\nConfigure the harness to invoke this shell with -c and login mode disabled.\n`,
+    `zero-shell -c '<command>' [arg0 args...]\nzero-shell -s [args...]\nzero-shell -i\nzero-shell <engine-script> [args...]\n\nRuns commands in the engine selected by ZERO_CONTEXT (or CODEX_THREAD_ID).\nWith no arguments, a terminal opens an interactive shell; piped input runs as a script.\nScript paths refer to the engine VFS.\nSign in with zero login and select a session with zero connect first.\nConfigure the harness to invoke this shell with -c and login mode disabled.\n`,
   );
 } else {
   runRemoteCli(["bash", ...args]).catch((error) => {

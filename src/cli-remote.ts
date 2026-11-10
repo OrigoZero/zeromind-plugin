@@ -5,6 +5,8 @@ import { conversationId } from "./cli-state.js";
 import { remoteUrl } from "./server-spec.js";
 import { openEngine, type OpenOptions } from "./engine-launch.js";
 import { streamShell } from "./shell-stream.js";
+import { interactiveShell } from "./shell-interactive.js";
+import { shellInvocation } from "./shell-invocation.js";
 import { parseWorldReference, runOpenCli } from "./cli-open.js";
 
 export const REMOTE_HELP = `zero — use a Zero world through its hosted connection
@@ -28,6 +30,7 @@ zero --context <agent> tools              list hosted operations and schemas
 zero --context <agent> call <tool> --input '<json>'
 zero --context <agent> bash -c '<command>' run in the engine's shell
 zero --context <agent> bash -s            read a shell script from host stdin
+zero --context <agent> bash -i            interactive shell with local line editing
 
 ZERO_CONTEXT supplies --context. Codex's CODEX_THREAD_ID is used when present.
 Use a distinct context per agent; reuse it across calls to keep the engine pin
@@ -156,6 +159,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
   let tool: string | undefined;
   let input: Record<string, unknown> = {};
   let shell: string | undefined;
+  let interactive = false;
   let open: OpenOptions | undefined;
   switch (command) {
     case "whoami":
@@ -237,9 +241,9 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
       break;
     }
     case "bash":
-      if (args.length === 2 && args[0] === "-c") shell = args[1];
-      else if (args.length === 1 && args[0] === "-s") shell = readFileSync(0, "utf8");
-      else throw new Error("Usage: zero bash -c '<command>' or zero bash -s");
+      if ((args.length === 1 && args[0] === "-i") || (args.length === 0 && process.stdin.isTTY))
+        interactive = true;
+      else shell = shellInvocation(args, () => readFileSync(0, "utf8"));
       break;
     default:
       throw new Error(`Unknown command: ${command}\n${REMOTE_HELP}`);
@@ -252,6 +256,15 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
   const client = new McpHttpClient(endpoint, await cliBearer(), "zero-cli", conversation);
   try {
     await client.initialize();
+    if (interactive) {
+      process.exitCode = await interactiveShell(
+        client,
+        process.stdin,
+        process.stdout,
+        process.stderr,
+      );
+      return;
+    }
     if (open) {
       process.stdout.write(JSON.stringify(await openEngine(client, open), null, 2) + "\n");
       return;

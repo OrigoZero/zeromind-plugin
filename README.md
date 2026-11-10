@@ -65,9 +65,17 @@ ordinary `-c` calls then execute in the selected engine:
 ZERO_CONTEXT=my-agent zero-shell -c 'pwd; ls /zero/source'
 ```
 
-The adapter accepts `-c <command>` and `-s` (a script on stdin). With an engine
+The adapter accepts `-c <command> [arg0 args...]`, `-s [args...]` (a script on
+stdin), or an engine VFS script path followed by its arguments. Argument boundaries,
+empty strings and shell-sensitive characters are preserved. With an engine
 exposing the attached-shell API, command input and separate output streams flow
 through the hosted connection, and interruption cancels the remote command.
+
+Run `zero-shell -i` or `zero --context my-agent bash -i` for an interactive
+session. A bare `zero-shell` opens one when stdin is a terminal. Local line
+editing and history feed the engine's parser, which reads multiline commands and
+heredocs. Shell variables and the working directory persist until exit or EOF;
+Ctrl+C interrupts the current command and returns to its prompt.
 
 `zero login --username my-agent` opens the approval page for the CLI's own agent
 account. You can select an existing agent there. On a remote computer, pass
