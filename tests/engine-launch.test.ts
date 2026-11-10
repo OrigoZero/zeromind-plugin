@@ -16,6 +16,25 @@ const answer = (value: unknown) => ({
   isError: false,
 });
 
+it("waits for queued command readiness while retaining the selected branch", async () => {
+  const operations: string[] = [];
+  const client = {
+    callTool: async (name: string, args: Record<string, unknown>) => {
+      operations.push(name);
+      if (name === "world.list") return answer({ worlds: [{ guid: world, name: "Project" }] });
+      if (name === "session.list") return answer({ sessions: [session] });
+      if (name === "session.connect") return answer({ connected: true, branch: session.branch });
+      if (name === "execute") return answer({ status: "running", kickoffId: "ready-1" });
+      if (name === "wait" && args.kickoffId) return answer({ status: "running", taskId: 17 });
+      if (name === "wait" && args.taskId === 17) return answer({ result: true });
+      throw new Error(`Unexpected ${name}`);
+    },
+  };
+  expect((await openEngine(client, { world, branch: "feature" })).branch).toBe("feature");
+  expect(operations.filter((name) => name === "execute")).toHaveLength(1);
+  expect(operations.slice(-3)).toEqual(["execute", "wait", "wait"]);
+});
+
 it("uses the reported default branch while preserving a context pin or explicit session", async () => {
   const connected: Record<string, unknown>[] = [];
   let pinned: string | undefined = undefined;

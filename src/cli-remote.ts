@@ -7,6 +7,7 @@ import { openEngine, type OpenOptions } from "./engine-launch.js";
 import { streamShell } from "./shell-stream.js";
 import { interactiveShell } from "./shell-interactive.js";
 import { shellInvocation } from "./shell-invocation.js";
+import { executeAndWait } from "./engine-execution.js";
 import { parseWorldReference, runOpenCli } from "./cli-open.js";
 
 export const REMOTE_HELP = `zero — use a Zero world through its hosted connection
@@ -32,6 +33,7 @@ zero --context <agent> call <tool> --input '<json>'
 zero --context <agent> bash -c '<command>' run in the engine's shell
 zero --context <agent> bash -s            read a shell script from host stdin
 zero --context <agent> bash -i            interactive shell with local line editing
+zero bash-env                            print a Bash startup file that routes commands to Zero
 
 ZERO_CONTEXT supplies --context. Codex's CODEX_THREAD_ID is used when present.
 Use a distinct context per agent; reuse it across calls to keep the engine pin
@@ -103,23 +105,14 @@ export async function runShell(
 ): Promise<number> {
   // execute preserves the shell API's separate streams and numeric exit code.
   // The attested caller selects the same shell session as the hosted bash tool.
-  let answer = await client.callTool("execute", { code: shellCode(command) });
-  for (;;) {
-    if (answer.isError) throw new Error(answer.text);
-    const value = data(answer);
-    const result = shellResult(value);
-    if (result) {
-      stdout(result.stdout);
-      stderr(result.stderr);
-      return result.exitCode < 0 ? 1 : result.exitCode & 255;
-    }
-    const row = value as { taskId?: unknown; status?: string } | null;
-    if (row && row.taskId !== undefined && row.status === "running") {
-      answer = await client.callTool("wait", { taskId: row.taskId, timeout_secs: 20 });
-      continue;
-    }
-    throw new Error(`The engine returned no shell result: ${answer.text}`);
+  const answer = await executeAndWait(client, shellCode(command));
+  const result = shellResult(data(answer));
+  if (result) {
+    stdout(result.stdout);
+    stderr(result.stderr);
+    return result.exitCode < 0 ? 1 : result.exitCode & 255;
   }
+  throw new Error(`The engine returned no shell result: ${answer.text}`);
 }
 
 function required(args: string[], index: number, flag: string): string {

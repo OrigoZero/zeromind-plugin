@@ -14,6 +14,11 @@ const run = async (): Promise<void> => {
     await runEngineCli(argv.slice(1));
     return;
   }
+  if (command === "bash-env") {
+    const { runBashEnvCli } = await import("./bash-env.js");
+    runBashEnvCli(argv.slice(1));
+    return;
+  }
   if (
     !command ||
     [
