@@ -135,7 +135,7 @@ What the agent gets, once linked: the ZeroMind library (search, inspect, preview
 
 ## Prerequisites
 
-**Node.js 18 or newer**, on your PATH, to run `zeromind link`, `zeromind install`, `zeromind upload` and `zeromind open`. Your harness then talks to `https://origozero.ai/mcp` over HTTPS and spawns nothing locally.
+**Node.js 20 or newer**, on your PATH, to run `zeromind link`, `zeromind install`, `zeromind upload` and `zeromind open`. Your harness then talks to `https://origozero.ai/mcp` over HTTPS and spawns nothing locally.
 
 - **macOS:** `brew install node` (or download from https://nodejs.org)
 - **Linux:** your distro's package manager, or https://nodejs.org / [nvm](https://github.com/nvm-sh/nvm)

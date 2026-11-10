@@ -11,7 +11,7 @@
       "icon_hint": "claude",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -42,7 +42,7 @@
       "tools_available": true,
       "prerequisites": [
         "Cursor 3.0+ for the plugin path",
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -74,7 +74,7 @@
       "icon_hint": "openai",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -101,7 +101,7 @@
       "icon_hint": "google",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -127,7 +127,7 @@
       "icon_hint": "sst",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -148,7 +148,7 @@
       "tools_available": true,
       "prerequisites": [
         "VS Code or JetBrains IDE",
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -175,7 +175,7 @@
       "tools_available": true,
       "prerequisites": [
         "VS Code or JetBrains IDE",
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -202,7 +202,7 @@
       "icon_hint": "codeium",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -222,7 +222,7 @@
       "icon_hint": "zed",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -248,7 +248,7 @@
       "icon_hint": "openclaw",
       "tools_available": false,
       "prerequisites": [
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -277,7 +277,7 @@
       "tools_note": "Aider takes MCP servers as `--mcp-servers` JSON on the command line; the install prints the flag rather than writing an unknown key into .aider.conf.yml. Without it, only the operating manual reaches the agent.",
       "prerequisites": [
         "Python 3.10+ (Aider)",
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -300,7 +300,7 @@
       "prerequisites": [
         "VS Code",
         "GitHub Copilot subscription",
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -320,7 +320,7 @@
       "icon_hint": "goose",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -349,7 +349,7 @@
       "prerequisites": [
         "JetBrains IDE",
         "Junie plugin",
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -369,7 +369,7 @@
       "icon_hint": "sourcegraph",
       "tools_available": true,
       "prerequisites": [
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {
@@ -390,7 +390,7 @@
       "tools_available": true,
       "prerequisites": [
         "Hermes Agent installed",
-        "Node.js 18+ to run the install command",
+        "Node.js 20+ to run the install command",
         "a linked machine (the install runs `zeromind link` when needed)"
       ],
       "primary_install": {

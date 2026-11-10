@@ -104,7 +104,7 @@ The matrix has 17 entries (16 harnesses + a generic `other`). Each entry drives 
 │  ─────────────────────────────────────────────────────────   │
 │                                                              │
 │  Before you run this:                                        │
-│    • Node.js 18+                                             │
+│    • Node.js 20+                                             │
 │                                                              │
 │  Run this in your project root:                              │
 │  ┌─────────────────────────────────────────────┐ [📋 Copy]  │
@@ -327,7 +327,7 @@ For the implementor: here's the shape of a single harness entry from the matrix.
   "icon_hint": "openai",
   "tools_available": true,
   "prerequisites": [
-    "Node.js 18+ to run the install command",
+    "Node.js 20+ to run the install command",
     "a linked machine (the install runs `zeromind link` when needed)"
   ],
   "primary_install": {
