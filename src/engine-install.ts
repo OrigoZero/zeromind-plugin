@@ -8,7 +8,7 @@ import { open as openZip, type Entry, type ZipFile } from "yauzl";
 import { lock } from "proper-lockfile";
 import { cacheDir } from "./config.js";
 import { issuer } from "./zeromind-client.js";
-import { checkedEndpoint } from "./cli-oauth.js";
+import { checkedEndpoint } from "./endpoint.js";
 
 type Asset = {
   PackageId: string;

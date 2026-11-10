@@ -10,7 +10,7 @@ import {
   postUnlink,
 } from "./zeromind-client.js";
 import { openWithPlatform } from "./cli-open.js";
-import { checkedEndpoint } from "./cli-oauth.js";
+import { checkedEndpoint } from "./endpoint.js";
 
 const FILE = "cli-agent.json";
 type AgentCache = SessionCache & { issuer: string; username?: string };
