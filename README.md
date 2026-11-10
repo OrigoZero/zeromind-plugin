@@ -272,7 +272,7 @@ Plain `http://` issuers work end to end: auth is a Bearer header on every reques
 
 ## Updating
 
-- **The tools** are served from `https://origozero.ai/mcp`. Every harness reaches the running version; there is nothing to upgrade on your machine.
+- **The tools** are served from `https://origozero.ai/mcp`. The hosted catalogue updates with ZeroMind; native engines update through `zero engine install`.
 - **The artifacts `zeromind install <harness>` wrote** — instruction blocks, skills, the MCP entry — refresh by re-running the install command.
 - **The Claude Code bundle** (skills + `.mcp.json`) updates through `/plugin`.
 
@@ -280,9 +280,11 @@ Maintainers: `package.json` `version` is the source of truth. `tests/directory-m
 
 ## Status
 
-0.7.1 — the plugin runs no MCP server of its own. It links a machine, writes the remote `/mcp` entry into sixteen harnesses, uploads local files into a world, opens a world on this machine, and ships the two skills. The tool surface is ZeroMind's, served live at `https://origozero.ai/mcp`; the tests drive the CLI end to end against the bundled mock ZeroMind server in [`tools/mock-zeromind/`](tools/mock-zeromind/).
-
-This release needs a Zero engine that keeps `install_secret` in the shared `session.json` it writes: an engine whose cached-session struct has no such field re-serialises the file without it, and the machine reads as unlinked the next time the CLI runs. 0.7.1 therefore ships after that engine release.
+0.8.0 provides agent-owned login, managed native installation and launch, headless
+renderer diagnostics, world/branch/session selection, and the `zero-shell`
+adapter alongside the existing harness integrations. Operations use ZeroMind's
+hosted MCP endpoint. Native launches require its authorized handoff support;
+streaming and interactive commands require the engine's attached-shell API.
 
 ## Development
 

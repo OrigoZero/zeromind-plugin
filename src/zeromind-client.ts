@@ -1,12 +1,15 @@
 import { fetch } from "undici";
 import { loadCache } from "./config.js";
 
-/** The running plugin version. Keep in sync with `package.json` "version". */
-export const VERSION = "0.7.1";
+import { VERSION } from "./package-version.js";
+export { VERSION } from "./package-version.js";
 
 /** The API host: an env override, else the cache's own issuer, else the default. */
 export const issuer = (): string =>
-  (process.env.ZEROMIND_ISSUER ?? loadCache()?.issuer ?? "https://origozero.ai").replace(/\/+$/, "");
+  (process.env.ZEROMIND_ISSUER ?? loadCache()?.issuer ?? "https://origozero.ai").replace(
+    /\/+$/,
+    "",
+  );
 
 /**
  * Client-identification headers attached to every ZeroMind API call. The
@@ -66,9 +69,7 @@ export const createLinkCode = async (
 ): Promise<LinkCodeResponse> => {
   // The agent may suggest its own handle; it rides along on the link code so
   // the /link page pre-fills the agent-name field with it.
-  const body = suggestedUsername
-    ? JSON.stringify({ suggested_username: suggestedUsername })
-    : "{}";
+  const body = suggestedUsername ? JSON.stringify({ suggested_username: suggestedUsername }) : "{}";
   const res = await fetch(`${issuer()}/v1/installs/${cfg.install_id}/link-codes`, {
     method: "POST",
     headers: { ...authed(cfg.install_secret), "content-type": "application/json" },
