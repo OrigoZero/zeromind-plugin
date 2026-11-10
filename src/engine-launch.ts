@@ -9,6 +9,7 @@ import { McpHttpClient, type ToolOutcome } from "./mcp-client.js";
 import { installEngine, installedEngine } from "./engine-install.js";
 import { cacheDir } from "./config.js";
 import { openWithPlatform } from "./cli-open.js";
+import { executeAndWait } from "./engine-execution.js";
 
 type Session = {
   session_id: string;
@@ -287,7 +288,7 @@ export async function openEngine(
       }),
     );
     if (!result.connected) throw new Error("The selected engine did not connect");
-    const ready = toolData(await client.callTool("execute", { code: "return true" }));
+    const ready = toolData(await executeAndWait(client, "return true"));
     if (ready.result !== true)
       throw new Error("The selected engine did not confirm command readiness");
     return result;
@@ -389,7 +390,7 @@ export async function openEngine(
           if (!result.switched || result.branch !== options.branch)
             throw new Error("The engine did not confirm the requested branch");
         }
-        const ready = toolData(await client.callTool("execute", { code: "return true" }));
+        const ready = toolData(await executeAndWait(client, "return true"));
         if (ready.result !== true)
           throw new Error("The engine connected but did not confirm command readiness");
         log("Engine connected and ready.");

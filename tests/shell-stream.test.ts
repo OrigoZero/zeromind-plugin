@@ -4,6 +4,42 @@ import { streamShell } from "../src/shell-stream.js";
 
 const answer = (result: unknown) => ({ text: JSON.stringify({ result }), isError: false });
 
+it("follows queued stream operations without dispatching them twice", async () => {
+  const input = new PassThrough();
+  input.end();
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  const operations: string[] = [];
+  const pending = new Map<number, ReturnType<typeof answer>>();
+  let nextId = 0;
+  const client = {
+    callTool: async (name: string, args: Record<string, unknown>) => {
+      if (name === "wait") {
+        if (args.kickoffId !== undefined)
+          return {
+            text: JSON.stringify({ status: "running", taskId: Number(args.kickoffId) }),
+            isError: false,
+          };
+        return pending.get(Number(args.taskId))!;
+      }
+      const code = String(args.code);
+      operations.push(code);
+      const result = code.includes("rawget")
+        ? { handle: "owned" }
+        : code.includes("shell.read")
+          ? { stdoutBase64: "", stderrBase64: "", exitCode: 17 }
+          : true;
+      const id = ++nextId;
+      pending.set(id, answer(result));
+      return { text: JSON.stringify({ status: "running", kickoffId: String(id) }), isError: false };
+    },
+  };
+  expect(await streamShell(client, "exit 17", input, stdout, stderr)).toBe(17);
+  expect(operations.filter((code) => code.includes("rawget"))).toHaveLength(1);
+  expect(operations.filter((code) => code.includes("shell.read"))).toHaveLength(1);
+  expect(operations.filter((code) => code.includes("shell.close"))).toHaveLength(1);
+});
+
 it("drains a finished command when stdin arrives after the engine closes input", async () => {
   const input = new PassThrough();
   input.end("late input");

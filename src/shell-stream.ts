@@ -1,5 +1,6 @@
 import type { Readable, Writable } from "node:stream";
 import type { ToolOutcome } from "./mcp-client.js";
+import { executeAndWait } from "./engine-execution.js";
 
 type Caller = { callTool(name: string, args: Record<string, unknown>): Promise<ToolOutcome> };
 export function luauString(text: string): string {
@@ -31,15 +32,16 @@ export async function streamShell(
   interactive = false,
 ): Promise<number | undefined> {
   const started = value(
-    await client.callTool("execute", {
-      code: `local start = rawget(shell, "start"); if type(start) == "function" then return {handle=start(${luauString(command)}, ${interactive ? "true" : "false"})} else return {legacy=true} end`,
-    }),
+    await executeAndWait(
+      client,
+      `local start = rawget(shell, "start"); if type(start) == "function" then return {handle=start(${luauString(command)}, ${interactive ? "true" : "false"})} else return {legacy=true} end`,
+    ),
   ) as { handle?: string; legacy?: boolean };
   if (started.legacy) return undefined;
   if (typeof started.handle !== "string")
     throw new Error("Engine did not return a shell stream handle");
   const handle = luauString(started.handle);
-  const execute = async (code: string) => value(await client.callTool("execute", { code }));
+  const execute = async (code: string) => value(await executeAndWait(client, code));
   let finished = false,
     inputFailure: Error | undefined,
     signal: Promise<unknown> | undefined;
