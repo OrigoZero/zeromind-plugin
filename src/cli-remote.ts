@@ -23,6 +23,7 @@ zero --context <agent> open <world> [--branch <branch>] [--native|--browser]
   --width <pixels> --height <pixels>      headless framebuffer size
 zero engine install [--version <version>] install a verified native release
 zero engine status                       show the CLI-managed native installation
+zero engine doctor [--software-rendering] test the installed offscreen renderer without login
 zero --context <agent> tools              list hosted operations and schemas
 zero --context <agent> call <tool> --input '<json>'
 zero --context <agent> bash -c '<command>' run in the engine's shell

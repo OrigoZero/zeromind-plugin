@@ -306,6 +306,32 @@ export async function installEngine(
 
 export async function runEngineCli(args: string[]): Promise<void> {
   const [command, ...rest] = args;
+  const usage =
+    "Usage: zero engine install [--version <version>] | status | doctor [--software-rendering] [--bin <path>]";
+  if (!command || command === "--help" || command === "-h") {
+    process.stdout.write(usage + "\n");
+    return;
+  }
+  if (command === "doctor") {
+    let softwareRendering = false;
+    let bin: string | undefined;
+    for (let i = 0; i < rest.length; i++) {
+      if (rest[i] === "--software-rendering") softwareRendering = true;
+      else if (rest[i] === "--bin" && rest[i + 1] && !rest[i + 1].startsWith("--")) bin = rest[++i];
+      else throw new Error(usage);
+    }
+    const { checkHeadlessRenderer, findEngine } = await import("./engine-launch.js");
+    const binary = await findEngine(bin);
+    if (!binary)
+      throw new Error("No native engine found. Run zero engine install, then zero engine doctor.");
+    const renderer = await checkHeadlessRenderer(binary, {
+      world: "",
+      headless: true,
+      softwareRendering,
+    });
+    process.stdout.write(JSON.stringify({ binary, renderer }, null, 2) + "\n");
+    return;
+  }
   if (command === "status" && rest.length === 0) {
     process.stdout.write(
       JSON.stringify((await installedEngine()) ?? { installed: false }, null, 2) + "\n",
@@ -316,7 +342,7 @@ export async function runEngineCli(args: string[]): Promise<void> {
     command !== "install" ||
     (rest.length !== 0 && (rest.length !== 2 || rest[0] !== "--version"))
   ) {
-    throw new Error("Usage: zero engine install [--version <version>] | zero engine status");
+    throw new Error(usage);
   }
   const result = await installEngine({ version: rest[1] });
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");

@@ -157,7 +157,19 @@ export async function stopLaunchedEngine(child: ReturnType<typeof spawn>): Promi
 }
 
 /** Exercise the requested renderer before issuing a short-lived launch credential. */
-export async function checkHeadlessRenderer(binary: string, options: OpenOptions): Promise<void> {
+export type RendererDiagnostic = {
+  headless: true;
+  adapter: string;
+  driver: string;
+  kind: string;
+  width: number;
+  height: number;
+};
+
+export async function checkHeadlessRenderer(
+  binary: string,
+  options: OpenOptions,
+): Promise<RendererDiagnostic | undefined> {
   if (!options.headless) return;
   const args = nativeLaunchArgs({ ...options, branch: undefined }, "").slice(1);
   let stdout: string;
@@ -179,7 +191,7 @@ export async function checkHeadlessRenderer(binary: string, options: OpenOptions
     .split(/\r?\n/)
     .reverse()
     .find((line) => line.startsWith("{"));
-  let value: { headless?: boolean; kind?: string };
+  let value: Partial<RendererDiagnostic> | null;
   try {
     value = JSON.parse(report ?? "");
   } catch {
@@ -187,8 +199,18 @@ export async function checkHeadlessRenderer(binary: string, options: OpenOptions
       "The engine returned no renderer diagnostic; update it with zero engine install.",
     );
   }
-  if (value.headless !== true || (options.softwareRendering && value.kind !== "cpu"))
+  if (
+    !value ||
+    value.headless !== true ||
+    typeof value.kind !== "string" ||
+    typeof value.adapter !== "string" ||
+    typeof value.driver !== "string" ||
+    value.width !== (options.width ?? (options.softwareRendering ? 640 : 1280)) ||
+    value.height !== (options.height ?? (options.softwareRendering ? 360 : 720)) ||
+    (options.softwareRendering && value.kind !== "cpu")
+  )
     throw new Error("The engine did not confirm the requested offscreen CPU/GPU renderer.");
+  return value as RendererDiagnostic;
 }
 
 export async function openEngine(

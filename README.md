@@ -81,6 +81,7 @@ used after its account identity is verified.
 
 ```sh
 zero engine install
+zero engine doctor --software-rendering
 zero --context my-agent open "My World" --branch feature
 zero --context my-agent open "My World" --branch feature --headless --software-rendering
 ```
@@ -97,6 +98,11 @@ or D3D12 WARP on Windows. The CLI checks the renderer before requesting a launch
 credential. `--width` and `--height` set the framebuffer dimensions; CPU rendering
 defaults to 640 by 360. The engine release must expose `--check-renderer` and the
 hosted service must support authorized native launches.
+
+`zero engine doctor` initializes the offscreen renderer and reports the actual
+adapter, driver and framebuffer size as JSON. It runs without logging in or
+opening a world. Add `--software-rendering` to check CPU rendering specifically,
+or `--bin <path>` to check a particular executable.
 
 Each supported harness (Claude Code, Cursor, Codex CLI, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, openClaw, JetBrains Junie, Sourcegraph Amp, GitHub Copilot, Block Goose, Aider) gets its onboarding through that harness's own native channel — skills, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/*.mdc`, `.clinerules`, `CONVENTIONS.md`, `.goosehints` — plus the MCP entry in the config file that harness reads. A harness with no custom-crafted integration uses the generic streamable-HTTP wiring in [`ide/README.md`](ide/README.md#generic-mcp-fallback).
 
