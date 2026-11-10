@@ -16,7 +16,7 @@ import { cacheDir } from "./config.js";
 import { McpHttpClient } from "./mcp-client.js";
 import { remoteUrl } from "./server-spec.js";
 import { issuer } from "./zeromind-client.js";
-import { cliBearer } from "./cli-oauth.js";
+import { cliBearer } from "./cli-agent.js";
 
 /** Which face of the world opens: its editor, or the game as a player sees it. */
 export type OpenMode = "edit" | "play";

@@ -26,6 +26,13 @@ describe("hosted CLI", () => {
     }> = [];
     const pins = new Map<string, unknown>();
     const server = createServer(async (req, res) => {
+      if (req.url === "/v1/me") {
+        res.setHeader("content-type", "application/json");
+        res.end(
+          JSON.stringify({ user: { id: "agent-one", username: "cli-agent", is_agent: true } }),
+        );
+        return;
+      }
       let raw = "";
       for await (const chunk of req) raw += chunk;
       const request = JSON.parse(raw);
@@ -45,6 +52,11 @@ describe("hosted CLI", () => {
       let value: unknown = pins.get(caller) ?? { unbound: true };
       if (request.params.name === "execute")
         value = { result: JSON.stringify({ stdout: "a\n", stderr: "warning\n", exitCode: 7 }) };
+      if (
+        request.params.name === "execute" &&
+        request.params.arguments.code.includes("rawget(shell")
+      )
+        value = { result: { legacy: true } };
       res.end(
         JSON.stringify({
           id: request.id,
@@ -77,7 +89,9 @@ describe("hosted CLI", () => {
         child.on("close", (code) => resolve({ out, err, code }));
       });
     expect((await run("one", "connect", "--world", "world", "--branch", "feature")).code).toBe(0);
-    expect((await run("one", "sessions")).out).toContain("feature");
+    const resumed = await run("one", "sessions");
+    expect(resumed.code, resumed.err).toBe(0);
+    expect(resumed.out).toContain("feature");
     expect((await run("two", "sessions")).out).toContain("unbound");
     expect(await run("one", "bash", "-c", "printf a; exit 7")).toEqual({
       out: "a\n",

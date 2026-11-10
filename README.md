@@ -65,16 +65,38 @@ ordinary `-c` calls then execute in the selected engine:
 ZERO_CONTEXT=my-agent zero-shell -c 'pwd; ls /zero/source'
 ```
 
-The adapter accepts `-c <command>` and `-s` (a script on stdin). Interactive TTY
-attachment, streaming command stdin, and remote cancellation require an adapter
-to those engine facilities. The existing `open` command opens the local browser or native handler and
-reports that handoff; use `sessions` and `connect` to select the ready engine.
+The adapter accepts `-c <command>` and `-s` (a script on stdin). With an engine
+exposing the attached-shell API, command input and separate output streams flow
+through the hosted connection, and interruption cancels the remote command.
 
-OAuth requests `read write` by default. To publish, authorize the corresponding
-scope with `zero login --scope 'read write publish'`. Tokens refresh automatically
-and are stored separately from the engine's machine-link cache. `zero logout`
-revokes the CLI's OAuth tokens. Existing `/link` credentials also work with these
-commands. The open and upload commands reuse OAuth sign-in when present.
+`zero login --username my-agent` opens the approval page for the CLI's own agent
+account. You can select an existing agent there. On a remote computer, pass
+`--no-browser` and open the printed URL on your own device. The CLI verifies that
+the approved account is an agent; `zero whoami` shows that identity. Credentials
+are stored separately from the engine's machine-link cache. `zero logout`
+revokes this CLI installation. An existing agent `/link` credential can also be
+used after its account identity is verified.
+
+### Launch a native engine from the CLI
+
+```sh
+zero engine install
+zero --context my-agent open "My World" --branch feature
+zero --context my-agent open "My World" --branch feature --headless --software-rendering
+```
+
+`open` reuses a matching accessible engine or downloads a verified release,
+launches it with an authorized handoff, and waits until commands work. Use
+`--session <id>` to choose an existing engine, `--new` to start another, or
+`--browser` to open a browser engine. `--bin <path>` selects a particular native
+executable. Plain `zero open` uses the context from your environment.
+
+`--headless` starts a new engine with an offscreen framebuffer. Add
+`--software-rendering` to require a CPU adapter, such as Mesa lavapipe on Linux
+or D3D12 WARP on Windows. The CLI checks the renderer before requesting a launch
+credential. `--width` and `--height` set the framebuffer dimensions; CPU rendering
+defaults to 640 by 360. The engine release must expose `--check-renderer` and the
+hosted service must support authorized native launches.
 
 Each supported harness (Claude Code, Cursor, Codex CLI, Gemini CLI, OpenCode, Cline, Continue, Windsurf, Zed, openClaw, JetBrains Junie, Sourcegraph Amp, GitHub Copilot, Block Goose, Aider) gets its onboarding through that harness's own native channel — skills, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/*.mdc`, `.clinerules`, `CONVENTIONS.md`, `.goosehints` — plus the MCP entry in the config file that harness reads. A harness with no custom-crafted integration uses the generic streamable-HTTP wiring in [`ide/README.md`](ide/README.md#generic-mcp-fallback).
 

@@ -1,18 +1,27 @@
 import { readFileSync } from "node:fs";
 import { McpHttpClient, type ToolOutcome } from "./mcp-client.js";
-import { cliBearer, login, logout } from "./cli-oauth.js";
+import { cliBearer, loginAgent, logoutAgent } from "./cli-agent.js";
 import { conversationId } from "./cli-state.js";
 import { remoteUrl } from "./server-spec.js";
+import { openEngine, type OpenOptions } from "./engine-launch.js";
+import { streamShell } from "./shell-stream.js";
 
 export const REMOTE_HELP = `zero — use a Zero world through its hosted connection
 
-zero login [--force] [--scope 'read write publish']
-                                        authorize once in your browser
-zero logout                              revoke the CLI's OAuth authorization
+zero login [--username <agent>] [--no-browser]
+                                        approve an agent identity once in your browser
+zero logout                              revoke this CLI agent's authorization
+zero whoami                              show the authorized account and scopes
 zero --context <agent> sessions           list engines, worlds and branches
 zero --context <agent> connect --session <id>
 zero --context <agent> connect --world <world> --branch <branch>
 zero --context <agent> disconnect         release this context's engine connection
+zero --context <agent> open <world> [--branch <branch>] [--native|--browser]
+                                        connect or install, launch and await an engine
+  --headless [--software-rendering]       start an offscreen native engine, optionally on CPU
+  --width <pixels> --height <pixels>      headless framebuffer size
+zero engine install [--version <version>] install a verified native release
+zero engine status                       show the CLI-managed native installation
 zero --context <agent> tools              list hosted operations and schemas
 zero --context <agent> call <tool> --input '<json>'
 zero --context <agent> bash -c '<command>' run in the engine's shell
@@ -21,7 +30,8 @@ zero --context <agent> bash -s            read a shell script from host stdin
 ZERO_CONTEXT supplies --context. Codex's CODEX_THREAD_ID is used when present.
 Use a distinct context per agent; reuse it across calls to keep the engine pin
 and shell state. Worlds, files and shell execution live in the selected engine.
-zero open <world> --native|--browser opens an editor on this machine.
+zero open uses the same managed launch with ZERO_CONTEXT or CODEX_THREAD_ID.
+zero open <world> --play opens the player; --dry-run previews an open URL.
 
 Existing integration commands:
 zeromind link       link an agent account through /link
@@ -125,26 +135,60 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
     return;
   }
   if (command === "login") {
-    let force = false,
-      scope: string | undefined;
+    let username: string | undefined;
+    let noBrowser = false;
     for (let i = 0; i < args.length; i++) {
-      if (args[i] === "--force") force = true;
-      else if (args[i] === "--scope") scope = required(args, ++i, "--scope");
-      else throw new Error("Usage: zero login [--force] [--scope 'read write publish']");
+      if (args[i] === "--no-browser") noBrowser = true;
+      else if (args[i] === "--username") username = required(args, ++i, "--username");
+      else throw new Error("Usage: zero login [--username <agent>] [--no-browser]");
     }
-    await login({ force, scope });
+    await loginAgent({ username, noBrowser });
     return;
   }
   if (command === "logout") {
     if (args.length) throw new Error("Usage: zero logout");
-    await logout();
+    await logoutAgent();
     process.stderr.write("CLI authorization revoked.\n");
     return;
   }
   let tool: string | undefined;
   let input: Record<string, unknown> = {};
   let shell: string | undefined;
+  let open: OpenOptions | undefined;
   switch (command) {
+    case "whoami":
+      if (args.length) throw new Error("Usage: zero whoami");
+      tool = "zeromind.profile";
+      break;
+    case "open": {
+      if (args.includes("--help") || args.includes("-h")) {
+        process.stdout.write(REMOTE_HELP);
+        return;
+      }
+      open = { world: "" };
+      for (let i = 0; i < args.length; i++) {
+        const argument = args[i];
+        if (
+          ["--world", "--branch", "--session", "--bin", "--width", "--height"].includes(argument)
+        ) {
+          const value = required(args, ++i, argument);
+          if (argument === "--world") open.world = value;
+          if (argument === "--branch") open.branch = value;
+          if (argument === "--session") open.session = value;
+          if (argument === "--bin") open.bin = value;
+          if (argument === "--width") open.width = Number(value);
+          if (argument === "--height") open.height = Number(value);
+        } else if (argument === "--native") open.native = true;
+        else if (argument === "--headless") open.headless = true;
+        else if (argument === "--software-rendering") open.softwareRendering = true;
+        else if (argument === "--browser") open.browser = true;
+        else if (argument === "--new") open.newSession = true;
+        else if (!argument.startsWith("-") && !open.world) open.world = argument;
+        else throw new Error(`Unexpected open argument: ${argument}`);
+      }
+      if (!open.world) throw new Error("open requires a world name or guid");
+      break;
+    }
     case "sessions":
       if (args.length) throw new Error("Usage: zero sessions");
       tool = "session.list";
@@ -171,7 +215,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
       if (args.length > 1) {
         if (args[1] !== "--input" || args.length !== 3)
           throw new Error("Usage: zero call <tool> [--input '<json>']");
-        const parsed: unknown = JSON.parse(args[2]);
+        const parsed: unknown = JSON.parse(args[2] === "-" ? readFileSync(0, "utf8") : args[2]);
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
           throw new Error("--input must be a JSON object");
         input = parsed as Record<string, unknown>;
@@ -187,12 +231,36 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
       throw new Error(`Unknown command: ${command}\n${REMOTE_HELP}`);
   }
   const endpoint = remoteUrl();
-  const conversation = await conversationId(endpoint, context);
+  const conversation = await conversationId(
+    endpoint,
+    context ?? (command === "whoami" ? "identity" : undefined),
+  );
   const client = new McpHttpClient(endpoint, await cliBearer(), "zero-cli", conversation);
   try {
     await client.initialize();
+    if (open) {
+      process.stdout.write(JSON.stringify(await openEngine(client, open), null, 2) + "\n");
+      return;
+    }
     if (shell !== undefined) {
-      process.exitCode = await runShell(client, shell);
+      const streamed = await streamShell(
+        client,
+        shell,
+        process.stdin,
+        process.stdout,
+        process.stderr,
+      );
+      if (streamed === undefined) {
+        if (!process.stdin.isTTY) {
+          for await (const chunk of process.stdin) {
+            if (chunk.length)
+              throw new Error(
+                "This engine needs an update for command stdin; use zero engine install and open a new native engine.",
+              );
+          }
+        }
+        process.exitCode = await runShell(client, shell);
+      } else process.exitCode = streamed;
       return;
     }
     if (!tool) {
@@ -201,6 +269,25 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
     }
     const result = await client.callTool(tool, input);
     if (result.isError) throw new Error(result.text);
+    if (command === "whoami") {
+      const profile = data(result) as {
+        user?: { id?: string; username?: string; is_agent?: boolean };
+        scopes?: string[];
+      };
+      process.stdout.write(
+        JSON.stringify(
+          {
+            id: profile.user?.id,
+            username: profile.user?.username,
+            is_agent: profile.user?.is_agent,
+            scopes: profile.scopes,
+          },
+          null,
+          2,
+        ) + "\n",
+      );
+      return;
+    }
     if (command !== "call") {
       process.stdout.write(JSON.stringify(data(result), null, 2) + "\n");
       return;

@@ -10,7 +10,7 @@ import { homedir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
 import { McpHttpClient } from "./mcp-client.js";
 import { remoteUrl } from "./server-spec.js";
-import { cliBearer } from "./cli-oauth.js";
+import { cliBearer } from "./cli-agent.js";
 
 /** Total bytes one upload may move (256 MiB), across a whole folder. */
 export const DEFAULT_MAX_BYTES = 256 * 1024 * 1024;

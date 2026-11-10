@@ -4,6 +4,16 @@
 const argv = process.argv.slice(2);
 const command = argv[0];
 const run = async (): Promise<void> => {
+  if (command === "open" && (argv.includes("--play") || argv.includes("--dry-run"))) {
+    const { runOpenCli } = await import("./cli-open.js");
+    await runOpenCli(argv.slice(1));
+    return;
+  }
+  if (command === "engine") {
+    const { runEngineCli } = await import("./engine-install.js");
+    await runEngineCli(argv.slice(1));
+    return;
+  }
   if (
     !command ||
     [
@@ -11,6 +21,7 @@ const run = async (): Promise<void> => {
       "-h",
       "--context",
       "login",
+      "whoami",
       "logout",
       "sessions",
       "connect",
@@ -18,6 +29,7 @@ const run = async (): Promise<void> => {
       "tools",
       "call",
       "bash",
+      "open",
     ].includes(command)
   ) {
     const { runRemoteCli } = await import("./cli-remote.js");
@@ -32,11 +44,6 @@ const run = async (): Promise<void> => {
   if (command === "upload") {
     const { runUploadCli } = await import("./cli-upload.js");
     await runUploadCli(argv.slice(1));
-    return;
-  }
-  if (command === "open") {
-    const { runOpenCli } = await import("./cli-open.js");
-    await runOpenCli(argv.slice(1));
     return;
   }
   if (["link", "status", "unlink"].includes(command)) {

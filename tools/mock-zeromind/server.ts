@@ -587,7 +587,7 @@ export const buildServer = (state: MockState): Server =>
             profile.pronouns = body.pronouns.trim() === "" ? undefined : body.pronouns;
           }
         }
-        return json(res, 200, profile);
+        return json(res, 200, method === "GET" ? { user: profile, scopes: ["read", "write"] } : profile);
       }
 
       return text(res, 404, "Not found");
