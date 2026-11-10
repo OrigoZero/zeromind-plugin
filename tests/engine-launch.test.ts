@@ -18,7 +18,7 @@ const answer = (value: unknown) => ({
 
 it("uses the reported default branch while preserving a context pin or explicit session", async () => {
   const connected: Record<string, unknown>[] = [];
-  let pinned: string | undefined;
+  let pinned: string | undefined = undefined;
   const rows = [session, { ...session, session_id: "trunk-engine", branch: "trunk" }];
   const client = {
     callTool: async (name: string, args: Record<string, unknown>) => {
