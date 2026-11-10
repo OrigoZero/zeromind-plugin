@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const execute = vi.hoisted(() => vi.fn());
 vi.mock("node:child_process", async (original) => ({
@@ -20,6 +20,21 @@ const cpuReport = {
 
 beforeEach(() => {
   execute.mockReset();
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+it("keeps a parent desktop application's AppImage location out of engine probes", async () => {
+  vi.stubEnv("APPIMAGE", "/parent/application.AppImage");
+  vi.stubEnv("APPDIR", "/parent/mounted");
+  execute.mockImplementation((_file, _args, _options, callback) =>
+    callback(null, { stdout: JSON.stringify(cpuReport) }),
+  );
+  await checkHeadlessRenderer("engine", { world: "", headless: true, softwareRendering: true });
+  expect(execute.mock.calls[0][2].env.APPIMAGE).toBeUndefined();
+  expect(execute.mock.calls[0][2].env.APPDIR).toBeUndefined();
+  expect(process.env.APPIMAGE).toBe("/parent/application.AppImage");
 });
 
 it("runs the renderer doctor repeatedly without an account or world", async () => {

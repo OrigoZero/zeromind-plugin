@@ -100,6 +100,9 @@ launches it with an authorized handoff, and waits until commands work. Use
 `--browser` to open a browser engine. `--bin <path>` selects a particular native
 executable. Plain `zero open` uses the context from your environment.
 
+Linux AppImage updates are unpacked into the CLI-managed installation and run
+through their entrypoint, without requiring a FUSE mount or desktop installer.
+
 An omitted branch keeps the context's matching pinned branch, or uses the
 world's reported default branch. An explicit `--session` keeps that session's
 branch unless `--branch` also names one.

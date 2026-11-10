@@ -1,6 +1,19 @@
 import { createHash, randomUUID } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { createWriteStream, existsSync } from "node:fs";
-import { chmod, mkdir, readFile, rename, rm, statfs, symlink, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+  statfs,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable, Transform } from "node:stream";
@@ -21,6 +34,40 @@ type Asset = {
 export type EngineInstall = { binary: string; version: string; platform: string; sha256: string };
 const MAX_PACKAGE = 1024 * 1024 * 1024;
 const MAX_EXPANDED = 4 * MAX_PACKAGE;
+const runExecutable = promisify(execFile);
+
+async function unpackLinuxAppImage(
+  image: string,
+  payload: string,
+  log: (line: string) => void,
+): Promise<string> {
+  if (process.platform !== "linux")
+    throw new Error("Unpacking a Linux AppImage requires a Linux host");
+  const extraction = join(payload, ".appimage");
+  await mkdir(extraction);
+  await chmod(image, 0o755);
+  log("Unpacking Linux AppImage for direct execution.");
+  try {
+    await runExecutable(image, ["--appimage-extract"], {
+      cwd: extraction,
+      windowsHide: true,
+      timeout: 180000,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+  } catch (error) {
+    const failure = error as Error & { stderr?: string };
+    throw new Error(
+      `Could not unpack the Linux AppImage: ${failure.stderr?.trim() || failure.message}`,
+    );
+  }
+  const entrypoint = join(extraction, "squashfs-root", "AppRun");
+  const executable = await realpath(entrypoint);
+  containedPath(payload, relative(payload, executable));
+  if (!(await stat(executable)).isFile())
+    throw new Error("The AppImage has no executable AppRun entrypoint");
+  await chmod(executable, 0o755);
+  return entrypoint;
+}
 export const engineRoot = () => resolve(process.env.ZERO_ENGINE_DIR ?? join(cacheDir(), "engines"));
 
 export function platformChannel(
@@ -272,9 +319,13 @@ export async function installEngine(
     )
       throw new Error("Engine package checksum or size does not match the release");
     const files = await unzip(archive, payload);
-    const matches = files.filter((p) =>
+    let matches = files.filter((p) =>
       channel === "win" ? /[\\/]native\.exe$/i.test(p) : /[\\/]native$/.test(p),
     );
+    if (matches.length === 0 && channel === "linux") {
+      const images = files.filter((path) => /\.AppImage$/i.test(path));
+      if (images.length === 1) matches = [await unpackLinuxAppImage(images[0], payload, log)];
+    }
     if (matches.length !== 1)
       throw new Error(
         `Engine package must contain exactly one native executable; found ${matches.length}`,

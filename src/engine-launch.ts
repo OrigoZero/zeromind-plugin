@@ -117,6 +117,11 @@ export function nativeLaunchArgs(options: OpenOptions, launchUrl: string): strin
 
 const runExecutable = promisify(execFile);
 
+/** Each engine establishes its own portable-application location. */
+function engineEnvironment(): NodeJS.ProcessEnv {
+  return { ...process.env, APPIMAGE: undefined, APPDIR: undefined };
+}
+
 /** Stop the process tree created by a launch that failed to become ready. */
 export async function stopLaunchedEngine(child: ReturnType<typeof spawn>): Promise<void> {
   if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
@@ -180,6 +185,7 @@ export async function checkHeadlessRenderer(
       windowsHide: true,
       timeout: 60000,
       maxBuffer: 1024 * 1024,
+      env: engineEnvironment(),
     }));
   } catch (error) {
     const failure = error as Error & { stderr?: string };
@@ -319,6 +325,7 @@ export async function openEngine(
         detached: true,
         windowsHide: true,
         stdio: ["ignore", fd, fd],
+        env: engineEnvironment(),
       });
       await new Promise<void>((ready, fail) => {
         child!.once("spawn", ready);

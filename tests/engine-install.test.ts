@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, existsSync, readdirSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import {
   chooseRelease,
   containedPath,
@@ -24,6 +25,54 @@ afterEach(async () => {
     root = undefined;
   }
 });
+
+it.skipIf(process.platform !== "linux")(
+  "installs an AppImage update as a reusable direct-execution tree",
+  async () => {
+    root = mkdtempSync(join(tmpdir(), "zero-appimage-test-"));
+    vi.stubEnv("ZERO_ENGINE_DIR", root);
+    const bytes = readFileSync("tests/fixtures/engine/appimage.nupkg");
+    let downloads = 0;
+    server = createServer((req, res) => {
+      if (req.url?.endsWith(".json")) {
+        res.setHeader("content-type", "application/json");
+        res.end(
+          JSON.stringify({
+            Assets: [
+              {
+                PackageId: "ZeroEngine",
+                Version: "0.0.1",
+                Type: "Full",
+                FileName: "engine.nupkg",
+                Size: bytes.length,
+                SHA256: createHash("sha256").update(bytes).digest("hex"),
+              },
+            ],
+          }),
+        );
+      } else {
+        downloads++;
+        res.end(bytes);
+      }
+    });
+    await new Promise<void>((r) => server!.listen(0, "127.0.0.1", r));
+    vi.stubEnv(
+      "ZEROMIND_ISSUER",
+      `http://127.0.0.1:${(server.address() as { port: number }).port}`,
+    );
+    const options = { platform: "linux" as const, arch: "x64", log: () => {} };
+    const first = await installEngine(options);
+    expect(first.binary).toContain(".appimage/squashfs-root/AppRun");
+    expect(execFileSync(first.binary, ["--version"], { encoding: "utf8" })).toBe(
+      "linux-test-engine\n",
+    );
+    expect(await installEngine(options)).toEqual(first);
+    expect(downloads).toBe(1);
+    expect(execFileSync(first.binary, ["--version"], { encoding: "utf8" })).toBe(
+      "linux-test-engine\n",
+    );
+  },
+);
 
 it("verifies and installs a release once, keeping the current engine after a bad update", async () => {
   root = mkdtempSync(join(tmpdir(), "zero-engine-install-"));
