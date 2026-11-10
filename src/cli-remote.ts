@@ -5,6 +5,7 @@ import { conversationId } from "./cli-state.js";
 import { remoteUrl } from "./server-spec.js";
 import { openEngine, type OpenOptions } from "./engine-launch.js";
 import { streamShell } from "./shell-stream.js";
+import { parseWorldReference, runOpenCli } from "./cli-open.js";
 
 export const REMOTE_HELP = `zero — use a Zero world through its hosted connection
 
@@ -165,6 +166,10 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
         process.stdout.write(REMOTE_HELP);
         return;
       }
+      if (args.includes("--play") || args.includes("--dry-run")) {
+        await runOpenCli(args);
+        return;
+      }
       open = { world: "" };
       for (let i = 0; i < args.length; i++) {
         const argument = args[i];
@@ -179,7 +184,9 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
           if (argument === "--width") open.width = Number(value);
           if (argument === "--height") open.height = Number(value);
         } else if (argument === "--native") open.native = true;
-        else if (argument === "--headless") open.headless = true;
+        else if (argument === "--edit") {
+          /* Editor mode is the managed launch default. */
+        } else if (argument === "--headless") open.headless = true;
         else if (argument === "--software-rendering") open.softwareRendering = true;
         else if (argument === "--browser") open.browser = true;
         else if (argument === "--new") open.newSession = true;
@@ -187,6 +194,12 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
         else throw new Error(`Unexpected open argument: ${argument}`);
       }
       if (!open.world) throw new Error("open requires a world name or guid");
+      const reference = parseWorldReference(open.world);
+      if (reference.mode === "play" && !args.includes("--edit")) {
+        await runOpenCli(args);
+        return;
+      }
+      open.world = reference.guid ?? reference.name!;
       break;
     }
     case "sessions":

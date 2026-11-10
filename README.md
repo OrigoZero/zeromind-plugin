@@ -190,9 +190,14 @@ Copies a file — or a folder, its relative layout preserved — from this machi
 npx -y @origozero/zeromind open <world guid | name | https url | zero:// url> [--play | --edit] [--native | --browser] [--dry-run]
 ```
 
-Every tool an agent calls is served by ZeroMind, which has no browser tab and no engine process on your machine: `world.open` and `world.launch` answer **where** a world opens, and this command is what opens it **here**. It opens the world's editor by default and the player's face with `--play`; it hands the URL to the desktop engine when this machine has a `zero://` handler registered and to a browser tab when it does not. `--native` / `--browser` decide it outright and are remembered in `open.json` beside `session.json`, so later calls with neither flag follow what you chose. `--dry-run` prints the target and the URL and changes nothing.
+Editor opens use the managed launcher described above: select a context, resolve
+the world and branch through ZeroMind, connect to an accessible session or launch
+an engine, and wait for readiness. `--edit` explicitly selects this mode.
 
-A guid or a URL is opened without a single network call. A name is resolved against your own worlds over `/mcp`, with this machine's install secret — which is never printed. No engine is contacted at all.
+`--play` and player URLs open the player's face through the local native URL
+handler or browser. These player opens remember `--native` / `--browser` in
+`open.json`. `--dry-run` prints an opening URL without launching it. World names
+are resolved through the hosted MCP connection using the verified agent identity.
 
 ## Pointing at a local / self-hosted ZeroMind
 
