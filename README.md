@@ -65,6 +65,18 @@ ordinary `-c` calls then execute in the selected engine:
 ZERO_CONTEXT=my-agent zero-shell -c 'pwd; ls /zero/source'
 ```
 
+For an agent that invokes Bash itself, set `BASH_ENV` for the agent process:
+
+```sh
+ZERO_CONTEXT=my-agent BASH_ENV="$(zero bash-env)" your-agent-command
+```
+
+Bash reads this startup file and hands its command, stdin or engine script path
+to Zero. This also handles noninteractive login invocations such as `bash -lc`.
+Arguments, stdin, output streams and exit status follow the same shell transport.
+The setting is scoped to that agent and its child processes. Start it without
+`BASH_ENV` to use the host shell again; interactive terminals use `zero-shell -i`.
+
 The adapter accepts `-c <command> [arg0 args...]`, `-s [args...]` (a script on
 stdin), or an engine VFS script path followed by its arguments. Argument boundaries,
 empty strings and shell-sensitive characters are preserved. With an engine

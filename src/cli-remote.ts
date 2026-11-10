@@ -32,6 +32,7 @@ zero --context <agent> call <tool> --input '<json>'
 zero --context <agent> bash -c '<command>' run in the engine's shell
 zero --context <agent> bash -s            read a shell script from host stdin
 zero --context <agent> bash -i            interactive shell with local line editing
+zero bash-env                            print a Bash startup file that routes commands to Zero
 
 ZERO_CONTEXT supplies --context. Codex's CODEX_THREAD_ID is used when present.
 Use a distinct context per agent; reuse it across calls to keep the engine pin
