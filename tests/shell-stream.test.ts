@@ -4,6 +4,32 @@ import { streamShell } from "../src/shell-stream.js";
 
 const answer = (result: unknown) => ({ text: JSON.stringify({ result }), isError: false });
 
+it("drains a finished command when stdin arrives after the engine closes input", async () => {
+  const input = new PassThrough();
+  input.end("late input");
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  let attempted = false;
+  let closed = false;
+  const client = {
+    callTool: async (_name: string, args: Record<string, unknown>) => {
+      const code = String(args.code);
+      if (code.includes("rawget")) return answer({ handle: "finished" });
+      if (code.includes("shell.write")) {
+        attempted = true;
+        return answer(false);
+      }
+      if (code.includes("shell.close")) {
+        closed = true;
+        return answer(true);
+      }
+      return answer({ stdoutBase64: "", stderrBase64: "", exitCode: attempted ? 7 : null });
+    },
+  };
+  expect(await streamShell(client, "exit 7", input, stdout, stderr)).toBe(7);
+  expect(closed).toBe(true);
+});
+
 it("delivers output before stdin EOF and carries binary input, stderr and exit status", async () => {
   const input = new PassThrough();
   let eof = false,
