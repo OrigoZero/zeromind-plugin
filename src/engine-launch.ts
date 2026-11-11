@@ -126,41 +126,46 @@ export function engineEnvironment(): NodeJS.ProcessEnv {
 /** Stop the process tree created by a launch that failed to become ready. */
 export async function stopLaunchedEngine(child: ReturnType<typeof spawn>): Promise<void> {
   if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
-  const exited = new Promise<void>((resolveExit) => child.once("exit", () => resolveExit()));
-  if (process.platform === "win32") {
-    await runExecutable("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
-      windowsHide: true,
-      timeout: 10000,
-    }).catch((error) => {
-      if (child.exitCode === null && child.signalCode === null) throw error;
-    });
-  } else {
-    try {
-      process.kill(-child.pid, "SIGTERM");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
-    }
-    const timer = setTimeout(() => {
+  child.ref();
+  try {
+    const exited = new Promise<void>((resolveExit) => child.once("exit", () => resolveExit()));
+    if (process.platform === "win32") {
+      await runExecutable("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+        windowsHide: true,
+        timeout: 10000,
+      }).catch((error) => {
+        if (child.exitCode === null && child.signalCode === null) throw error;
+      });
+    } else {
       try {
-        process.kill(-child.pid!, "SIGKILL");
-      } catch {
-        /* The owned process group may already have exited. */
-      }
-    }, 5000);
-    timer.unref();
-    try {
-      await exited;
-      try {
-        process.kill(-child.pid, "SIGKILL");
+        process.kill(-child.pid, "SIGTERM");
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
       }
-    } finally {
-      clearTimeout(timer);
+      const timer = setTimeout(() => {
+        try {
+          process.kill(-child.pid!, "SIGKILL");
+        } catch {
+          /* The owned process group may already have exited. */
+        }
+      }, 5000);
+      timer.unref();
+      try {
+        await exited;
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+      return;
     }
-    return;
+    await exited;
+  } finally {
+    child.unref();
   }
-  await exited;
 }
 
 /** Exercise the requested renderer before issuing a short-lived launch credential. */
@@ -335,7 +340,6 @@ export async function openEngine(
       child.once("exit", (code, signal) => {
         ended = `exit ${code ?? signal}`;
       });
-      child.unref();
     } finally {
       closeSync(fd);
     }
@@ -393,6 +397,7 @@ export async function openEngine(
         const ready = toolData(await executeAndWait(client, "return true"));
         if (ready.result !== true)
           throw new Error("The engine connected but did not confirm command readiness");
+        child?.unref();
         log("Engine connected and ready.");
         return { ...result, ...(logfile ? { log: logfile } : {}) };
       }
