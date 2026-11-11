@@ -121,7 +121,12 @@ An omitted branch keeps the context's matching pinned branch, or uses the
 world's reported default branch. An explicit `--session` keeps that session's
 branch unless `--branch` also names one.
 
-`--headless` starts a new engine with an offscreen framebuffer. Add
+`--headless` starts a new engine with an offscreen framebuffer.
+In a headless engine, CLI commands use its primary client by default. Named
+sub-clients can be created explicitly for parallel work. The CLI continues to
+authenticate as its approved agent account.
+
+Add
 `--software-rendering` to require a CPU adapter, such as Mesa lavapipe on Linux
 or D3D12 WARP on Windows. The CLI checks the renderer before requesting a launch
 credential. `--width` and `--height` set the framebuffer dimensions; CPU rendering
