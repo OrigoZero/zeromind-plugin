@@ -1,10 +1,10 @@
 import { spawn, execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync, closeSync, openSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, open as openFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { McpHttpClient, type ToolOutcome } from "./mcp-client.js";
 import { installEngine, installedEngine } from "./engine-install.js";
 import { cacheDir } from "./config.js";
@@ -121,6 +121,79 @@ const runExecutable = promisify(execFile);
 /** Each engine establishes its own portable-application location. */
 export function engineEnvironment(): NodeJS.ProcessEnv {
   return { ...process.env, APPIMAGE: undefined, APPDIR: undefined };
+}
+
+/** The environment variable a launched engine reads the secret it signs its world-load reports with from. */
+export const LAUNCHER_SECRET_ENV = "ZERO_LAUNCHER_SECRET";
+/** What a world-load report line starts with, before the secret and the report. */
+const LOAD_REPORT_PREFIX = "ZERO_WORLD_LOAD ";
+
+/** How a world load ended, as the engine reports it to the process that launched it. */
+export type WorldLoadReport = {
+  world: string;
+  attempt?: number;
+  outcome: "loaded" | "stopped";
+  stage?: string;
+  error?: string;
+};
+
+/**
+ * The last world-load report for `world` among `lines`, read only from lines
+ * signed with `secret`; any other line, a forged one included, is skipped.
+ */
+export function lastWorldLoadReport(
+  lines: string[],
+  secret: string,
+  world: string,
+): WorldLoadReport | undefined {
+  const signed = `${LOAD_REPORT_PREFIX}${secret} `;
+  let last: WorldLoadReport | undefined;
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    if (!line.startsWith(signed)) continue;
+    try {
+      const report = JSON.parse(line.slice(signed.length)) as WorldLoadReport;
+      if (report.world === world && (report.outcome === "loaded" || report.outcome === "stopped"))
+        last = report;
+    } catch {
+      // A signed line that does not parse states no outcome.
+    }
+  }
+  return last;
+}
+
+/** The error a launch ends with when the engine's world load stopped. */
+export function describeStoppedLoad(report: WorldLoadReport, logfile: string): string {
+  const where = report.stage ? ` at ${report.stage}` : "";
+  const why = report.error ? `: ${report.error}` : "";
+  const access = report.stage === "checkingAccess" || report.stage === "gettingEditAccess";
+  const next = access
+    ? "This agent needs edit access to the world: ask the world's owner to grant it, then open the world again."
+    : `Inspect ${logfile}.`;
+  return `The engine could not load the world; the load stopped${where}${why}\n${next}`;
+}
+
+/** Reads the lines an engine appends to its log, from where the last read ended. */
+class LogFollower {
+  private offset = 0;
+  private partial = "";
+  constructor(private readonly path: string) {}
+  async newLines(): Promise<string[]> {
+    const file = await openFile(this.path, "r");
+    try {
+      const { size } = await file.stat();
+      if (size <= this.offset) return [];
+      const buffer = Buffer.alloc(size - this.offset);
+      const { bytesRead } = await file.read(buffer, 0, buffer.length, this.offset);
+      this.offset += bytesRead;
+      const text = this.partial + buffer.subarray(0, bytesRead).toString("utf8");
+      const lines = text.split(/\r?\n/);
+      this.partial = lines.pop() ?? "";
+      return lines;
+    } finally {
+      await file.close();
+    }
+  }
 }
 
 /** Stop the process tree created by a launch that failed to become ready. */
@@ -316,6 +389,9 @@ export async function openEngine(
   let child: ReturnType<typeof spawn> | undefined;
   let ended: string | undefined;
   let logfile: string | undefined;
+  let follower: LogFollower | undefined;
+  let loadReport: WorldLoadReport | undefined;
+  const launcherSecret = randomBytes(24).toString("hex");
   if (binary) {
     const launchUrl = launched.open?.native;
     if (typeof launchUrl !== "string" || !new URL(launchUrl).searchParams.has("handoff"))
@@ -331,7 +407,7 @@ export async function openEngine(
         detached: true,
         windowsHide: true,
         stdio: ["ignore", fd, fd],
-        env: engineEnvironment(),
+        env: { ...engineEnvironment(), [LAUNCHER_SECRET_ENV]: launcherSecret },
       });
       await new Promise<void>((ready, fail) => {
         child!.once("spawn", ready);
@@ -343,6 +419,7 @@ export async function openEngine(
     } finally {
       closeSync(fd);
     }
+    follower = new LogFollower(logfile);
     log(`Native engine starting. Log: ${logfile}`);
   } else {
     const address = launched.open?.browser;
@@ -402,6 +479,9 @@ export async function openEngine(
         return { ...result, ...(logfile ? { log: logfile } : {}) };
       }
       if (ended) throw new Error(`Native engine stopped during launch (${ended}). Log: ${logfile}`);
+      if (follower)
+        loadReport = lastWorldLoadReport(await follower.newLines(), launcherSecret, world) ?? loadReport;
+      if (loadReport?.outcome === "stopped") throw new Error(describeStoppedLoad(loadReport, logfile!));
       await new Promise((resolveWait) => setTimeout(resolveWait, 1000));
     }
     throw new Error(
