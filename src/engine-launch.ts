@@ -10,6 +10,7 @@ import { installEngine, installedEngine } from "./engine-install.js";
 import { cacheDir } from "./config.js";
 import { openWithPlatform } from "./cli-open.js";
 import { executeAndWait } from "./engine-execution.js";
+import { forgetEngine, recordEngine, updateEngine } from "./engine-registry.js";
 
 type Session = {
   session_id: string;
@@ -92,6 +93,10 @@ export type OpenOptions = {
   timeoutMs?: number;
   headless?: boolean;
   softwareRendering?: boolean;
+  /** Minutes a headless engine may go with no tool call before it stops; 0 keeps it running. */
+  idleMinutes?: number;
+  /** The conversation launching the engine, recorded so it can close what it launched. */
+  conversation?: string;
   width?: number;
   height?: number;
 };
@@ -194,6 +199,30 @@ class LogFollower {
       await file.close();
     }
   }
+}
+
+/** How long a headless engine the CLI launches may go unused before it stops, in minutes. */
+export const DEFAULT_HEADLESS_IDLE_MINUTES = 90;
+
+const acceptedArguments = new Map<string, Promise<string>>();
+
+/** Whether the engine at `binary` takes `argument`, read from its own help. */
+export async function engineAcceptsArgument(binary: string, argument: string): Promise<boolean> {
+  let help = acceptedArguments.get(binary);
+  if (!help) {
+    help = runExecutable(binary, ["--help"], {
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 30000,
+      maxBuffer: 1024 * 1024,
+      env: engineEnvironment(),
+    }).then(
+      ({ stdout }) => stdout,
+      () => "",
+    );
+    acceptedArguments.set(binary, help);
+  }
+  return (await help).includes(argument);
 }
 
 /** Stop the process tree created by a launch that failed to become ready. */
@@ -403,7 +432,14 @@ export async function openEngine(
     logfile = join(logs, `engine-${randomUUID()}.log`);
     const fd = openSync(logfile, "wx", 0o600);
     try {
-      child = spawn(binary, nativeLaunchArgs(options, launchUrl), {
+      const idleMinutes = options.headless
+        ? (options.idleMinutes ?? DEFAULT_HEADLESS_IDLE_MINUTES)
+        : 0;
+      const idleArgs =
+        idleMinutes > 0 && (await engineAcceptsArgument(binary, "--exit-after-idle-minutes"))
+          ? ["--exit-after-idle-minutes", String(idleMinutes)]
+          : [];
+      child = spawn(binary, [...nativeLaunchArgs(options, launchUrl), ...idleArgs], {
         detached: true,
         windowsHide: true,
         stdio: ["ignore", fd, fd],
@@ -416,6 +452,18 @@ export async function openEngine(
       child.once("exit", (code, signal) => {
         ended = `exit ${code ?? signal}`;
       });
+      if (child.pid)
+        await recordEngine({
+          pid: child.pid,
+          binary,
+          world,
+          ...(options.branch ? { branch: options.branch } : {}),
+          headless: Boolean(options.headless),
+          ...(options.conversation ? { conversation: options.conversation } : {}),
+          ...(idleArgs.length ? { idleMinutes } : {}),
+          launchedAt: new Date().toISOString(),
+          log: logfile,
+        });
     } finally {
       closeSync(fd);
     }
@@ -475,6 +523,7 @@ export async function openEngine(
         if (ready.result !== true)
           throw new Error("The engine connected but did not confirm command readiness");
         child?.unref();
+        if (child?.pid) await updateEngine(child.pid, { sessionId: appeared[0].session_id });
         log("Engine connected and ready.");
         return { ...result, ...(logfile ? { log: logfile } : {}) };
       }
@@ -491,6 +540,7 @@ export async function openEngine(
     if (child) {
       try {
         await stopLaunchedEngine(child);
+        if (child.pid) await forgetEngine(child.pid);
       } catch (cleanupError) {
         throw new Error(
           `${(error as Error).message}\nCould not stop the launched engine (${child.pid}): ${(cleanupError as Error).message}`,
