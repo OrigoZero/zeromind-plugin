@@ -4,6 +4,7 @@ import { cliBearer, loginAgent, logoutAgent } from "./cli-agent.js";
 import { conversationId } from "./cli-state.js";
 import { remoteUrl } from "./server-spec.js";
 import { openEngine, type OpenOptions } from "./engine-launch.js";
+import { closeEngine, runningEngines } from "./engine-registry.js";
 import { streamShell } from "./shell-stream.js";
 import { interactiveShell } from "./shell-interactive.js";
 import { shellInvocation } from "./shell-invocation.js";
@@ -24,6 +25,10 @@ zero --context <agent> open <world> [--branch <branch>] [--native|--browser]
                                         connect or install, launch and await an engine
   --headless [--software-rendering]       start an offscreen native engine, optionally on CPU
   --width <pixels> --height <pixels>      headless framebuffer size
+  --idle-minutes <minutes>               stop a headless engine after this long with no call (default 90, 0 never)
+zero engines                             list the native engines this CLI launched that still run
+zero --context <agent> close              stop the engines this context launched, with their sub-clients
+  --session <id> | --all                 stop the engine on that session, or every engine listed
 zero engine install [--version <version>] install a verified native release
   --software-rendering                   verify CPU rendering; provision Debian/Ubuntu drivers if needed
 zero engine status                       show the CLI-managed native installation
@@ -144,6 +149,42 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
     await loginAgent({ username, noBrowser });
     return;
   }
+  if (command === "engines") {
+    if (args.length) throw new Error("Usage: zero engines");
+    process.stdout.write(JSON.stringify({ engines: await runningEngines() }, null, 2) + "\n");
+    return;
+  }
+  if (command === "close") {
+    let session: string | undefined;
+    let all = false;
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === "--all") all = true;
+      else if (args[i] === "--session") session = required(args, ++i, "--session");
+      else throw new Error("Usage: zero [--context <agent>] close [--session <id> | --all]");
+    }
+    if (all && session) throw new Error("Choose --session <id> or --all");
+    const engines = await runningEngines();
+    const conversation =
+      all || session ? undefined : await conversationId(remoteUrl(), context);
+    const chosen = engines.filter((e) =>
+      all ? true : session ? e.sessionId === session : e.conversation === conversation,
+    );
+    if (!chosen.length)
+      throw new Error(
+        engines.length
+          ? "No running engine matches; zero engines lists the ones this CLI launched."
+          : "No engine this CLI launched is running.",
+      );
+    for (const engine of chosen) await closeEngine(engine);
+    process.stdout.write(
+      JSON.stringify(
+        { closed: chosen.map((e) => ({ pid: e.pid, world: e.world, session: e.sessionId })) },
+        null,
+        2,
+      ) + "\n",
+    );
+    return;
+  }
   if (command === "logout") {
     if (args.length) throw new Error("Usage: zero logout");
     await logoutAgent();
@@ -173,7 +214,15 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
       for (let i = 0; i < args.length; i++) {
         const argument = args[i];
         if (
-          ["--world", "--branch", "--session", "--bin", "--width", "--height"].includes(argument)
+          [
+            "--world",
+            "--branch",
+            "--session",
+            "--bin",
+            "--width",
+            "--height",
+            "--idle-minutes",
+          ].includes(argument)
         ) {
           const value = required(args, ++i, argument);
           if (argument === "--world") open.world = value;
@@ -182,6 +231,12 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
           if (argument === "--bin") open.bin = value;
           if (argument === "--width") open.width = Number(value);
           if (argument === "--height") open.height = Number(value);
+          if (argument === "--idle-minutes") {
+            const minutes = Number(value);
+            if (!Number.isInteger(minutes) || minutes < 0)
+              throw new Error("--idle-minutes takes a whole number of minutes, 0 for never");
+            open.idleMinutes = minutes;
+          }
         } else if (argument === "--native") open.native = true;
         else if (argument === "--edit") {
           /* Editor mode is the managed launch default. */
@@ -260,7 +315,9 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
       return;
     }
     if (open) {
-      process.stdout.write(JSON.stringify(await openEngine(client, open), null, 2) + "\n");
+      process.stdout.write(
+        JSON.stringify(await openEngine(client, { ...open, conversation }), null, 2) + "\n",
+      );
       return;
     }
     if (shell !== undefined) {

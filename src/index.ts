@@ -35,6 +35,8 @@ const run = async (): Promise<void> => {
       "call",
       "bash",
       "open",
+      "engines",
+      "close",
     ].includes(command)
   ) {
     const { runRemoteCli } = await import("./cli-remote.js");
