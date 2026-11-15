@@ -1,6 +1,6 @@
 {
   "name": "@origozero/zeromind",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Use Zero worlds from your agent's shell or MCP connector. Agent login, native engine installation, headless rendering, branch selection and remote shell execution.",
   "type": "module",
   "main": "dist/index.js",
