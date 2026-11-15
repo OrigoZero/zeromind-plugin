@@ -4,6 +4,10 @@
 const argv = process.argv.slice(2);
 const command = argv[0];
 const run = async (): Promise<void> => {
+  // Every request goes through the proxy and trusts the authorities the
+  // environment names.
+  const { useEnvironmentNetwork } = await import("./network.js");
+  useEnvironmentNetwork();
   if (command === "--version" || command === "-v") {
     const { VERSION } = await import("./package-version.js");
     process.stdout.write(VERSION + "\n");

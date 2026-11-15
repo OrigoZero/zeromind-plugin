@@ -19,6 +19,7 @@ import { pipeline } from "node:stream/promises";
 import { Readable, Transform } from "node:stream";
 import { open as openZip, type Entry, type ZipFile } from "yauzl";
 import { lock } from "proper-lockfile";
+import { fetch } from "undici";
 import { cacheDir } from "./config.js";
 import { issuer } from "./zeromind-client.js";
 import { checkedEndpoint } from "./endpoint.js";
