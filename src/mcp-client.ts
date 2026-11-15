@@ -5,7 +5,8 @@
 // later request. It exists so the CLI can reach a world's engine with the
 // same credential and the same server every harness uses.
 
-import { Agent, fetch, type Response } from "undici";
+import { fetch, type Dispatcher, type Response } from "undici";
+import { newDispatcher } from "./network.js";
 import { VERSION } from "./zeromind-client.js";
 
 /** The protocol revision this client speaks. */
@@ -54,7 +55,7 @@ export class McpHttpClient {
   // Its own connection pool, so `close()` can end every socket it opened:
   // a keep-alive connection left on the shared dispatcher outlives the work
   // and holds the CLI's event loop open after the last call.
-  private readonly agent = new Agent();
+  private readonly agent: Dispatcher = newDispatcher();
 
   constructor(
     private readonly url: string,

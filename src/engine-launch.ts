@@ -201,6 +201,36 @@ class LogFollower {
   }
 }
 
+/**
+ * The engine a launch runs. An executable named by `--bin` or
+ * `ZERO_ENGINE_BIN` is run as it is. Otherwise the engine this CLI manages is
+ * brought to the newest published release first, since the engine it unpacks
+ * has no installer manifest of its own to update from: an engine already
+ * current is used at once, a newer release is installed. When the release
+ * feed cannot be read, the installed engine is used and the reason is named;
+ * with none installed, an engine the system registered is used.
+ */
+export async function launchableEngine(
+  explicit: string | undefined,
+  log: (line: string) => void,
+): Promise<string> {
+  if (explicit ?? process.env.ZERO_ENGINE_BIN) return (await findEngine(explicit))!;
+  try {
+    return (await installEngine({ log })).binary;
+  } catch (error) {
+    const installed = await installedEngine();
+    if (installed) {
+      log(
+        `Could not check for a newer engine (${(error as Error).message}); launching the installed ${installed.version}.`,
+      );
+      return installed.binary;
+    }
+    const registered = await findEngine();
+    if (registered) return registered;
+    throw error;
+  }
+}
+
 /** How long a headless engine the CLI launches may go unused before it stops, in minutes. */
 export const DEFAULT_HEADLESS_IDLE_MINUTES = 90;
 
@@ -280,6 +310,17 @@ export type RendererDiagnostic = {
   height: number;
 };
 
+/** What a failed renderer check tells the person, from what the engine printed. */
+export function describeRendererCheckFailure(output: string): string {
+  const glibc = /version `GLIBC_([0-9.]+)' not found/.exec(output);
+  if (glibc)
+    return (
+      `The engine cannot start on this system: it needs glibc ${glibc[1]} or newer, which this system's C library does not provide.\n` +
+      "zero engine install installs the newest published engine; when that is the engine already installed, no published engine runs on this system's C library yet."
+    );
+  return `Headless renderer check failed: ${output}\nUpdate the engine with zero engine install. CPU rendering requires a software graphics driver such as Mesa lavapipe on Linux or D3D12 WARP on Windows.`;
+}
+
 export async function checkHeadlessRenderer(
   binary: string,
   options: OpenOptions,
@@ -297,9 +338,7 @@ export async function checkHeadlessRenderer(
     }));
   } catch (error) {
     const failure = error as Error & { stderr?: string };
-    throw new Error(
-      `Headless renderer check failed: ${failure.stderr?.trim() || failure.message}\nUpdate the engine with zero engine install. CPU rendering requires a software graphics driver such as Mesa lavapipe on Linux or D3D12 WARP on Windows.`,
-    );
+    throw new Error(describeRendererCheckFailure(failure.stderr?.trim() || failure.message));
   }
   const report = stdout
     .trim()
@@ -403,9 +442,7 @@ export async function openEngine(
   if (!createNew && candidates.length > 1)
     throw new Error("Several engines match; choose --session <id> or --new");
   // Install before requesting the short-lived handoff.
-  const binary = options.browser
-    ? undefined
-    : ((await findEngine(options.bin)) ?? (await installEngine({ log })).binary);
+  const binary = options.browser ? undefined : await launchableEngine(options.bin, log);
   if (binary) await checkHeadlessRenderer(binary, options);
   toolData(await client.callTool("world.disconnect", {}));
   const launched = toolData(

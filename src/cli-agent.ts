@@ -1,4 +1,5 @@
 import { generateKeyPairSync } from "node:crypto";
+import { fetch } from "undici";
 import { unlinkSync } from "node:fs";
 import { installSecret, loadCache, type SessionCache } from "./config.js";
 import { credentialLock, readState, saveState, statePath } from "./cli-state.js";
