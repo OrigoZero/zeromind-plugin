@@ -78,6 +78,12 @@ It opens the desktop engine when this machine has a `zero://` handler and a brow
 
 An agent running **inside** an engine is already in its world and never needs any of this.
 
+## Several agents on one connection
+
+The engine tells callers apart by their connection, and gives each caller a sub-client of its own: its own copy of the world, with its own scene, play session, shell and edits, apart from the window the person sees and from every other caller's. Sub-agents that one agent session runs share that session's connection, so to the engine they are one caller with one sub-client: one of them entering play mode or switching scene does it for all of them, and they overwrite each other's work.
+
+Each sub-agent passes its own name in the `as` argument every engine tool takes, the same name on every call it makes. The engine then treats each name as a caller of its own, with its own sub-client, play session, shell and notices. `client` chooses where a call runs (`"user"` for the window the person sees, a sub-client's id to look at another agent's work); it does not separate agents, and several agents naming the same sub-client share it.
+
 ## The seamless flow
 
 1. **`zeromind.search`** — check whether the thing the user wants (or parts of it) already exists before building. See STEP 0 above and the `zeromind-library` skill. Shortlist two or three hits, read each one's code with `zm` in the engine's `bash` once a world is open, then `zeromind.install` the drop-in / parts / base that fits into the world you are working in and verify it.
