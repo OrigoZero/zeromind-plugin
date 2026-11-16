@@ -17,12 +17,58 @@ const FILE = "cli-agent.json";
 type AgentCache = SessionCache & { issuer: string; username?: string };
 type Agent = { id: string; username: string; is_agent: boolean };
 
-export async function verifyAgent(secret: string, base = issuer()): Promise<Agent> {
-  const response = await fetch(`${base}/v1/me`, {
-    headers: { authorization: `Bearer ${secret}` },
-    redirect: "error",
-    signal: AbortSignal.timeout(30000),
-  });
+/** Answers that mean the service could not decide, not that it refused: a retry can succeed. */
+const transientStatus = (status: number): boolean =>
+  status === 408 || status === 429 || status >= 500;
+
+export type VerifyAgentOptions = {
+  /** Tries made before the service is reported unavailable (default 3). */
+  attempts?: number;
+  /** Time one request may take, in milliseconds (default 30000). */
+  timeoutMs?: number;
+  /** Pause between tries (default a real timer, doubling from 500 ms). */
+  wait?: (ms: number) => Promise<void>;
+};
+
+function unavailable(what: string): Error {
+  return new Error(
+    `ZeroMind could not check this agent's authorization right now (${what}). This is a temporary service problem, not a refusal; retry the command in a moment.`,
+  );
+}
+
+export async function verifyAgent(
+  secret: string,
+  base = issuer(),
+  options: VerifyAgentOptions = {},
+): Promise<Agent> {
+  const attempts = Math.max(1, options.attempts ?? 3);
+  const wait =
+    options.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  let response: Awaited<ReturnType<typeof fetch>> | undefined;
+  for (let attempt = 1; ; attempt++) {
+    let failure: string;
+    try {
+      response = await fetch(`${base}/v1/me`, {
+        headers: { authorization: `Bearer ${secret}` },
+        redirect: "error",
+        signal: AbortSignal.timeout(options.timeoutMs ?? 30000),
+      });
+      if (!transientStatus(response.status)) break;
+      failure = `HTTP ${response.status}`;
+      // The body of a failed answer is not read; release the connection.
+      await response.body?.cancel().catch(() => undefined);
+    } catch (error) {
+      const cause = (error as { cause?: { code?: string; message?: string } }).cause;
+      // A redirect is the endpoint answering, not the service failing.
+      if (/redirect/i.test(cause?.message ?? "")) throw error;
+      failure =
+        (error as Error).name === "TimeoutError" || (error as Error).name === "AbortError"
+          ? "no answer in time"
+          : `request failed${cause?.code ? `: ${cause.code}` : ""}`;
+    }
+    if (attempt >= attempts) throw unavailable(failure);
+    await wait(500 * 2 ** (attempt - 1));
+  }
   if (!response.ok)
     throw new Error(
       `Agent authorization was refused (${response.status}); run zero login to approve an agent account.`,
