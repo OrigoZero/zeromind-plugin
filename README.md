@@ -306,12 +306,14 @@ Maintainers: `package.json` `version` is the source of truth. `tests/directory-m
 
 ## Status
 
-0.8.1 provides agent-owned login, managed native installation and launch (kept
+0.8.2 provides agent-owned login, managed native installation and launch (kept
 current at every launch, listed by `zero engines` and stopped by `zero close`,
 headless ones stopping after `--idle-minutes` with no call), headless renderer
 diagnostics, world/branch/session selection, requests through the proxy and
 certificate authorities the environment names, and the `zero-shell` adapter
-alongside the existing harness integrations. Operations use ZeroMind's
+alongside the existing harness integrations. A `zero bash` command that
+finishes within its window is one request to the engine, answered with its
+output and exit status. Operations use ZeroMind's
 hosted MCP endpoint. Native launches require its authorized handoff support;
 streaming and interactive commands require the engine's attached-shell API.
 
