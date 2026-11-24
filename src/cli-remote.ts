@@ -3,13 +3,16 @@ import { McpHttpClient, type ToolOutcome } from "./mcp-client.js";
 import { cliBearer, loginAgent, logoutAgent } from "./cli-agent.js";
 import { conversationId } from "./cli-state.js";
 import { remoteUrl } from "./server-spec.js";
-import { openEngine, type OpenOptions } from "./engine-launch.js";
-import { closeEngine, runningEngines } from "./engine-registry.js";
+import type { OpenOptions } from "./engine-launch.js";
 import { streamShell } from "./shell-stream.js";
-import { interactiveShell } from "./shell-interactive.js";
 import { shellInvocation } from "./shell-invocation.js";
+import { watchStdin, type StdinWatch } from "./stdin-prefetch.js";
 import { executeAndWait } from "./engine-execution.js";
-import { parseWorldReference, runOpenCli } from "./cli-open.js";
+
+/** How long the first call waits for a command whose stdin is complete before streaming takes over. */
+const INLINE_WINDOW_MS = 10_000;
+/** The same wait while stdin may still carry input or a person may still type, which streaming forwards. */
+const INLINE_OPEN_STDIN_WINDOW_MS = 2_000;
 
 export const REMOTE_HELP = `zero — use a Zero world through its hosted connection
 
@@ -126,7 +129,22 @@ function required(args: string[], index: number, flag: string): string {
   return value;
 }
 
+/** Run a `zero` command; host stdin is released however the command ends. */
 export async function runRemoteCli(argv: string[]): Promise<void> {
+  const watch: { current?: StdinWatch } = {};
+  try {
+    await runRemoteCommand(argv, watch);
+  } finally {
+    if (watch.current) {
+      // Stdin was read ahead for the command; an open pipe would otherwise keep the process alive.
+      watch.current.snapshot();
+      process.stdin.pause();
+      process.stdin.destroy();
+    }
+  }
+}
+
+async function runRemoteCommand(argv: string[], watch: { current?: StdinWatch }): Promise<void> {
   const args = [...argv];
   let context: string | undefined;
   if (args[0] === "--context") {
@@ -151,6 +169,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
   }
   if (command === "engines") {
     if (args.length) throw new Error("Usage: zero engines");
+    const { runningEngines } = await import("./engine-registry.js");
     process.stdout.write(JSON.stringify({ engines: await runningEngines() }, null, 2) + "\n");
     return;
   }
@@ -163,9 +182,9 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
       else throw new Error("Usage: zero [--context <agent>] close [--session <id> | --all]");
     }
     if (all && session) throw new Error("Choose --session <id> or --all");
+    const { closeEngine, runningEngines } = await import("./engine-registry.js");
     const engines = await runningEngines();
-    const conversation =
-      all || session ? undefined : await conversationId(remoteUrl(), context);
+    const conversation = all || session ? undefined : await conversationId(remoteUrl(), context);
     const chosen = engines.filter((e) =>
       all ? true : session ? e.sessionId === session : e.conversation === conversation,
     );
@@ -206,6 +225,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
         process.stdout.write(REMOTE_HELP);
         return;
       }
+      const { parseWorldReference, runOpenCli } = await import("./cli-open.js");
       if (args.includes("--play") || args.includes("--dry-run")) {
         await runOpenCli(args);
         return;
@@ -292,7 +312,11 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
     case "bash":
       if ((args.length === 1 && args[0] === "-i") || (args.length === 0 && process.stdin.isTTY))
         interactive = true;
-      else shell = shellInvocation(args, () => readFileSync(0, "utf8"));
+      else {
+        shell = shellInvocation(args, () => readFileSync(0, "utf8"));
+        // Read stdin while the first requests are in flight, so the command can start with its input.
+        watch.current = watchStdin(process.stdin);
+      }
       break;
     default:
       throw new Error(`Unknown command: ${command}\n${REMOTE_HELP}`);
@@ -304,8 +328,9 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
   );
   const client = new McpHttpClient(endpoint, await cliBearer(), "zero-cli", conversation);
   try {
-    await client.initialize();
+    // The first call names its conversation in `_meta`; no `initialize` round trip is sent.
     if (interactive) {
+      const { interactiveShell } = await import("./shell-interactive.js");
       process.exitCode = await interactiveShell(
         client,
         process.stdin,
@@ -315,20 +340,28 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
       return;
     }
     if (open) {
+      const { openEngine } = await import("./engine-launch.js");
       process.stdout.write(
         JSON.stringify(await openEngine(client, { ...open, conversation }), null, 2) + "\n",
       );
       return;
     }
     if (shell !== undefined) {
+      const stdin = watch.current!.snapshot();
       const streamed = await streamShell(
         client,
         shell,
         process.stdin,
         process.stdout,
         process.stderr,
+        false,
+        { windowMs: stdin.ended ? INLINE_WINDOW_MS : INLINE_OPEN_STDIN_WINDOW_MS, stdin },
       );
       if (streamed === undefined) {
+        if (stdin.data.length)
+          throw new Error(
+            "This engine needs an update for command stdin; use zero engine install and open a new native engine.",
+          );
         if (!process.stdin.isTTY) {
           for await (const chunk of process.stdin) {
             if (chunk.length)

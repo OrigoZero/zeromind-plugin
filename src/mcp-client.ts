@@ -49,8 +49,19 @@ const readMessage = async (res: Response, id: number): Promise<JsonRpcMessage> =
   throw new Error(`the event stream carried no answer to request ${id}`);
 };
 
+/** A refusal by status, so a caller can tell a missing session from a bad request. */
+class HttpStatusError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 export class McpHttpClient {
   private sessionId?: string;
+  private initialized = false;
   private nextId = 1;
   // Its own connection pool, so `close()` can end every socket it opened:
   // a keep-alive connection left on the shared dispatcher outlives the work
@@ -88,8 +99,28 @@ export class McpHttpClient {
         `${this.url} rejected this machine's credential (401); run \`zeromind login\` or \`zeromind link\` and try again`,
       );
     }
-    if (!res.ok) throw new Error(`${this.url} answered ${res.status}: ${await res.text()}`);
+    if (!res.ok)
+      throw new HttpStatusError(
+        res.status,
+        `${this.url} answered ${res.status}: ${await res.text()}`,
+      );
     return res;
+  }
+
+  /**
+   * Send a request on the conversation named in `_meta`, which the server keys its state on, and
+   * open a transport session only when the server asks for one (a 400 or 404 before any session
+   * exists). A request refused that way ran nothing, so sending it again is safe.
+   */
+  private async request(body: unknown): Promise<Response> {
+    try {
+      return await this.post(body);
+    } catch (error) {
+      const status = (error as { status?: number }).status;
+      if (this.initialized || (status !== 400 && status !== 404)) throw error;
+      await this.initialize();
+      return await this.post(body);
+    }
   }
 
   /** Open the session: `initialize`, keep the session id, say we're ready. */
@@ -110,6 +141,7 @@ export class McpHttpClient {
     if (sessionId) this.sessionId = sessionId;
     const message = await readMessage(res, id);
     if (message.error) throw new Error(`initialize: ${message.error.message}`);
+    this.initialized = true;
     // The body is empty, and reading it is what returns the connection to
     // the pool instead of leaving it open until the agent is closed.
     const ack = await this.post({ jsonrpc: "2.0", method: "notifications/initialized" });
@@ -124,7 +156,7 @@ export class McpHttpClient {
   /** Call one tool. A refusal comes back as `isError` with the server's text. */
   async callTool(name: string, args: Record<string, unknown>): Promise<ToolOutcome> {
     const id = this.nextId++;
-    const res = await this.post({
+    const res = await this.request({
       jsonrpc: "2.0",
       id,
       method: "tools/call",
@@ -150,7 +182,7 @@ export class McpHttpClient {
 
   async listTools(): Promise<unknown[]> {
     const id = this.nextId++;
-    const res = await this.post({
+    const res = await this.request({
       jsonrpc: "2.0",
       id,
       method: "tools/list",

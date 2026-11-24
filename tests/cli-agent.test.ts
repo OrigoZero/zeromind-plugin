@@ -57,9 +57,10 @@ it("approves a distinct agent, preserves parent credentials and reuses the agent
   });
   expect(server.state.linkCodeRequests).toBe(1);
   expect(readFileSync(join(dir, "session.json"), "utf8")).toBe(parent);
-  server.state.profileFor("agent-builder").is_agent = false;
-  await expect(cliBearer()).rejects.toThrow("parent-user credential");
-  server.state.profileFor("agent-builder").is_agent = true;
+  // The agent this CLI approved was verified at approval; a command does not ask the service again.
+  const reads = server.state.profileReads;
+  expect(await cliBearer()).toBe(secret);
+  expect(server.state.profileReads).toBe(reads);
   await logoutAgent();
   expect(existsSync(join(dir, "cli-agent.json"))).toBe(false);
   expect(readFileSync(join(dir, "session.json"), "utf8")).toBe(parent);
