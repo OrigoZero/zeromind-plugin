@@ -69,6 +69,8 @@ export class MockState {
   issues: IssueSubmission[] = [];
   /** Device codes asked for, so a test can assert none was. */
   linkCodeRequests = 0;
+  /** GET /v1/me requests answered, so a test can assert a command made none. */
+  profileReads = 0;
   /** When set, POST unlink answers this status instead of revoking. */
   unlinkStatus?: number;
   worlds = new Map<string, WorldRow>();
@@ -566,6 +568,7 @@ export const buildServer = (state: MockState): Server =>
       // Own-profile read/update — the surface the agent uses to give itself
       // an identity after linking. Mirrors GET/PATCH /v1/me on the real API.
       if (path === "/v1/me" && (method === "GET" || method === "PATCH")) {
+        if (method === "GET") state.profileReads += 1;
         const install = requireAuth(req, state);
         if (!install || !install.linked || !install.user_id) {
           return json(res, 401, { error: "unauthorized" });

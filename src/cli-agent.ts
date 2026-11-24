@@ -163,7 +163,10 @@ export async function cliBearer(): Promise<string> {
     throw new Error(
       "Run zero login to approve an agent identity (use --no-browser on a remote computer).",
     );
-  await verifyAgent(secret);
+  // An agent identity approved by `zero login` was verified when it was approved and is saved
+  // with its user; an install secret does not change identity, and a revoked one is refused
+  // by /mcp on the first request. Only a credential this CLI did not approve is verified here.
+  if (!(own?.user_id && own.username)) await verifyAgent(secret);
   return secret;
 }
 

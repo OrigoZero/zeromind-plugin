@@ -2,7 +2,6 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { cacheDir } from "./config.js";
-import { lock } from "proper-lockfile";
 
 export const statePath = (name: string): string => join(cacheDir(), name);
 
@@ -33,6 +32,8 @@ export function saveState(name: string, value: unknown): void {
 
 /** Serialize credential rotation across CLI processes. */
 export async function credentialLock<T>(work: () => Promise<T>): Promise<T> {
+  // Loaded here: a command that never rotates credentials does not pay for the module.
+  const { lock } = await import("proper-lockfile");
   mkdirSync(cacheDir(), { recursive: true, mode: 0o700 });
   const started = Date.now();
   let release: () => Promise<void>;
@@ -71,17 +72,25 @@ export async function conversationId(endpoint: string, context?: string): Promis
     throw new Error(
       "Choose an agent context with --context <name> or ZERO_CONTEXT; reuse it for subsequent commands.",
     );
+  const path = statePath("cli-identity.json");
+  const derive = (identity: { id: string }) =>
+    `zero-cli:${createHash("sha256")
+      .update(JSON.stringify([identity.id, endpoint, name]))
+      .digest("hex")}`;
+  // The identity file is written once and never changed, so an installation that has one needs no lock.
+  try {
+    const existing = JSON.parse(readFileSync(path, "utf8")) as { id?: unknown };
+    if (typeof existing.id === "string" && existing.id) return derive({ id: existing.id });
+  } catch {
+    /* Absent, or being written by another process: the locked path below decides. */
+  }
   return credentialLock(async () => {
     mkdirSync(cacheDir(), { recursive: true, mode: 0o700 });
-    const path = statePath("cli-identity.json");
     try {
       writeFileSync(path, JSON.stringify({ id: randomUUID() }), { flag: "wx", mode: 0o600 });
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
     }
-    const identity = JSON.parse(readFileSync(path, "utf8")) as { id: string };
-    return `zero-cli:${createHash("sha256")
-      .update(JSON.stringify([identity.id, endpoint, name]))
-      .digest("hex")}`;
+    return derive(JSON.parse(readFileSync(path, "utf8")) as { id: string });
   });
 }
